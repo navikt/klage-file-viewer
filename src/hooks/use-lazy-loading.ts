@@ -7,7 +7,7 @@ const MIN_INITIAL_PAGES = 5;
 const PAGE_BUFFER_COUNT = 3;
 
 interface UseLazyLoadingParams {
-  /** Total number of PDF sections available. */
+  /** Total number of file sections available. */
   sectionCount: number;
   /** Ref to the scrollable container element. */
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;

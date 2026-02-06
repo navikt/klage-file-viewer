@@ -1,25 +1,58 @@
 {
-  "name": "klage-pdf-viewer",
+  "name": "@navikt/klage-file-viewer",
+  "version": "0.0.3",
   "type": "module",
   "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./pdf-worker": "./dist/pdf-worker.min.mjs",
+    "./excel-worker": "./dist/excel-worker.js"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsup && tailwindcss -i src/styles.css -o dist/styles.css --minify && cp node_modules/pdfjs-dist/build/pdf.worker.min.mjs dist/pdf-worker.min.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "test": "bun test"
+  },
+  "peerDependencies": {
+    "@navikt/aksel-icons": "^8.0.0",
+    "@navikt/ds-css": "^8.0.0",
+    "@navikt/ds-react": "^8.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
   "dependencies": {
-    "@navikt/aksel-icons": "8.3.0",
-    "@navikt/ds-css": "8.3.0",
-    "@navikt/ds-react": "8.3.0",
-    "@navikt/ds-tailwind": "8.3.0",
     "pdfjs-dist": "5.4.624",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "read-excel-file": "6.0.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.3.14",
-    "@tailwindcss/vite": "4.1.18",
-    "@types/react": "19.2.13",
+    "@biomejs/biome": "2.3.15",
+    "@navikt/aksel-icons": "8.4.1",
+    "@navikt/ds-css": "8.4.1",
+    "@navikt/ds-react": "8.4.1",
+    "@navikt/ds-tailwind": "8.4.1",
+    "@tailwindcss/cli": "4.1.18",
+    "@tailwindcss/postcss": "4.1.18",
+    "@types/bun": "1.3.9",
+    "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "5.1.3",
+    "@vitejs/plugin-react": "5.1.4",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
     "tailwindcss": "4.1.18",
+    "tsup": "8.5.1",
     "typescript": "5.9.3",
-    "vite": "7.3.1",
-    "vite-tsconfig-paths": "6.0.5"
+    "vite": "7.3.1"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   }
 }

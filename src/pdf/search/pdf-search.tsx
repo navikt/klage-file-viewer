@@ -1,11 +1,11 @@
 import { ChevronLeftIcon, ChevronRightIcon, MagnifyingGlassIcon, XMarkIcon } from '@navikt/aksel-icons';
 import { BodyShort, Button, HStack, Tooltip } from '@navikt/ds-react';
 import { type Dispatch, type KeyboardEvent, type SetStateAction, useCallback, useEffect, useState } from 'react';
-import { CaseSensitiveIcon } from '../lib/case-sensitive-icon';
-import { isMetaKey, Keys, MOD_KEY_TEXT } from '../lib/keys';
-import type { RotationDegrees } from '../types';
-import { computeHighlights } from './search';
-import type { PageHighlights, SearchMatch } from './types';
+import { CaseSensitiveIcon } from '@/lib/case-sensitive-icon';
+import { isMetaKey, Keys, MOD_KEY_TEXT } from '@/lib/keys';
+import { computeHighlights } from '@/pdf/search/search';
+import type { PageHighlights, SearchMatch } from '@/pdf/search/types';
+import type { RotationDegrees } from '@/types';
 
 type PdfSearchProps = {
   isSearchOpen: boolean;

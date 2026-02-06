@@ -1,0 +1,50 @@
+name: Build and publish package
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "*.md"
+      - "dev/**"
+      - ".tool-versions"
+      - ".gitignore"
+      - "vite.config.ts"
+      - "biome.json"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          registries: |
+            https://registry.npmjs.org/
+            @navikt:https://npm.pkg.github.com|$TOKEN
+
+      - name: Check if version is newer than the published version
+        env:
+          READER_TOKEN: ${{ secrets.READER_TOKEN }}
+        run: bun .github/scripts/check-version.ts
+
+      - name: Install dependencies
+        env:
+          TOKEN: ${{ secrets.READER_TOKEN }}
+        run: bun install --frozen-lockfile
+
+      - name: Build package
+        run: bun run build
+
+      - name: Publish package
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun publish

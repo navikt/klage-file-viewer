@@ -1,12 +1,10 @@
-import { LoadedPdfSection } from './loaded-pdf-section';
-import { PdfSectionPlaceholder } from './pdf-section-placeholder';
-import type { HighlightRect } from './search/types';
-import type { PdfEntry } from './types';
-
-export type { NewTabProps, PdfEntry } from './types';
+import { LoadedPdfSection } from '@/pdf/loaded-pdf-section';
+import { PdfSectionPlaceholder } from '@/pdf/pdf-section-placeholder';
+import type { HighlightRect } from '@/pdf/search/types';
+import type { PdfFileEntry } from '@/types';
 
 interface PdfSectionProps {
-  pdf: PdfEntry;
+  pdf: PdfFileEntry;
   scale: number;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   /** Whether this section should load its PDF data (managed by the parent). */

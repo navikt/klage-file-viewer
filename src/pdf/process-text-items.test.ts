@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
-import { processTextItems } from './process-text-items';
+import { processTextItems } from '@/pdf/process-text-items';
 
 const createTextItem = (str: string, x: number, y: number, width: number, overrides?: Partial<TextItem>): TextItem => ({
   str,

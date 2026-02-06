@@ -2,16 +2,32 @@ import { ArrowsCirclepathIcon } from '@navikt/aksel-icons';
 import { Alert, BodyShort, Button, Heading, HStack, Loader, VStack } from '@navikt/ds-react';
 import { getDocument, type PDFDocumentProxy, type PDFPageProxy } from 'pdfjs-dist';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { usePdfViewerConfig } from './context';
-import { getA4Dimensions } from './pdf-section-placeholder';
-import { RotatablePage } from './rotatable-page';
-import type { HighlightRect } from './search/types';
-import { StickyHeader } from './sticky-header';
-import type { PdfEntry } from './types';
-import { usePdfData } from './use-pdf-data';
+import { useFileViewerConfig } from '@/context';
+import { getPageScrollTop, scrollToPage } from '@/lib/page-scroll';
+import { getA4Dimensions } from '@/pdf/pdf-section-placeholder';
+import { RotatablePage } from '@/pdf/rotatable-page';
+import type { HighlightRect } from '@/pdf/search/types';
+import { StickyHeader } from '@/sticky-header';
+import type { PdfFileEntry } from '@/types';
+import { useFileData } from '@/use-file-data';
+
+/**
+ * Check whether the scroll container has been scrolled to (or past) the
+ * reading position for the given page. The reading position is where
+ * `scrollToPage` would place the page – right below the sticky header.
+ */
+const hasReachedPage = (pageElement: HTMLElement, scrollContainer: HTMLElement): boolean =>
+  scrollContainer.scrollTop >= getPageScrollTop(pageElement, scrollContainer) - 1;
+
+/**
+ * Check whether the scroll container has been scrolled completely past the
+ * given page (the page is entirely above the viewport).
+ */
+const hasPassedPage = (pageElement: HTMLElement, scrollContainer: HTMLElement): boolean =>
+  scrollContainer.scrollTop > getPageScrollTop(pageElement, scrollContainer) + pageElement.offsetHeight;
 
 interface LoadedPdfSectionProps {
-  pdf: PdfEntry;
+  pdf: PdfFileEntry;
   scale: number;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   onPageCountReady: (pageCount: number) => void;
@@ -29,8 +45,8 @@ export const LoadedPdfSection = ({
   highlightsByPage,
   currentMatchIndex,
 }: LoadedPdfSectionProps) => {
-  const { ErrorActions } = usePdfViewerConfig();
-  const { data, loading, error, refresh } = usePdfData(pdf.url, pdf.query);
+  const { errorComponent: ErrorComponent } = useFileViewerConfig();
+  const { data, loading, error, refresh } = useFileData(pdf.url, pdf.query);
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [loadedData, setLoadedData] = useState<Blob | null>(null);
@@ -76,6 +92,96 @@ export const LoadedPdfSection = ({
 
     return () => observer.disconnect();
   }, [pages, currentPage, scrollContainerRef]);
+
+  // --- page navigation with stable target tracking ---
+  // `targetPage` is state (for rendering the disabled state without flicker)
+  // and mirrored in a ref (so rapid clicks accumulate without waiting for re-renders).
+  const [targetPage, setTargetPage] = useState(currentPage);
+  const targetPageRef = useRef(currentPage);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Debounced sync: after scrolling settles, align targetPage with currentPage.
+  // During a button-triggered smooth scroll the observer fires for intermediate
+  // pages – the debounce prevents those transient values from resetting the target.
+  useEffect(() => {
+    clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      targetPageRef.current = currentPage;
+      setTargetPage(currentPage);
+    }, 150);
+
+    return () => clearTimeout(syncTimerRef.current);
+  }, [currentPage]);
+
+  const navigateToPage = useCallback(
+    (page: number) => {
+      const scrollContainer = scrollContainerRef.current;
+
+      if (scrollContainer === null) {
+        return;
+      }
+
+      const clamped = Math.max(1, Math.min(page, pages.length));
+
+      const pageElement = internalPageRefs.current.get(clamped);
+
+      if (pageElement === undefined) {
+        return;
+      }
+
+      const desiredTop = getPageScrollTop(pageElement, scrollContainer);
+
+      if (clamped === targetPageRef.current && Math.abs(scrollContainer.scrollTop - desiredTop) < 1) {
+        return;
+      }
+
+      if (clamped !== targetPageRef.current) {
+        targetPageRef.current = clamped;
+        setTargetPage(clamped);
+
+        // Cancel any pending debounced sync so it does not overwrite
+        // the target we just set.
+        clearTimeout(syncTimerRef.current);
+      }
+
+      scrollToPage(pageElement, scrollContainer, { behavior: 'smooth' });
+    },
+    [pages.length, scrollContainerRef],
+  );
+
+  const onPreviousPage =
+    pages.length === 0
+      ? undefined
+      : () => {
+          const target = targetPageRef.current;
+          const scrollContainer = scrollContainerRef.current;
+          const pageElement = internalPageRefs.current.get(target);
+
+          // If the target page is completely above the viewport (scrolled past),
+          // it is itself the "previous" page – bring it back into view.
+          const scrollToTarget =
+            scrollContainer !== null && pageElement !== undefined && hasPassedPage(pageElement, scrollContainer);
+
+          navigateToPage(scrollToTarget ? target : target - 1);
+        };
+
+  const onNextPage =
+    pages.length === 0
+      ? undefined
+      : () => {
+          const target = targetPageRef.current;
+          const scrollContainer = scrollContainerRef.current;
+          const pageElement = internalPageRefs.current.get(target);
+
+          // If the user hasn't scrolled to the target page's reading position yet,
+          // it is itself the "next" page – scroll to it instead of skipping past.
+          const scrollToTarget =
+            scrollContainer !== null && pageElement !== undefined && !hasReachedPage(pageElement, scrollContainer);
+
+          navigateToPage(scrollToTarget ? target : target + 1);
+        };
+  const previousPageDisabled = targetPage <= 1;
+  const nextPageDisabled = targetPage >= pages.length;
 
   const setInternalPageRef = useCallback(
     (pageNumber: number, element: HTMLDivElement | null) => {
@@ -149,7 +255,7 @@ export const LoadedPdfSection = ({
     loadPages();
   }, [pdfDocument]);
 
-  // --- report page count to parent for lazy-loading coordination ---
+  // Report page count to parent for lazy-loading coordination
   useEffect(() => {
     if (pages.length > 0) {
       onPageCountReady(pages.length);
@@ -160,7 +266,7 @@ export const LoadedPdfSection = ({
   const pdfLoading = data !== null && data !== loadedData;
   const isLoaderVisible = loading || pdfLoading;
 
-  // --- error state ---
+  // Error state
   if (displayError !== undefined && displayError !== null) {
     return (
       <>
@@ -169,6 +275,7 @@ export const LoadedPdfSection = ({
           currentPage={null}
           numPages={null}
           newTab={pdf.newTab}
+          downloadUrl={pdf.downloadUrl}
           headerExtra={pdf.headerExtra}
           isLoading={loading}
           refresh={refresh}
@@ -178,7 +285,7 @@ export const LoadedPdfSection = ({
           <Alert variant="error" size="small">
             <HStack gap="space-16" align="center">
               <Heading size="small">Feil ved lasting av PDF</Heading>
-              {ErrorActions !== undefined ? <ErrorActions refresh={refresh} /> : null}
+              {ErrorComponent !== undefined ? <ErrorComponent refresh={refresh} /> : null}
               <Button
                 data-color="neutral"
                 variant="secondary"
@@ -211,12 +318,24 @@ export const LoadedPdfSection = ({
         currentPage={currentPage}
         numPages={numPages}
         newTab={pdf.newTab}
+        downloadUrl={pdf.downloadUrl}
         headerExtra={pdf.headerExtra}
         isLoading={loading}
         refresh={refresh}
+        onPreviousPage={onPreviousPage}
+        onNextPage={onNextPage}
+        previousPageDisabled={previousPageDisabled}
+        nextPageDisabled={nextPageDisabled}
       />
 
-      <div className="relative flex w-full flex-col items-center gap-4" style={pageContainerStyle}>
+      <VStack
+        position="relative"
+        align="center"
+        gap="space-16"
+        width="100%"
+        style={pageContainerStyle}
+        data-klage-file-viewer-document-pages={pages.length}
+      >
         {isLoaderVisible ? (
           <div className="absolute top-0 left-0 z-10 flex h-full w-full items-center justify-center bg-ax-bg-neutral-moderate/70 backdrop-blur-xs">
             <VStack align="center" gap="space-8">
@@ -230,18 +349,25 @@ export const LoadedPdfSection = ({
           const pageHighlights = highlightsByPage?.get(page.pageNumber);
 
           return (
-            <RotatablePage
+            <div
               key={page.pageNumber}
-              page={page}
-              url={pdf.url}
-              scale={scale}
-              highlights={pageHighlights}
-              currentMatchIndex={currentMatchIndex}
-              setPageRef={setInternalPageRef}
-            />
+              data-page-number={page.pageNumber}
+              ref={(el) => {
+                setInternalPageRef(page.pageNumber, el);
+              }}
+              className="mx-auto w-full overflow-x-auto"
+            >
+              <RotatablePage
+                page={page}
+                url={pdf.url}
+                scale={scale}
+                highlights={pageHighlights}
+                currentMatchIndex={currentMatchIndex}
+              />
+            </div>
           );
         })}
-      </div>
+      </VStack>
     </>
   );
 };

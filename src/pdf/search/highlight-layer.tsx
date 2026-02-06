@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { HighlightRect } from './types';
+import type { HighlightRect } from '@/pdf/search/types';
 
 interface HighlightLayerProps {
   highlights: HighlightRect[];

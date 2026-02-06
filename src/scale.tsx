@@ -1,9 +1,9 @@
 import { ZoomMinusIcon, ZoomPlusIcon } from '@navikt/aksel-icons';
 import { Button, HStack, Tooltip } from '@navikt/ds-react';
 import { type Dispatch, type KeyboardEvent, type SetStateAction, useCallback, useEffect, useState } from 'react';
-import { clamp } from './lib/clamp';
-import { Keys, MOD_KEY_TEXT } from './lib/keys';
-import { snapDown, snapUp } from './lib/snap';
+import { clamp } from '@/lib/clamp';
+import { Keys, MOD_KEY_TEXT } from '@/lib/keys';
+import { snapDown, snapUp } from '@/lib/snap';
 
 interface Props {
   scale: number;

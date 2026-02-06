@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useMemo } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from 'react';
 
 export interface FetchErrorInfo {
   url: string;
@@ -6,30 +6,74 @@ export interface FetchErrorInfo {
   body: string;
 }
 
-export interface PdfViewerConfig {
-  /** Whether to invert colors (for dark mode). Default: `false` */
-  invertColors: boolean;
-  /** Called when a PDF fetch fails. */
-  onFetchError?: (error: FetchErrorInfo) => void;
-  /** Optional component rendered inside the error alert alongside the default reload button. */
-  ErrorActions?: React.ComponentType<{ refresh: () => void }>;
+export enum ThemeMode {
+  Light = 'light',
+  Dark = 'dark',
 }
 
-const DEFAULT_CONFIG: PdfViewerConfig = {
-  invertColors: false,
+export interface KlageFileViewerConfig {
+  theme: 'light' | 'dark';
+  invertColors: boolean;
+  setInvertColors: (value: boolean) => void;
+  /** Called when a file fetch fails. */
+  onFetchError?: (error: FetchErrorInfo) => void;
+  /** Optional component rendered inside the error alert alongside the default reload button. */
+  errorComponent?: React.ComponentType<{ refresh: () => void }>;
+}
+
+const INVERT_COLORS_STORAGE_KEY = 'klage-file-viewer/settings/invertColorsInDarkMode';
+
+const readInvertColorsSetting = (): boolean => {
+  try {
+    // If not explicitly set to 'false', we treat the setting as enabled.
+    return localStorage.getItem(INVERT_COLORS_STORAGE_KEY) !== 'false';
+  } catch {
+    // Ignore errors (e.g. localStorage unavailable).
+  }
+
+  return true;
 };
 
-const PdfViewerConfigContext = createContext<PdfViewerConfig>(DEFAULT_CONFIG);
+const DEFAULT_CONFIG: KlageFileViewerConfig = {
+  theme: ThemeMode.Light,
+  invertColors: true,
+  setInvertColors: () => undefined,
+};
 
-export const usePdfViewerConfig = (): PdfViewerConfig => useContext(PdfViewerConfigContext);
+const FileViewerConfigContext = createContext<KlageFileViewerConfig>(DEFAULT_CONFIG);
 
-interface PdfViewerProviderProps {
-  config?: Partial<PdfViewerConfig>;
+export const useFileViewerConfig = (): KlageFileViewerConfig => useContext(FileViewerConfigContext);
+
+interface KlageFileViewerProviderProps {
+  /** Called when a file fetch fails. */
+  onFetchError?: (error: FetchErrorInfo) => void;
+  /** Optional component rendered inside the error alert alongside the default reload button. */
+  errorComponent?: React.ComponentType<{ refresh: () => void }>;
+  theme: 'light' | 'dark';
   children: ReactNode;
 }
 
-export const PdfViewerProvider = ({ config, children }: PdfViewerProviderProps) => {
-  const merged = useMemo<PdfViewerConfig>(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
+export const FileViewerProvider = ({ onFetchError, errorComponent, theme, children }: KlageFileViewerProviderProps) => {
+  const [invertColors, setInvertColorsState] = useState<boolean>(() => readInvertColorsSetting());
 
-  return <PdfViewerConfigContext.Provider value={merged}>{children}</PdfViewerConfigContext.Provider>;
+  const setInvertColors = useCallback((newValue: boolean) => {
+    setInvertColorsState(newValue);
+
+    try {
+      localStorage.setItem(INVERT_COLORS_STORAGE_KEY, newValue ? 'true' : 'false');
+    } catch (error) {
+      if (error instanceof Error) {
+        console.warn('Could not save setting to localStorage', error);
+      } else {
+        console.warn('Could not save setting to localStorage');
+      }
+    }
+  }, []);
+
+  const config = useMemo<KlageFileViewerConfig>(
+    () => ({ onFetchError, errorComponent, theme, invertColors, setInvertColors }),
+    [onFetchError, errorComponent, theme, invertColors, setInvertColors],
+  );
+
+  return <FileViewerConfigContext.Provider value={config}>{children}</FileViewerConfigContext.Provider>;
 };

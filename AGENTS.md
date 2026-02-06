@@ -2,10 +2,10 @@
 
 ## Commands
 - Install dependencies: `bun i`
-- Start dev server: `bun start`
+- Build the library: `bun run build`
 - Run unit tests: `bun test`
-- Check types: `bun typecheck`
-- Lint and fix code: `bun lint --fix`
+- Check types: `bun run typecheck`
+- Lint and fix code: `bun run lint --fix`
 
 ## Code style
 - TypeScript strict mode

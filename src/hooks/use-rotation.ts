@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { RotationDegrees } from '../types';
+import type { RotationDegrees } from '@/types';
 
 const VALID_ROTATIONS: readonly RotationDegrees[] = [0, 90, 180, 270];
 
@@ -8,7 +8,7 @@ const isValidRotation = (value: number): value is RotationDegrees => VALID_ROTAT
 const getStorageKey = (url: string, pageNumber: number): string => {
   const encoded = new TextEncoder().encode(url).toBase64({ alphabet: 'base64url', omitPadding: true });
 
-  return `klage-pdf-viewer/rotation/${encoded}/${pageNumber.toString(10)}`;
+  return `klage-file-viewer/rotation/${encoded}/${pageNumber.toString(10)}`;
 };
 
 const readRotation = (key: string): RotationDegrees => {

@@ -1,27 +1,16 @@
 import { BodyShort, Loader, VStack } from '@navikt/ds-react';
-import { StickyHeader } from './sticky-header';
-
-/** A4 page width in PDF points (72 DPI). */
-export const A4_WIDTH_PT = 595;
-
-/** A4 page height in PDF points (72 DPI). */
-export const A4_HEIGHT_PT = 842;
-
-/** Compute pixel dimensions for an A4 page at the given scale (percentage, e.g. 125). */
-export const getA4Dimensions = (scale: number) => ({
-  width: A4_WIDTH_PT * (scale / 100),
-  height: A4_HEIGHT_PT * (scale / 100),
-});
+import { getA4Dimensions } from '@/pdf/pdf-section-placeholder';
+import { StickyHeader } from '@/sticky-header';
 
 // biome-ignore lint/suspicious/noEmptyBlockStatements: intentional no-op
 const NOOP = () => {};
 
-interface PdfSectionPlaceholderProps {
+interface ExcelSectionPlaceholderProps {
   title: string;
   scale: number;
 }
 
-export const PdfSectionPlaceholder = ({ title, scale }: PdfSectionPlaceholderProps) => {
+export const ExcelSectionPlaceholder = ({ title, scale }: ExcelSectionPlaceholderProps) => {
   const { width, height } = getA4Dimensions(scale);
 
   return (

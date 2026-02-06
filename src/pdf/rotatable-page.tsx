@@ -2,11 +2,11 @@ import { RotateLeftIcon } from '@navikt/aksel-icons';
 import { Button, Tooltip } from '@navikt/ds-react';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { type RefCallback, useCallback } from 'react';
-import { useRotation } from './hooks/use-rotation';
-import { PdfPage } from './page';
-import { HighlightLayer } from './search/highlight-layer';
-import type { HighlightRect } from './search/types';
-import type { RotationDegrees } from './types';
+import { useRotation } from '@/hooks/use-rotation';
+import { PdfPage } from '@/pdf/page';
+import { HighlightLayer } from '@/pdf/search/highlight-layer';
+import type { HighlightRect } from '@/pdf/search/types';
+import type { RotationDegrees } from '@/types';
 
 interface RotatablePageProps {
   page: PDFPageProxy;
@@ -34,7 +34,11 @@ export const RotatablePage = ({ page, url, scale, highlights, currentMatchIndex,
   const hasHighlights = highlights !== undefined && highlights.length > 0;
 
   return (
-    <div ref={refCallback} data-page-number={page.pageNumber} className="group/page relative shadow-ax-dialog">
+    <div
+      ref={refCallback}
+      data-page-number={page.pageNumber}
+      className="group/page relative m-1 w-fit shadow-ax-dialog"
+    >
       <PdfPage page={page} scale={scale / 100} rotation={rotation} />
 
       {hasHighlights && currentMatchIndex !== undefined ? (

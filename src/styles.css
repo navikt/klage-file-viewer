@@ -1,0 +1,102 @@
+@import "tailwindcss/theme" layer(klage-file-viewer);
+@import "tailwindcss/utilities" layer(klage-file-viewer);
+@config "../tailwind.config.js";
+
+/*
+ * Minimal text layer styles extracted from pdfjs-dist/web/pdf_viewer.css (v5.4.624).
+ * Only the .textLayer rules required for text rendering and selection are included.
+ * The full pdf_viewer.css is ~255 KB; this extract is a fraction of that size.
+ */
+
+@layer klage-file-viewer {
+  .klage-file-viewer {
+    box-sizing: border-box;
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: inherit;
+    }
+  }
+
+  .textLayer {
+    --csstools-color-scheme--light: initial;
+    color-scheme: only light;
+
+    position: absolute;
+    text-align: initial;
+    inset: 0;
+    overflow: clip;
+    opacity: 1;
+    line-height: 1;
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
+    forced-color-adjust: none;
+    transform-origin: 0 0;
+    caret-color: CanvasText;
+    z-index: 0;
+  }
+
+  .textLayer.highlighting {
+    touch-action: none;
+  }
+
+  .textLayer :is(span, br) {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+  }
+
+  .textLayer {
+    --min-font-size: 1;
+    --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+    --min-font-size-inv: calc(1 / var(--min-font-size));
+  }
+
+  .textLayer > :not(.markedContent),
+  .textLayer .markedContent span:not(.markedContent) {
+    z-index: 1;
+
+    --font-height: 0;
+    font-size: calc(var(--text-scale-factor) * var(--font-height));
+
+    --scale-x: 1;
+    --rotate: 0deg;
+    transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+  }
+
+  .textLayer .markedContent {
+    display: contents;
+  }
+
+  .textLayer span[role="img"] {
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: default;
+  }
+
+  .textLayer ::selection {
+    color: transparent;
+    background-color: color-mix(in oklab, var(--ax-bg-accent-strong) 50%, transparent);
+  }
+
+  .textLayer br::selection {
+    background: transparent;
+  }
+
+  .textLayer .endOfContent {
+    display: block;
+    position: absolute;
+    inset: 100% 0 0;
+    z-index: 0;
+    cursor: default;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .textLayer.selecting .endOfContent {
+    top: 0;
+  }
+}

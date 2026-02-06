@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.3.8/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.3.15/schema.json",
   "root": true,
   "vcs": {
     "enabled": true,
@@ -14,9 +14,7 @@
         "organizeImports": {
           "level": "on",
           "options": {
-            "groups": [
-              "**"
-            ]
+            "groups": ["**"]
           }
         }
       }
@@ -102,13 +100,7 @@
           "level": "error",
           "fix": "unsafe",
           "options": {
-            "allow": [
-              "debug",
-              "info",
-              "warn",
-              "error",
-              "[level]"
-            ]
+            "allow": ["debug", "info", "warn", "error", "[level]"]
           }
         },
         "noReactSpecificProps": "off",
@@ -184,10 +176,19 @@
       "enabled": true
     }
   },
+  "overrides": [
+    {
+      "includes": ["src/index.ts"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noBarrelFile": "off"
+          }
+        }
+      }
+    }
+  ],
   "files": {
-    "includes": [
-      "**",
-      "!.bruno"
-    ]
+    "includes": ["**", "!.bruno"]
   }
 }

@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { usePdfViewerConfig } from './context';
+import { useFileViewerConfig } from '@/context';
 
-export interface UsePdfData {
+export interface UseFileData {
   data: Blob | null;
   loading: boolean;
   refresh: () => void;
   error: string | undefined;
 }
 
-export const usePdfData = (url: string | undefined, query?: Record<string, string>): UsePdfData => {
-  const { onFetchError } = usePdfViewerConfig();
+export const useFileData = (url: string | undefined, query?: Record<string, string>): UseFileData => {
+  const { onFetchError } = useFileViewerConfig();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Blob | null>(null);
   const [error, setError] = useState<string>();

@@ -1,7 +1,7 @@
 import { type PDFPageProxy, TextLayer } from 'pdfjs-dist';
 import { useEffect, useMemo, useRef } from 'react';
-import { usePdfViewerConfig } from './context';
-import { processTextItems } from './process-text-items';
+import { ThemeMode, useFileViewerConfig } from '@/context';
+import { processTextItems } from '@/pdf/process-text-items';
 
 interface PdfPageProps {
   page: PDFPageProxy;
@@ -34,7 +34,7 @@ const getTextLayerStyle = (rotation: number): React.CSSProperties => {
 };
 
 export const PdfPage = ({ page, scale, rotation }: PdfPageProps) => {
-  const { invertColors } = usePdfViewerConfig();
+  const { theme, invertColors } = useFileViewerConfig();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
   const renderTaskRef = useRef<ReturnType<PDFPageProxy['render']> | null>(null);
@@ -147,7 +147,13 @@ export const PdfPage = ({ page, scale, rotation }: PdfPageProps) => {
 
   return (
     <>
-      <canvas ref={canvasRef} style={{ filter: invertColors ? 'hue-rotate(180deg) invert(1)' : 'none' }} />
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: 'block',
+          filter: invertColors && theme === ThemeMode.Dark ? 'hue-rotate(180deg) invert(1)' : 'none',
+        }}
+      />
 
       <div ref={textLayerRef} className="textLayer absolute origin-top-left" style={textLayerStyle} />
     </>
