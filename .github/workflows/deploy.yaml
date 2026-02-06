@@ -1,0 +1,30 @@
+name: Build and publish package
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - ".gitignore"
+      - "*.md"
+      - "dev/**"
+      - "e2e/**"
+      - "playwright.config.ts"
+      - "vite.config.ts"
+      - ".tool-versions"
+      - "biome.json"
+      - "bunfig.toml"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-test-publish:
+    name: Build, test and publish package
+    uses: ./.github/workflows/build-and-test.yaml
+    with:
+      publish: true
+    secrets:
+      READER_TOKEN: ${{ secrets.READER_TOKEN }}
+      PUBLISH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

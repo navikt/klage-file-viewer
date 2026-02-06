@@ -1,0 +1,100 @@
+{
+  "saksnummer": "2024/12345",
+  "tema": "SYK",
+  "type": "KLAGE",
+  "status": "UNDER_BEHANDLING",
+  "opprettet": "2024-03-15T10:30:00Z",
+  "frist": "2024-06-15",
+  "klager": {
+    "navn": "Ola Nordmann",
+    "foedselsnummer": "12345678901",
+    "adresse": {
+      "gateadresse": "Storgata 1",
+      "postnummer": "0182",
+      "poststed": "Oslo",
+      "land": "Norge"
+    },
+    "kontaktinformasjon": {
+      "telefon": "+47 900 00 000",
+      "epost": "ola.nordmann@example.com"
+    }
+  },
+  "prosessfullmektig": null,
+  "paaklagetVedtak": {
+    "vedtakId": "V-2024-54321",
+    "vedtaksdato": "2024-02-01",
+    "utfall": "AVSLAG",
+    "begrunnelse": "Vilkårene for sykepenger er ikke oppfylt etter folketrygdloven § 8-4."
+  },
+  "dokumenter": [
+    {
+      "dokumentId": "DOK-001",
+      "tittel": "Klagevedtak",
+      "filtype": "PDF",
+      "mottatt": "2024-03-15T10:30:00Z",
+      "antallSider": 3,
+      "varianter": ["ARKIV", "SLADDET"],
+      "skjerming": null
+    },
+    {
+      "dokumentId": "DOK-002",
+      "tittel": "Legeerklæring",
+      "filtype": "PDF",
+      "mottatt": "2024-03-10T08:00:00Z",
+      "antallSider": 1,
+      "varianter": ["ARKIV"],
+      "skjerming": "POL"
+    },
+    {
+      "dokumentId": "DOK-003",
+      "tittel": "Vedlegg fra klager",
+      "filtype": "JPEG",
+      "mottatt": "2024-03-12T14:22:00Z",
+      "antallSider": 1,
+      "varianter": ["ARKIV"],
+      "skjerming": null
+    }
+  ],
+  "behandlingshistorikk": [
+    {
+      "hendelse": "MOTTATT",
+      "tidspunkt": "2024-03-15T10:30:00Z",
+      "utfoertAv": "SYSTEM",
+      "kommentar": "Klage mottatt via digital innsending."
+    },
+    {
+      "hendelse": "TILDELT_SAKSBEHANDLER",
+      "tidspunkt": "2024-03-18T09:00:00Z",
+      "utfoertAv": "Z123456",
+      "kommentar": null
+    },
+    {
+      "hendelse": "SENDT_TIL_MEDUNDERSKRIVER",
+      "tidspunkt": "2024-04-02T11:45:00Z",
+      "utfoertAv": "Z123456",
+      "kommentar": "Vurdering ferdigstilt, sendes til kvalitetssikring."
+    }
+  ],
+  "hjemler": ["ftrl § 8-4", "ftrl § 8-12", "ftrl § 21-3"],
+  "kvalitetsvurdering": {
+    "utfoert": false,
+    "mangler": ["KLAGER_IKKE_TILSTREKKELIG_MULIGHET_TIL_AA_UTTALE_SEG", "UTILSTREKKELIG_BEGRUNNELSE"],
+    "kommentar": null
+  },
+  "statistikk": {
+    "kabal": {
+      "behandlingstidDager": 18,
+      "antallMedunderskrivere": 1,
+      "returneringer": 0
+    },
+    "tidligere": {
+      "antallKlagerFraBruker": 2,
+      "antallOmgjoeringer": 0
+    }
+  },
+  "internNotater": [
+    "Bruker har tidligere fått avslag på tilsvarende søknad i 2023.",
+    "Ny legeerklæring vedlagt med oppdatert vurdering."
+  ],
+  "erAvsluttet": false
+}

@@ -1,20 +1,30 @@
 export type RotationDegrees = 0 | 90 | 180 | 270;
 
-export interface NewTabProps {
-  url: string;
-  id: string;
-  onClick?: React.MouseEventHandler<HTMLButtonElement>;
+export type FileType = 'PDF' | 'JPEG' | 'PNG' | 'TIFF' | 'XLSX' | 'JSON' | 'XML' | 'AXML' | 'DXML' | 'RTF';
+
+export type VariantFormat = 'ARKIV' | 'SLADDET';
+
+export type Skjerming = 'POL' | 'FEIL';
+
+export interface FileVariant {
+  filtype: FileType;
+  hasAccess: boolean;
+  format: VariantFormat;
+  skjerming: Skjerming | null;
 }
 
-export interface PdfEntry {
-  /** Display title for this PDF */
+export type FileVariants = FileVariant | [FileVariant, FileVariant] | FileType;
+
+export interface FileEntry {
+  variants: FileVariants;
+  /** Display title for this file */
   title: string;
-  /** PDF source URL */
+  /** File source URL */
   url: string;
-  /** Optional query parameters sent with the PDF request */
+  /** Optional query parameters sent with the file request */
   query?: Record<string, string>;
-  /** New-tab link configuration */
-  newTab?: NewTabProps;
-  /** Optional extra content rendered in the sticky header (e.g. variant tags, redaction switches) */
-  headerExtra?: React.ReactNode;
+  /** URL to open this file in a new tab */
+  newTabUrl?: string;
+  /** Optional download URL for this file */
+  downloadUrl?: string;
 }

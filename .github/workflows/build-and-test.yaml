@@ -1,0 +1,82 @@
+name: Build and test
+
+on:
+  workflow_call:
+    inputs:
+      publish:
+        description: "Whether to publish the package"
+        required: false
+        default: false
+        type: boolean
+
+    secrets:
+      READER_TOKEN:
+        required: true
+      PUBLISH_TOKEN:
+        required: false
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    container:
+      # Faster than installing browser and OS dependencies every time. Even with caching of the browser binaries.
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install unzip
+        # The Playwright Docker image doesn't include unzip, which setup-bun requires
+        run: apt-get update && apt-get install -y unzip
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          registries: |
+            https://registry.npmjs.org/
+            @navikt:https://npm.pkg.github.com|$TOKEN
+
+      - name: Check if version is newer than the published version
+        env:
+          READER_TOKEN: ${{ secrets.READER_TOKEN }}
+        run: bun .github/scripts/check-version.ts
+
+      # When not publishing (sanity build), continue on failure to collect all errors.
+      # failure() is used explicitly instead of just !inputs.publish to avoid running on cancellation.
+      - name: Install dependencies
+        if: success() || (!inputs.publish && failure())
+        env:
+          TOKEN: ${{ secrets.READER_TOKEN }}
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        if: success() || (!inputs.publish && failure())
+        run: bun typecheck
+
+      - name: Lint
+        if: success() || (!inputs.publish && failure())
+        run: bun lint
+
+      - name: Knip
+        if: success() || (!inputs.publish && failure())
+        run: bun knip
+
+      - name: Build package
+        if: success() || (!inputs.publish && failure())
+        run: bun run build
+
+      - name: Run unit tests
+        if: success() || (!inputs.publish && failure())
+        run: bun test
+
+      - name: Run E2E tests
+        if: success() || (!inputs.publish && failure())
+        run: bun e2e
+
+      - name: Publish package
+        if: inputs.publish && success()
+        env:
+          TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+        run: bun publish

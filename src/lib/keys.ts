@@ -1,6 +1,6 @@
-export const CMD = '⌘';
-export const CTRL = 'Ctrl';
-export const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.userAgent);
+const CMD = '⌘';
+const CTRL = 'Ctrl';
+const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.userAgent);
 export const MOD_KEY_TEXT = IS_MAC ? CMD : CTRL;
 
 interface KeyEvent {
@@ -19,4 +19,6 @@ export enum Keys {
   Shift = 'Shift',
   F = 'f',
   G = 'g',
+  ArrowUp = 'ArrowUp',
+  ArrowDown = 'ArrowDown',
 }

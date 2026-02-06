@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useMemo } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from 'react';
 
 export interface FetchErrorInfo {
   url: string;
@@ -6,30 +6,143 @@ export interface FetchErrorInfo {
   body: string;
 }
 
-export interface PdfViewerConfig {
-  /** Whether to invert colors (for dark mode). Default: `false` */
-  invertColors: boolean;
-  /** Called when a PDF fetch fails. */
-  onFetchError?: (error: FetchErrorInfo) => void;
-  /** Optional component rendered inside the error alert alongside the default reload button. */
-  ErrorActions?: React.ComponentType<{ refresh: () => void }>;
+export enum ThemeMode {
+  Light = 'light',
+  Dark = 'dark',
 }
 
-const DEFAULT_CONFIG: PdfViewerConfig = {
-  invertColors: false,
+interface KlageFileViewerConfig extends Omit<Props, 'children'> {
+  standalone: boolean;
+  traceName: string | undefined;
+  invertColors: boolean;
+  setInvertColors: (value: boolean) => void;
+  smoothScrolling: boolean;
+  setSmoothScrolling: (value: boolean) => void;
+}
+
+const INVERT_COLORS_STORAGE_KEY = 'klage-file-viewer/settings/invertColorsInDarkMode';
+const SMOOTH_SCROLLING_STORAGE_KEY = 'klage-file-viewer/settings/smoothScrolling';
+
+const readInvertColorsSetting = (): boolean => {
+  try {
+    // If not explicitly set to 'false', we treat the setting as enabled.
+    return localStorage.getItem(INVERT_COLORS_STORAGE_KEY) !== 'false';
+  } catch {
+    // Ignore errors (e.g. localStorage unavailable).
+  }
+
+  return true;
 };
 
-const PdfViewerConfigContext = createContext<PdfViewerConfig>(DEFAULT_CONFIG);
+const readSmoothScrollingSetting = (): boolean => {
+  try {
+    // If not explicitly set to 'false', we treat the setting as enabled.
+    return localStorage.getItem(SMOOTH_SCROLLING_STORAGE_KEY) !== 'false';
+  } catch {
+    // Ignore errors (e.g. localStorage unavailable).
+  }
 
-export const usePdfViewerConfig = (): PdfViewerConfig => useContext(PdfViewerConfigContext);
+  return true;
+};
 
-interface PdfViewerProviderProps {
-  config?: Partial<PdfViewerConfig>;
+const DEFAULT_CONFIG: KlageFileViewerConfig = {
+  standalone: false,
+  traceName: undefined,
+  theme: ThemeMode.Light,
+  invertColors: true,
+  setInvertColors: () => undefined,
+  smoothScrolling: true,
+  setSmoothScrolling: () => undefined,
+};
+
+const FileViewerConfigContext = createContext<KlageFileViewerConfig>(DEFAULT_CONFIG);
+
+export const useFileViewerConfig = (): KlageFileViewerConfig => useContext(FileViewerConfigContext);
+
+export interface KlageFileViewerProviderProps {
+  /** When `true`, shows all fit options (fit-to-width, fit-to-page). When `false` (default), hides options that depend on a fixed container width. */
+  standalone?: boolean;
+  /** Optional name used as the `component.instance` attribute on OpenTelemetry spans. Useful for differentiating multiple instances of the viewer. */
+  traceName?: string;
+  theme: 'light' | 'dark';
+  /** Called when a file fetch fails. */
+  onFetchError?: (error: FetchErrorInfo) => void;
+  /** Optional component rendered inside the error alert alongside the default reload button. */
+  errorComponent?: React.ComponentType<{ refresh: () => void }>;
+  /** Common passwords to automatically try when a PDF is password-protected. */
+  commonPasswords?: string[];
+}
+
+interface Props extends KlageFileViewerProviderProps {
   children: ReactNode;
 }
 
-export const PdfViewerProvider = ({ config, children }: PdfViewerProviderProps) => {
-  const merged = useMemo<PdfViewerConfig>(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
+export const FileViewerProvider = ({
+  standalone = false,
+  traceName,
+  onFetchError,
+  errorComponent,
+  commonPasswords,
+  theme,
+  children,
+}: Props) => {
+  const [invertColors, setInvertColorsState] = useState<boolean>(() => readInvertColorsSetting());
+  const [smoothScrolling, setSmoothScrollingState] = useState<boolean>(() => readSmoothScrollingSetting());
 
-  return <PdfViewerConfigContext.Provider value={merged}>{children}</PdfViewerConfigContext.Provider>;
+  const setInvertColors = useCallback((newValue: boolean) => {
+    setInvertColorsState(newValue);
+
+    try {
+      localStorage.setItem(INVERT_COLORS_STORAGE_KEY, newValue ? 'true' : 'false');
+    } catch (error) {
+      if (error instanceof Error) {
+        console.warn('Could not save setting to localStorage', error);
+      } else {
+        console.warn('Could not save setting to localStorage');
+      }
+    }
+  }, []);
+
+  const setSmoothScrolling = useCallback((newValue: boolean) => {
+    setSmoothScrollingState(newValue);
+
+    try {
+      localStorage.setItem(SMOOTH_SCROLLING_STORAGE_KEY, newValue ? 'true' : 'false');
+    } catch (error) {
+      if (error instanceof Error) {
+        console.warn('Could not save setting to localStorage', error);
+      } else {
+        console.warn('Could not save setting to localStorage');
+      }
+    }
+  }, []);
+
+  const config = useMemo<KlageFileViewerConfig>(
+    () => ({
+      standalone,
+      traceName,
+      onFetchError,
+      errorComponent,
+      commonPasswords,
+      theme,
+      invertColors,
+      setInvertColors,
+      smoothScrolling,
+      setSmoothScrolling,
+    }),
+    [
+      standalone,
+      traceName,
+      onFetchError,
+      errorComponent,
+      commonPasswords,
+      theme,
+      invertColors,
+      setInvertColors,
+      smoothScrolling,
+      setSmoothScrolling,
+    ],
+  );
+
+  return <FileViewerConfigContext.Provider value={config}>{children}</FileViewerConfigContext.Provider>;
 };

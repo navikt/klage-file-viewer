@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.3.8/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.6/schema.json",
   "root": true,
   "vcs": {
     "enabled": true,
@@ -14,9 +14,7 @@
         "organizeImports": {
           "level": "on",
           "options": {
-            "groups": [
-              "**"
-            ]
+            "groups": ["**"]
           }
         }
       }
@@ -48,7 +46,6 @@
       },
       "nursery": {
         "useExplicitType": "off",
-        "noImportCycles": "on",
         "useSortedClasses": {
           "level": "on",
           "fix": "safe",
@@ -95,6 +92,13 @@
           "level": "off",
           "fix": "none",
           "options": {}
+        },
+        "useConsistentObjectDefinitions": {
+          "level": "error",
+          "fix": "safe",
+          "options": {
+            "syntax": "shorthand"
+          }
         }
       },
       "suspicious": {
@@ -102,18 +106,13 @@
           "level": "error",
           "fix": "unsafe",
           "options": {
-            "allow": [
-              "debug",
-              "info",
-              "warn",
-              "error",
-              "[level]"
-            ]
+            "allow": ["debug", "info", "warn", "error", "[level]"]
           }
         },
         "noReactSpecificProps": "off",
         "noEmptyBlockStatements": "error",
-        "noFocusedTests": "error"
+        "noFocusedTests": "error",
+        "noImportCycles": "on"
       },
       "complexity": {
         "useSimplifiedLogicExpression": "off",
@@ -184,10 +183,19 @@
       "enabled": true
     }
   },
+  "overrides": [
+    {
+      "includes": ["src/index.ts"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noBarrelFile": "off"
+          }
+        }
+      }
+    }
+  ],
   "files": {
-    "includes": [
-      "**",
-      "!.bruno"
-    ]
+    "includes": ["**", "!.bruno"]
   }
 }

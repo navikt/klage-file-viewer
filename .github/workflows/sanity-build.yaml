@@ -1,0 +1,13 @@
+name: Sanity Build
+
+on: [pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  sanity-build:
+    name: Sanity Build
+    uses: ./.github/workflows/build-and-test.yaml
+    secrets:
+      READER_TOKEN: ${{ secrets.READER_TOKEN }}
