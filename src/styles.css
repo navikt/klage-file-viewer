@@ -79,12 +79,15 @@
   }
 
   .textLayer ::selection {
-    color: transparent;
-    background-color: color-mix(in oklab, var(--ax-bg-accent-strong) 50%, transparent);
+    /* biome-ignore lint/complexity/noImportantStyles: Consumers should not override */
+    color: transparent !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Consumers should not override */
+    background-color: color-mix(in oklab, var(--ax-bg-accent-strong) 50%, transparent) !important;
   }
 
   .textLayer br::selection {
-    background: transparent;
+    /* biome-ignore lint/complexity/noImportantStyles: Consumers should not override */
+    background: transparent !important;
   }
 
   .textLayer .endOfContent {
