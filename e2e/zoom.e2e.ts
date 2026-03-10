@@ -1,10 +1,17 @@
-import { focusViewer, INITIAL_SCALE, VIEWER_SELECTOR, ZOOM_IN_REGEX, ZOOM_OUT_REGEX } from '@e2e/helpers';
+import {
+  focusViewer,
+  INITIAL_SCALE,
+  VIEWER_SELECTOR,
+  waitForContent,
+  ZOOM_IN_REGEX,
+  ZOOM_OUT_REGEX,
+} from '@e2e/helpers';
 import { expect, test } from '@playwright/test';
 
 test.describe('KlageFileViewer', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector(VIEWER_SELECTOR);
+    await waitForContent(page);
   });
 
   test.describe('zoom controls', () => {

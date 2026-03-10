@@ -1,4 +1,4 @@
-import { DOCUMENT_WITH_VARIANTS_URL, TEXT_LAYER_SELECTOR, VIEWER_SELECTOR } from '@e2e/helpers';
+import { DOCUMENT_WITH_VARIANTS_URL, TEXT_LAYER_SELECTOR, VIEWER_SELECTOR, waitForContent } from '@e2e/helpers';
 import { expect, test } from '@playwright/test';
 
 test.describe('KlageFileViewer', () => {
@@ -6,11 +6,7 @@ test.describe('KlageFileViewer', () => {
     test.beforeEach(async ({ page }) => {
       // Navigate directly to only the document with both ARKIV and SLADDET variants
       await page.goto(DOCUMENT_WITH_VARIANTS_URL);
-      await page.waitForSelector(VIEWER_SELECTOR);
-
-      // Wait for the PDF text layer to render
-      const textLayer = page.locator(TEXT_LAYER_SELECTOR).first();
-      await expect(textLayer).toBeVisible();
+      await waitForContent(page);
     });
 
     test('shows redacted version by default', async ({ page }) => {

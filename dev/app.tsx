@@ -8,7 +8,7 @@ import { Alert, Box, Theme } from '@navikt/ds-react';
 import { useMemo } from 'react';
 import { KlageFileViewer } from '@/index';
 
-const workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href;
+const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).href;
 
 const COMMON_PASSWORDS = ['123', 'passord'];
 

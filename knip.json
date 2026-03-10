@@ -1,5 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "project": ["src/**/*.{ts,tsx}", "dev/**/*.{ts,tsx}", ".github/scripts/**/*.ts"],
+  "ignoreBinaries": ["scripts/download-chromium.sh"],
   "ignoreDependencies": ["@navikt/ds-css", "@tailwindcss/postcss", "@opentelemetry/api"]
 }

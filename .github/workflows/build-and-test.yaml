@@ -71,6 +71,10 @@ jobs:
         if: success() || (!inputs.publish && failure())
         run: bun test
 
+      - name: Download Chromium 142 (Applikasjonsportalen)
+        if: success() || (!inputs.publish && failure())
+        run: scripts/download-chromium.sh
+
       - name: Run E2E tests
         if: success() || (!inputs.publish && failure())
         run: bun e2e

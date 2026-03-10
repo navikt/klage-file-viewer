@@ -8,16 +8,20 @@ import {
   PAGE_COUNT_REGEX,
   SINGLE_PDF_URL,
   VIEWER_SELECTOR,
+  waitForContent,
+  waitForPdfText,
 } from '@e2e/helpers';
 import { expect, test } from '@playwright/test';
 
-test.describe('KlageFileViewer', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector(VIEWER_SELECTOR);
-  });
+const EXPECTED_PDF_TEXT = 'Forklar kort og presist hva reglene sier og skriv begrunnelse';
 
+test.describe('KlageFileViewer', () => {
   test.describe('navigation', () => {
+    test.beforeEach(async ({ page }) => {
+      await page.goto('/');
+      await waitForContent(page);
+    });
+
     test('can navigate to next page within a document', async ({ page }) => {
       const header = page.locator(FILE_HEADER_SELECTOR).first();
       await expect(header.getByText(PAGE_COUNT_REGEX)).toBeVisible();
@@ -46,7 +50,7 @@ test.describe('KlageFileViewer', () => {
     test('opens search with Control+F on a single PDF', async ({ page }) => {
       // Search is only available when a single PDF is displayed
       await page.goto(SINGLE_PDF_URL);
-      await page.waitForSelector(VIEWER_SELECTOR);
+      await waitForPdfText(page, EXPECTED_PDF_TEXT);
 
       await focusViewer(page);
       await page.keyboard.press('Control+f');
@@ -59,10 +63,9 @@ test.describe('KlageFileViewer', () => {
     test('navigates to next page with Control+ArrowDown', async ({ page }) => {
       // Use a single multi-page PDF — full-height pages make scroll-based visibility detection reliable
       await page.goto(SINGLE_PDF_URL);
-      await page.waitForSelector(VIEWER_SELECTOR);
+      await waitForPdfText(page, EXPECTED_PDF_TEXT);
 
       const header = page.locator(FILE_HEADER_SELECTOR).first();
-      await expect(header.getByText(PAGE_COUNT_REGEX)).toBeVisible();
 
       const pageTag = header.getByText(PAGE_COUNT_REGEX);
       const initialText = await pageTag.textContent();
@@ -88,10 +91,9 @@ test.describe('KlageFileViewer', () => {
     test('navigates to previous page with Control+ArrowUp', async ({ page }) => {
       // Use a single multi-page PDF — full-height pages make scroll-based visibility detection reliable
       await page.goto(SINGLE_PDF_URL);
-      await page.waitForSelector(VIEWER_SELECTOR);
+      await waitForPdfText(page, EXPECTED_PDF_TEXT);
 
       const header = page.locator(FILE_HEADER_SELECTOR).first();
-      await expect(header.getByText(PAGE_COUNT_REGEX)).toBeVisible();
 
       const pageTag = header.getByText(PAGE_COUNT_REGEX);
       const initialText = await pageTag.textContent();
@@ -125,6 +127,9 @@ test.describe('KlageFileViewer', () => {
     });
 
     test('navigates to next document with Control+Shift+ArrowDown', async ({ page }) => {
+      await page.goto('/');
+      await waitForContent(page);
+
       const viewer = page.locator(VIEWER_SELECTOR);
       const documentTag = viewer.getByText(DOCUMENT_COUNT_REGEX);
       await expect(documentTag).toBeVisible();
@@ -149,6 +154,9 @@ test.describe('KlageFileViewer', () => {
     });
 
     test('navigates to previous document with Control+Shift+ArrowUp', async ({ page }) => {
+      await page.goto('/');
+      await waitForContent(page);
+
       const viewer = page.locator(VIEWER_SELECTOR);
       const documentTag = viewer.getByText(DOCUMENT_COUNT_REGEX);
       await expect(documentTag).toBeVisible();

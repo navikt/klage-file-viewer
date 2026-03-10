@@ -34,3 +34,33 @@ export const focusViewer = async (page: Page) => {
   const container = page.locator('[data-klage-file-viewer]');
   await container.focus();
 };
+
+/**
+ * Wait until the viewer has loaded at least one file section and the page
+ * counter is visible.
+ *
+ * Files are lazy-loaded section by section, so this only guarantees that the
+ * *first* section has loaded — not that every section or every page has
+ * rendered. Works for all file types (PDF, Excel, images).
+ *
+ * Use {@link waitForPdfText} when a test depends on actual PDF content.
+ */
+export const waitForContent = async (page: Page) => {
+  await page.locator(FILE_HEADER_SELECTOR).first().getByText(PAGE_COUNT_REGEX).waitFor({ state: 'visible' });
+};
+
+/**
+ * Wait until the PDF text layer has rendered and contains the expected text.
+ *
+ * PDF pages are lazy-loaded — only visible pages get a canvas and text layer.
+ * The text layer is the *last* step of the render pipeline (canvas first, then
+ * text extraction), so its presence with the expected content confirms the PDF
+ * is fully rendered and interactive.
+ *
+ * Chromium 141 (Edge 142 equivalent) is noticeably slower at rendering PDFs
+ * than the latest Chromium. Waiting for specific text avoids flaky timeouts
+ * caused by asserting before the render pipeline finishes.
+ */
+export const waitForPdfText = async (page: Page, text: string) => {
+  await page.locator(TEXT_LAYER_SELECTOR, { hasText: text }).first().waitFor({ state: 'visible' });
+};
