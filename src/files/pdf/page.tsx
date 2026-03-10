@@ -2,6 +2,7 @@ import { type PDFPageProxy, TextLayer } from 'pdfjs-dist';
 import type { PageViewport } from 'pdfjs-dist/types/src/display/display_utils';
 import { useEffect, useMemo, useRef } from 'react';
 import { ThemeMode, useFileViewerConfig } from '@/context';
+import { observeCanvasResize } from '@/files/pdf/pixel-ratio';
 import { processTextItems } from '@/files/pdf/process-text-items';
 import { useTextLayerSelection } from '@/files/pdf/text-layer-selection';
 
@@ -35,64 +36,6 @@ const getTextLayerStyle = (rotation: number): React.CSSProperties => {
   }
 };
 
-/**
- * The desired output scale at the base zoom level (scale = 1).
- *
- * This value covers the worst-case multi-monitor scenario on Windows: a laptop with
- * `devicePixelRatio ≈ 1.5` driving a 4K monitor in duplicated (mirrored) mode, where the
- * OS performs an additional 2× framebuffer upscale (1.5 × 2 = 3). Neither `devicePixelRatio`
- * nor `devicePixelContentBoxSize` can detect the 4K monitor in this mode.
- *
- * At zoom levels above 1× the effective floor decreases proportionally — text is already
- * physically larger, so fewer canvas pixels per CSS pixel are needed to maintain the same
- * perceived sharpness. This keeps canvas memory roughly constant regardless of zoom level.
- */
-const BASE_OUTPUT_SCALE = 3;
-
-/**
- * Get the observed device-to-CSS pixel ratio from a `ResizeObserverEntry`.
- *
- * Uses `devicePixelContentBoxSize` when available to get the **true** physical pixel
- * dimensions the canvas occupies on the current display. This is more reliable than
- * `window.devicePixelRatio` in multi-monitor setups (especially extended displays on
- * Windows) where the reported ratio may not match the monitor the window is actually on.
- *
- * Falls back to `window.devicePixelRatio` when the API is unavailable.
- */
-const getDevicePixelRatio = (entry: ResizeObserverEntry): number => {
-  const devicePixelSize = entry.devicePixelContentBoxSize?.[0];
-  const [cssSize] = entry.contentBoxSize;
-
-  if (devicePixelSize !== undefined && cssSize !== undefined && cssSize.inlineSize > 0 && cssSize.blockSize > 0) {
-    // Use the larger axis to ensure sufficient resolution in both dimensions.
-    return Math.max(devicePixelSize.inlineSize / cssSize.inlineSize, devicePixelSize.blockSize / cssSize.blockSize);
-  }
-
-  return window.devicePixelRatio;
-};
-
-/**
- * Compute the canvas output scale given the observed device pixel ratio and the PDF
- * viewer zoom level.
- *
- * The output scale satisfies three constraints:
- * 1. At least `1.0` — so the canvas always has at least as many backing pixels as CSS
- *    pixels. When `outputScale < 1` the browser must upscale the canvas to fill the CSS
- *    layout box. On Edge/Windows with hardware-accelerated compositing and a sub-1.0 DPR
- *    (e.g. 50 % browser zoom on a 150 %-scaled laptop → DPR 0.75) this upscale can use
- *    nearest-neighbour sampling, producing sharply pixelated text. A floor of 1.0
- *    eliminates the upscale entirely. The resulting canvas size at high zoom matches what
- *    a DPR 1.0 user already gets, so the memory cost is not unreasonable.
- * 2. At least the observed device pixel ratio — so canvas pixels ≥ physical pixels on the
- *    current display (handles extended multi-monitor and high-DPI screens).
- * 3. At least `BASE_OUTPUT_SCALE / max(scale, 1)` — maintains enough absolute canvas
- *    resolution for crisp text after OS-level framebuffer upscaling on duplicated displays.
- *    At zoom > 1× text is already large, so the floor decreases proportionally, keeping
- *    canvas memory roughly constant instead of growing quadratically with zoom.
- */
-const computeOutputScale = (observedDevicePixelRatio: number, scale: number): number =>
-  Math.max(1, observedDevicePixelRatio, BASE_OUTPUT_SCALE / Math.max(scale, 1));
-
 /** Cancel any in-progress render and text layer tasks, then clear the text layer container. */
 const cancelRender = (
   renderTaskRef: React.RefObject<ReturnType<PDFPageProxy['render']> | null>,
@@ -110,29 +53,6 @@ const cancelRender = (
   }
 
   textLayerElement.innerHTML = '';
-};
-
-/** Observe the canvas for resize / DPI changes using `devicePixelContentBoxSize` when available. */
-const observeCanvasResize = (
-  canvas: HTMLCanvasElement,
-  callback: (entry: ResizeObserverEntry) => void,
-): ResizeObserver => {
-  const observer = new ResizeObserver((entries) => {
-    const entry = entries[0];
-
-    if (entry !== undefined) {
-      callback(entry);
-    }
-  });
-
-  try {
-    observer.observe(canvas, { box: 'device-pixel-content-box' });
-  } catch {
-    // `device-pixel-content-box` is not supported — fall back to `window.devicePixelRatio`.
-    observer.observe(canvas);
-  }
-
-  return observer;
 };
 
 /** Apply text layer CSS custom properties and dimensions for an unrotated viewport. */
@@ -179,8 +99,12 @@ const renderPage = async (ctx: RenderPageContext, outputScale: number): Promise<
   }
 
   // Set canvas backing-store dimensions to match the computed output scale.
-  canvas.width = Math.floor(viewport.width * outputScale);
-  canvas.height = Math.floor(viewport.height * outputScale);
+  canvas.width = Math.ceil(viewport.width * outputScale);
+  canvas.height = Math.ceil(viewport.height * outputScale);
+
+  console.debug(
+    `Rendering PDF page at scale ${scale} with output scale ${outputScale} and canvas size ${canvas.width}x${canvas.height} (${canvas.clientWidth}x${canvas.clientHeight})`,
+  );
 
   // PDF.js TextLayer positions text based on unrotated (raw) page coordinates.
   // We create an unrotated viewport for the TextLayer and apply CSS rotation to the container.
@@ -274,15 +198,13 @@ export const PdfPage = ({ page, scale, rotation }: PdfPageProps) => {
     /**
      * Use a `ResizeObserver` with `devicePixelContentBoxSize` to detect the true physical
      * pixel dimensions the canvas occupies. This is more accurate than `window.devicePixelRatio`
-     * which can be stale or incorrect in multi-monitor setups — especially when displays are
-     * duplicated on Windows.
+     * which can be stale or incorrect in multi-monitor setups.
      *
      * The observer also automatically re-renders when the effective DPI changes, e.g. when the
      * window is moved between monitors with different scaling factors.
      */
-    const observer = observeCanvasResize(canvas, (entry) => {
+    const observer = observeCanvasResize(canvas, (outputScale) => {
       if (!cancelled && !page.destroyed) {
-        const outputScale = computeOutputScale(getDevicePixelRatio(entry), scale);
         renderPage(ctx, outputScale);
       }
     });
@@ -300,6 +222,11 @@ export const PdfPage = ({ page, scale, rotation }: PdfPageProps) => {
         ref={canvasRef}
         style={{
           display: 'block',
+          // Prevent host-application CSS resets (e.g. Tailwind preflight's
+          // `max-width: 100%` on replaced elements) from constraining the
+          // canvas display size below what the rendering pipeline expects.
+          maxWidth: 'none',
+          maxHeight: 'none',
           filter: invertColors && theme === ThemeMode.Dark ? 'hue-rotate(180deg) invert(1)' : 'none',
         }}
       />
