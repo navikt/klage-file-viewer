@@ -108,13 +108,13 @@ const renderPage = async (ctx: RenderPageContext, outputScale: number): Promise<
 
   // PDF.js TextLayer positions text based on unrotated (raw) page coordinates.
   // We create an unrotated viewport for the TextLayer and apply CSS rotation to the container.
-  const unrotatedViewport = page.getViewport({
+  const unrotatedViewport = viewport.clone({
     scale: scale / outputScale,
     rotation: page.rotate, // Only inherent page rotation, no user rotation
   });
 
   // Get full-scale unrotated dimensions for sizing
-  const unrotatedFullViewport = page.getViewport({ scale, rotation: page.rotate });
+  const unrotatedFullViewport = unrotatedViewport.clone({ scale, rotation: page.rotate });
   const unrotatedW = unrotatedFullViewport.width;
   const unrotatedH = unrotatedFullViewport.height;
 
