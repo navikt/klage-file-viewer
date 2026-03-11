@@ -40,4 +40,4 @@ const getDevicePixelRatio = (entry: ResizeObserverEntry): number => {
   return window.devicePixelRatio;
 };
 
-const computeOutputScale = (observedDevicePixelRatio: number): number => Math.max(1, observedDevicePixelRatio);
+const computeOutputScale = (observedDevicePixelRatio: number): number => Math.max(1, observedDevicePixelRatio) * 2;
