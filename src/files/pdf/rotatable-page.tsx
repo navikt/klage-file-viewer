@@ -43,7 +43,10 @@ export const RotatablePage = ({
   const hasHighlights = highlights !== undefined && highlights.length > 0;
 
   return (
-    <div ref={refCallback} className="group/page relative w-fit shadow-ax-dialog">
+    <div
+      ref={refCallback}
+      className="group/page relative my-1 w-fit border-t border-t-ax-neutral-200A shadow-ax-dialog"
+    >
       <PdfPage page={page} scale={scale / 100} rotation={rotation} />
 
       {hasHighlights && currentMatchIndex !== undefined ? (

@@ -188,7 +188,7 @@ const KlageFileViewerInner = ({
   return (
     <Box
       as="section"
-      background="default"
+      background="neutral-softA"
       shadow="dialog"
       borderRadius="4"
       position="relative"
