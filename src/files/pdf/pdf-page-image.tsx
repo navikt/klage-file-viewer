@@ -1,0 +1,89 @@
+import type { PdfDocumentObject, PdfEngine, PdfPageObject } from '@embedpdf/models';
+import { useEffect, useRef, useState } from 'react';
+import { ThemeMode, useFileViewerConfig } from '@/context';
+
+interface PdfPageImageProps {
+  engine: PdfEngine;
+  doc: PdfDocumentObject;
+  page: PdfPageObject;
+  scale: number;
+  visible: boolean;
+}
+
+export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImageProps) => {
+  const [src, setSrc] = useState<string | null>(null);
+  const prevUrlRef = useRef<string | null>(null);
+  const { theme, invertColors } = useFileViewerConfig();
+
+  useEffect(() => {
+    if (!visible) {
+      if (prevUrlRef.current !== null) {
+        URL.revokeObjectURL(prevUrlRef.current);
+        prevUrlRef.current = null;
+        setSrc(null);
+      }
+
+      return;
+    }
+
+    let cancelled = false;
+
+    const task = engine.renderPage(doc, page, {
+      scaleFactor: scale / 100,
+      rotation: 0,
+      dpr: window.devicePixelRatio,
+      imageType: 'image/webp',
+      imageQuality: 0.92,
+    });
+
+    task.wait(
+      (blob) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (prevUrlRef.current !== null) {
+          URL.revokeObjectURL(prevUrlRef.current);
+        }
+
+        const url = URL.createObjectURL(blob);
+        prevUrlRef.current = url;
+        setSrc(url);
+      },
+      () => {
+        // Render error — show nothing (placeholder stays)
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [engine, doc, page, scale, visible]);
+
+  // Revoke blob URL on unmount
+  useEffect(
+    () => () => {
+      if (prevUrlRef.current !== null) {
+        URL.revokeObjectURL(prevUrlRef.current);
+        prevUrlRef.current = null;
+      }
+    },
+    [],
+  );
+
+  const filterStyle = invertColors && theme === ThemeMode.Dark ? 'hue-rotate(180deg) invert(1)' : 'none';
+
+  if (src === null) {
+    return <div className="h-full w-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.3)]" />;
+  }
+
+  return (
+    <img
+      src={src}
+      alt=""
+      draggable={false}
+      className="h-full w-full"
+      style={{ filter: filterStyle, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
+    />
+  );
+};

@@ -1,201 +1,132 @@
-import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
-import { useCallback, useEffect, useState } from 'react';
-import {
-  loadWithAutoTry,
-  loadWithSubmittedPassword,
-  type PdfLoadResult,
-  PdfLoadResultType,
-} from '@/files/pdf/pdf-loading';
-import { getStoredPassword, removeStoredPassword, storePassword } from '@/files/pdf/pdf-password-storage';
-
-export enum PasswordStatus {
-  NONE = 0,
-  NEEDED = 1,
-  INCORRECT = 2,
-}
-
-export type PasswordState =
-  | { status: PasswordStatus.NONE }
-  | { status: PasswordStatus.NEEDED }
-  | { status: PasswordStatus.INCORRECT; attempts: number };
-
-interface UsePdfDocumentParams {
-  data: Blob | null;
-  commonPasswords: string[] | undefined;
-  fileUrl: string;
-}
+import type { PdfDocumentObject, PdfEngine } from '@embedpdf/models';
+import { useEffect, useRef, useState } from 'react';
 
 interface UsePdfDocumentResult {
-  pdfDocument: PDFDocumentProxy | null;
-  pages: PDFPageProxy[];
-  passwordState: PasswordState;
-  pdfError: string | null;
-  usedPassword: string | null;
-  autoTryingPasswords: boolean;
-  loadedData: Blob | null;
-  submittedPassword: string | null;
-  setSubmittedPassword: (password: string | null) => void;
+  doc: PdfDocumentObject | null;
+  loading: boolean;
+  error: string | null;
 }
 
-export const usePdfDocument = ({ data, commonPasswords, fileUrl }: UsePdfDocumentParams): UsePdfDocumentResult => {
-  const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
-  const [pdfError, setPdfError] = useState<string | null>(null);
-  const [loadedData, setLoadedData] = useState<Blob | null>(null);
-  const [pages, setPages] = useState<PDFPageProxy[]>([]);
-  const [passwordState, setPasswordState] = useState<PasswordState>({ status: PasswordStatus.NONE });
-  const [submittedPassword, setSubmittedPassword] = useState<string | null>(null);
-  const [usedPassword, setUsedPassword] = useState<string | null>(null);
-  const [autoTryingPasswords, setAutoTryingPasswords] = useState(false);
+const noop = () => {
+  // Intentional no-op for PdfTask callbacks where we don't need to handle the result.
+};
 
-  // Load PDF document from blob
-  useEffect(() => {
-    if (data === null) {
-      setPdfDocument(null);
-      setLoadedData(null);
+const tryOpenDocument = (
+  engine: PdfEngine,
+  file: { id: string; content: ArrayBuffer },
+  password?: string,
+): Promise<PdfDocumentObject> =>
+  new Promise((resolve, reject) => {
+    const options = password !== undefined ? { password } : undefined;
+    const task = engine.openDocumentBuffer(file, options);
+    task.wait(resolve, reject);
+  });
 
-      return;
+const isPasswordError = (err: unknown): boolean =>
+  err instanceof Error && (err.message.includes('password') || err.message.includes('Password'));
+
+const tryOpenWithPasswords = async (
+  engine: PdfEngine,
+  file: { id: string; content: ArrayBuffer },
+  passwords: string[],
+): Promise<PdfDocumentObject | null> => {
+  for (const password of passwords) {
+    try {
+      return await tryOpenDocument(engine, file, password);
+    } catch {
+      // Try next password
+    }
+  }
+
+  return null;
+};
+
+const closeDocument = (engine: PdfEngine, doc: PdfDocumentObject): void => {
+  const closeTask = engine.closeDocument(doc);
+  closeTask.wait(noop, noop);
+};
+
+/**
+ * Attempt to open a PDF document, retrying with common passwords if the
+ * initial open fails with a password error.
+ */
+const openDocumentWithPasswords = async (
+  engine: PdfEngine,
+  data: Blob,
+  commonPasswords: string[] | undefined,
+): Promise<PdfDocumentObject> => {
+  const arrayBuffer = await data.arrayBuffer();
+  const file = { id: crypto.randomUUID(), content: arrayBuffer };
+
+  try {
+    return await tryOpenDocument(engine, file);
+  } catch (err) {
+    if (isPasswordError(err) && commonPasswords !== undefined && commonPasswords.length > 0) {
+      const doc = await tryOpenWithPasswords(engine, file, commonPasswords);
+
+      if (doc !== null) {
+        return doc;
+      }
     }
 
-    let cancelled = false;
-    const isCancelled = () => cancelled;
+    throw err;
+  }
+};
 
-    const loadPdf = async () => {
-      setPdfError(null);
+export const usePdfDocument = (
+  engine: PdfEngine | null,
+  data: Blob | null,
+  commonPasswords?: string[],
+): UsePdfDocumentResult => {
+  const [doc, setDoc] = useState<PdfDocumentObject | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const docRef = useRef<PdfDocumentObject | null>(null);
 
-      const arrayBuffer = await data.arrayBuffer();
-
-      const storedPassword = getStoredPassword(fileUrl);
-
-      const result =
-        submittedPassword !== null
-          ? await loadWithSubmittedPassword(arrayBuffer, submittedPassword)
-          : await loadWithAutoTry(arrayBuffer, commonPasswords, storedPassword, isCancelled, {
-              onAutoTryStart: () => {
-                if (!cancelled) {
-                  setAutoTryingPasswords(true);
-                }
-              },
-              onAutoTryEnd: () => {
-                if (!cancelled) {
-                  setAutoTryingPasswords(false);
-                }
-              },
-            });
-
-      if (cancelled) {
-        return;
-      }
-
-      applyLoadResult(result, data);
-    };
-
-    const applyLoadResult = (result: PdfLoadResult, blob: Blob) => {
-      switch (result.type) {
-        case PdfLoadResultType.SUCCESS: {
-          setPdfDocument(result.doc);
-          setLoadedData(blob);
-          setUsedPassword(result.usedPassword);
-          setPasswordState({ status: PasswordStatus.NONE });
-
-          if (result.usedPassword !== null) {
-            storePassword(fileUrl, result.usedPassword);
-          }
-
-          break;
-        }
-        case PdfLoadResultType.PASSWORD_NEEDED: {
-          setPasswordState({ status: PasswordStatus.NEEDED });
-          setLoadedData(blob);
-          removeStoredPassword(fileUrl);
-          break;
-        }
-        case PdfLoadResultType.PASSWORD_INCORRECT: {
-          setPasswordState((prev) => ({
-            status: PasswordStatus.INCORRECT,
-            attempts: prev.status === PasswordStatus.INCORRECT ? prev.attempts + 1 : 1,
-          }));
-          setLoadedData(blob);
-          break;
-        }
-        case PdfLoadResultType.ERROR: {
-          setPdfError(result.message);
-          setLoadedData(blob);
-          console.error('Error loading PDF:', result.message);
-          break;
-        }
-      }
-    };
-
-    loadPdf();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [data, submittedPassword, commonPasswords, fileUrl]);
-
-  // Cleanup: clear pages eagerly before destroying the document to prevent
-  // ResizeObserver callbacks from calling render() on destroyed PDFPageProxy objects.
   useEffect(() => {
-    return () => {
-      if (pdfDocument !== null) {
-        setPages([]);
-        pdfDocument.destroy();
-      }
-    };
-  }, [pdfDocument]);
-
-  // Load pages from document
-  useEffect(() => {
-    if (pdfDocument === null) {
-      setPages([]);
-
+    if (engine === null || data === null) {
       return;
     }
 
     let cancelled = false;
 
-    const loadPages = async () => {
-      const loaded: PDFPageProxy[] = [];
+    const run = async () => {
+      setLoading(true);
+      setError(null);
 
       try {
-        for (let i = 1; i <= pdfDocument.numPages; i++) {
-          if (cancelled) {
-            return;
-          }
+        const openedDoc = await openDocumentWithPasswords(engine, data, commonPasswords);
 
-          const page = await pdfDocument.getPage(i);
-          loaded.push(page);
+        if (cancelled) {
+          closeDocument(engine, openedDoc);
+
+          return;
         }
-      } catch {
-        // Document was destroyed while loading pages — discard partial results.
-        return;
-      }
 
-      if (!cancelled) {
-        setPages(loaded);
+        docRef.current = openedDoc;
+        setDoc(openedDoc);
+        setLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Kunne ikke åpne PDF-dokumentet');
+          setLoading(false);
+        }
       }
     };
 
-    loadPages();
+    run();
 
     return () => {
       cancelled = true;
+
+      if (docRef.current !== null) {
+        const currentDoc = docRef.current;
+        docRef.current = null;
+        setDoc(null);
+        closeDocument(engine, currentDoc);
+      }
     };
-  }, [pdfDocument]);
+  }, [engine, data, commonPasswords]);
 
-  const setSubmittedPasswordStable = useCallback((password: string | null) => {
-    setSubmittedPassword(password);
-  }, []);
-
-  return {
-    pdfDocument,
-    pages,
-    passwordState,
-    pdfError,
-    usedPassword,
-    autoTryingPasswords,
-    loadedData,
-    submittedPassword,
-    setSubmittedPassword: setSubmittedPasswordStable,
-  };
+  return { doc, loading, error };
 };

@@ -1,4 +1,3 @@
-import { resolve } from 'node:path';
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
@@ -9,11 +8,6 @@ export default defineConfig({
   metafile: true,
   format: 'esm',
   entry: ['src/index.ts'],
-  noExternal: [/^pdfjs-dist/],
+  noExternal: [/^@embedpdf/],
   external: ['react', 'react-dom', /^@navikt\//, /^@opentelemetry\//],
-  esbuildOptions(options) {
-    options.alias = {
-      'pdfjs-dist': resolve('node_modules/pdfjs-dist/legacy/build/pdf.min.mjs'),
-    };
-  },
 });

@@ -1,9 +1,11 @@
 import { Box, VStack } from '@navikt/ds-react';
-import { GlobalWorkerOptions } from 'pdfjs-dist';
-import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { type Ref, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { FileViewerProvider, type KlageFileViewerProviderProps, useFileViewerConfig } from '@/context';
 import type { DocumentNavigation } from '@/file-header/file-header';
 import { FileSection } from '@/file-section';
+import type { PdfSectionSearchInfo } from '@/files/pdf/loaded-pdf-section';
+import { PdfEngineProvider } from '@/files/pdf/pdf-engine-context';
+import type { SearchableDocument } from '@/files/pdf/search/search';
 import type { HighlightRect, PageHighlights } from '@/files/pdf/search/types';
 import { useInitialScale } from '@/hooks/use-initial-scale';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
@@ -12,7 +14,7 @@ import { RefreshRegistryProvider, useRefreshRegistry } from '@/hooks/use-refresh
 import { useSectionVisibility } from '@/hooks/use-section-visibility';
 import { Toolbar } from '@/toolbar/toolbar';
 import { ToolbarHeightProvider, useToolbarHeight } from '@/toolbar-height-context';
-import type { FileEntry, FileType, FileVariants } from '@/types';
+import type { FileEntry } from '@/types';
 
 export interface KlageFileViewerHandle {
   /** Moves focus to the scroll container. */
@@ -23,13 +25,14 @@ export interface KlageFileViewerHandle {
   reloadAll: () => Promise<number>;
 }
 
-export interface KlageFileViewerProps extends KlageFileViewerInnerProps, KlageFileViewerProviderProps {}
+export interface KlageFileViewerProps
+  extends Omit<KlageFileViewerInnerProps, 'toolbarRef'>,
+    KlageFileViewerProviderProps {}
 
 const PADDING = 16;
 
 export const KlageFileViewer = ({
   files,
-  workerSrc,
   onClose,
   newTabUrl,
   theme,
@@ -42,17 +45,18 @@ export const KlageFileViewer = ({
   return (
     <FileViewerProvider {...config} theme={theme}>
       <RefreshRegistryProvider>
-        <ToolbarHeightProvider toolbarRef={toolbarRef}>
-          <KlageFileViewerInner
-            files={files}
-            workerSrc={workerSrc}
-            onClose={onClose}
-            newTabUrl={newTabUrl}
-            handleRef={handleRef}
-            className={className === undefined ? 'klage-file-viewer' : `klage-file-viewer ${className}`}
-            toolbarRef={toolbarRef}
-          />
-        </ToolbarHeightProvider>
+        <PdfEngineProvider>
+          <ToolbarHeightProvider toolbarRef={toolbarRef}>
+            <KlageFileViewerInner
+              files={files}
+              onClose={onClose}
+              newTabUrl={newTabUrl}
+              handleRef={handleRef}
+              className={className === undefined ? 'klage-file-viewer' : `klage-file-viewer ${className}`}
+              toolbarRef={toolbarRef}
+            />
+          </ToolbarHeightProvider>
+        </PdfEngineProvider>
       </RefreshRegistryProvider>
     </FileViewerProvider>
   );
@@ -61,8 +65,6 @@ export const KlageFileViewer = ({
 interface KlageFileViewerInnerProps {
   /** List of files to render in sequence */
   files: FileEntry[];
-  /** URL to the PDF.js worker script. Required when any file has `variants` resolving to `PDF`. */
-  workerSrc?: string;
   /** Shows close button when provided — called when the user clicks the close button */
   onClose?: () => void;
   /** When provided, shows a link in the toolbar to open the entire document set in a new tab */
@@ -78,7 +80,6 @@ interface InternalRefs {
 
 const KlageFileViewerInner = ({
   files,
-  workerSrc,
   onClose,
   newTabUrl,
   handleRef,
@@ -102,21 +103,10 @@ const KlageFileViewerInner = ({
     reloadAll,
   }));
 
-  const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const [pdfSearchInfoMap, setPdfSearchInfoMap] = useState<Map<number, PdfSectionSearchInfo>>(() => new Map());
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  const hasPdfs = files.some((file) => containsFileType(file.variants, 'PDF'));
-
-  // Configure PDF.js worker when PDF files are present (idempotent — safe to call on every render).
-  useEffect(() => {
-    if (hasPdfs && workerSrc !== undefined) {
-      GlobalWorkerOptions.workerSrc = workerSrc;
-    }
-  }, [hasPdfs, workerSrc]);
-
-  const isSinglePdf = files.length === 1 && files[0] !== undefined && getInitialFileType(files[0].variants) === 'PDF';
-
-  const { loadedSectionCount, handlePageCountReady } = useLazyLoading({
+  const { loadedSectionCount, sectionPageCounts, handlePageCountReady } = useLazyLoading({
     sectionCount: files.length,
     scrollContainerRef,
   });
@@ -156,7 +146,6 @@ const KlageFileViewerInner = ({
   const { handleKeyDown } = useKeyboardShortcuts({
     scrollContainerRef,
     setScale,
-    isSinglePdf,
     onOpenSearch: () => {
       setIsSearchOpen(true);
       searchInputRef.current?.focus();
@@ -167,23 +156,92 @@ const KlageFileViewerInner = ({
     nextDocumentDisabled,
   });
 
-  const highlightsByPage = useMemo(() => {
-    const map = new Map<number, HighlightRect[]>();
+  const searchDocuments = useMemo<SearchableDocument[]>(() => {
+    const docs: SearchableDocument[] = [];
+
+    // Build sorted list of section indices that have search info
+    const sortedIndices = Array.from(pdfSearchInfoMap.keys()).sort((a, b) => a - b);
+
+    for (const sectionIndex of sortedIndices) {
+      const info = pdfSearchInfoMap.get(sectionIndex);
+
+      if (info === undefined) {
+        continue;
+      }
+
+      // Compute page number offset: sum of page counts from all preceding sections
+      let pageNumberOffset = 0;
+
+      for (let i = 0; i < sectionIndex; i++) {
+        pageNumberOffset += sectionPageCounts.get(i) ?? 0;
+      }
+
+      docs.push({
+        engine: info.engine,
+        doc: info.doc,
+        pageNumberOffset,
+        scale,
+        rotations: info.rotations,
+      });
+    }
+
+    return docs;
+  }, [pdfSearchInfoMap, sectionPageCounts, scale]);
+
+  const sectionPageOffsets = useMemo(() => {
+    const offsets: number[] = [];
+    let cumulative = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      offsets.push(cumulative);
+      cumulative += sectionPageCounts.get(i) ?? 0;
+    }
+
+    return offsets;
+  }, [files.length, sectionPageCounts]);
+
+  const highlightsBySection = useMemo(() => {
+    const globalMap = new Map<number, HighlightRect[]>();
 
     for (const { pageNumber, highlights } of searchHighlights) {
-      map.set(pageNumber, highlights);
+      globalMap.set(pageNumber, highlights);
     }
 
-    return map;
-  }, [searchHighlights]);
+    return files.map((_file, index) => {
+      const offset = sectionPageOffsets[index] ?? 0;
+      const pageCount = sectionPageCounts.get(index) ?? 0;
+      const localMap = new Map<number, HighlightRect[]>();
 
-  const setPageRef = useCallback((pageNumber: number, element: HTMLDivElement | null) => {
-    if (element === null) {
-      pageRefs.current.delete(pageNumber);
-    } else {
-      pageRefs.current.set(pageNumber, element);
-    }
-  }, []);
+      for (let localPage = 1; localPage <= pageCount; localPage++) {
+        const globalPage = offset + localPage;
+        const highlights = globalMap.get(globalPage);
+
+        if (highlights !== undefined) {
+          localMap.set(localPage, highlights);
+        }
+      }
+
+      return localMap;
+    });
+  }, [searchHighlights, files, sectionPageOffsets, sectionPageCounts]);
+
+  const searchableReadyCallbacks = useMemo(
+    () =>
+      files.map((_file, index) => (info: PdfSectionSearchInfo | null) => {
+        setPdfSearchInfoMap((prev) => {
+          const next = new Map(prev);
+
+          if (info === null) {
+            next.delete(index);
+          } else {
+            next.set(index, info);
+          }
+
+          return next;
+        });
+      }),
+    [files],
+  );
 
   return (
     <Box
@@ -209,10 +267,9 @@ const KlageFileViewerInner = ({
           scale={scale}
           setScale={setScale}
           scrollContainerRef={scrollContainerRef}
-          isSinglePdf={isSinglePdf}
           isSearchOpen={isSearchOpen}
           setIsSearchOpen={setIsSearchOpen}
-          pageRefs={pageRefs}
+          searchDocuments={searchDocuments}
           onHighlightsChange={setSearchHighlights}
           currentMatchIndex={currentMatchIndex}
           onCurrentMatchIndexChange={setCurrentMatchIndex}
@@ -254,9 +311,9 @@ const KlageFileViewerInner = ({
                 scrollContainerRef={scrollContainerRef}
                 shouldLoad={index < loadedSectionCount}
                 onPageCountReady={(pageCount) => handlePageCountReady(index, pageCount)}
-                setPageRef={isSinglePdf ? setPageRef : undefined}
-                highlightsByPage={isSinglePdf ? highlightsByPage : undefined}
-                currentMatchIndex={isSinglePdf ? currentMatchIndex : undefined}
+                onSearchableReady={searchableReadyCallbacks[index]}
+                highlightsByPage={highlightsBySection[index]}
+                currentMatchIndex={currentMatchIndex}
                 documentNavigation={documentNavigations[index]}
               />
             </VStack>
@@ -265,30 +322,4 @@ const KlageFileViewerInner = ({
       </VStack>
     </Box>
   );
-};
-
-const containsFileType = (variants: FileVariants, fileType: FileType): boolean => {
-  if (typeof variants === 'string') {
-    return variants === fileType;
-  }
-
-  if (Array.isArray(variants)) {
-    return variants.some(({ filtype }) => filtype === fileType);
-  }
-
-  return variants.filtype === fileType;
-};
-
-const getInitialFileType = (variants: FileVariants): FileType => {
-  if (typeof variants === 'string') {
-    return variants;
-  }
-
-  if (Array.isArray(variants)) {
-    const redactedVariant = variants.find(({ format }) => format === 'SLADDET');
-
-    return (redactedVariant ?? variants[0]).filtype;
-  }
-
-  return variants.filtype;
 };

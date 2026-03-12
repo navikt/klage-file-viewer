@@ -1,0 +1,203 @@
+import type { PdfDocumentObject, PdfEngine, Rotation } from '@embedpdf/models';
+import { useCallback, useEffect } from 'react';
+import { PdfPageImage } from '@/files/pdf/pdf-page-image';
+import { HighlightLayer } from '@/files/pdf/search/highlight-layer';
+import type { HighlightRect } from '@/files/pdf/search/types';
+import { SelectionOverlay } from '@/files/pdf/selection/selection-overlay';
+import type { PageSelectionRange, ScreenGlyph } from '@/files/pdf/selection/types';
+import { usePageGlyphs } from '@/files/pdf/selection/use-page-glyphs';
+
+interface PdfPageProps {
+  engine: PdfEngine;
+  doc: PdfDocumentObject;
+  pageIndex: number;
+  scale: number;
+  rotation: Rotation;
+  visible: boolean;
+  highlights?: HighlightRect[];
+  currentMatchIndex?: number;
+  onRotate: (pageIndex: number) => void;
+  onRegisterElement: (pageNumber: number, element: HTMLDivElement | null) => void;
+  selectionRange: PageSelectionRange | null;
+  isSelecting: boolean;
+  onPointerDown: (pageIndex: number, charIndex: number, isDoubleClick: boolean) => void;
+  onPointerMove: (pageIndex: number, charIndex: number) => void;
+  onPointerUp: () => void;
+  glyphsRegistry: React.RefObject<Map<number, ScreenGlyph[]>>;
+}
+
+export const PdfPage = ({
+  engine,
+  doc,
+  pageIndex,
+  scale,
+  rotation,
+  visible,
+  highlights,
+  currentMatchIndex,
+  onRotate,
+  onRegisterElement,
+  selectionRange,
+  isSelecting,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  glyphsRegistry,
+}: PdfPageProps) => {
+  const pageNumber = pageIndex + 1;
+
+  const handleRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      onRegisterElement(pageNumber, el);
+    },
+    [onRegisterElement, pageNumber],
+  );
+
+  const page = doc.pages[pageIndex];
+
+  if (page === undefined) {
+    return null;
+  }
+
+  const scaleFactor = scale / 100;
+  const baseWidth = page.size.width * scaleFactor;
+  const baseHeight = page.size.height * scaleFactor;
+  const swapped = rotation === 1 || rotation === 3;
+  const width = swapped ? baseHeight : baseWidth;
+  const height = swapped ? baseWidth : baseHeight;
+
+  const rotationMatrix = getRotationMatrix(rotation, baseWidth, baseHeight);
+
+  return (
+    <div
+      ref={handleRef}
+      data-klage-file-viewer-page-number={pageNumber}
+      data-klage-file-viewer-scalable
+      className="relative flex w-full justify-center"
+    >
+      <div className="relative" style={{ width, height }}>
+        <div
+          style={{
+            width: baseWidth,
+            height: baseHeight,
+            transformOrigin: '0 0',
+            transform: rotationMatrix,
+            position: 'relative',
+          }}
+        >
+          <PdfPageImage engine={engine} doc={doc} page={page} scale={scale} visible={visible} />
+          <PageSelectionLayer
+            engine={engine}
+            doc={doc}
+            pageIndex={pageIndex}
+            page={page}
+            scale={scale}
+            visible={visible}
+            selectionRange={selectionRange}
+            isSelecting={isSelecting}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            glyphsRegistry={glyphsRegistry}
+          />
+          {highlights !== undefined && highlights.length > 0 ? (
+            <HighlightLayer highlights={highlights} currentMatchIndex={currentMatchIndex ?? 0} />
+          ) : null}
+        </div>
+        <RotateButton pageNumber={pageNumber} onRotate={() => onRotate(pageIndex)} />
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Inner component that calls `usePageGlyphs` — extracted so the hook is not
+ * called conditionally (the early return for `page === undefined` above would
+ * violate the rules of hooks if the hook lived in the parent).
+ */
+interface PageSelectionLayerProps {
+  engine: PdfEngine;
+  doc: PdfDocumentObject;
+  pageIndex: number;
+  page: import('@embedpdf/models').PdfPageObject;
+  scale: number;
+  visible: boolean;
+  selectionRange: PageSelectionRange | null;
+  isSelecting: boolean;
+  onPointerDown: (pageIndex: number, charIndex: number, isDoubleClick: boolean) => void;
+  onPointerMove: (pageIndex: number, charIndex: number) => void;
+  onPointerUp: () => void;
+  glyphsRegistry: React.RefObject<Map<number, ScreenGlyph[]>>;
+}
+
+const PageSelectionLayer = ({
+  engine,
+  doc,
+  pageIndex,
+  page,
+  scale,
+  visible,
+  selectionRange,
+  isSelecting,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  glyphsRegistry,
+}: PageSelectionLayerProps) => {
+  const { glyphs } = usePageGlyphs(engine, doc, page, scale, visible);
+
+  // Register glyphs in the shared registry so useTextSelection can access them for word expansion
+  useEffect(() => {
+    if (glyphs !== null) {
+      glyphsRegistry.current.set(pageIndex, glyphs);
+    }
+
+    return () => {
+      glyphsRegistry.current.delete(pageIndex);
+    };
+  }, [glyphs, glyphsRegistry, pageIndex]);
+
+  return (
+    <SelectionOverlay
+      glyphs={glyphs}
+      selectionRange={selectionRange}
+      pageIndex={pageIndex}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      isSelecting={isSelecting}
+    />
+  );
+};
+
+const getRotationMatrix = (rotation: Rotation, width: number, height: number): string => {
+  switch (rotation) {
+    case 0:
+      return 'none';
+    case 1:
+      return `rotate(90deg) translateY(-${height.toString(10)}px)`;
+    case 2:
+      return `rotate(180deg) translate(-${width.toString(10)}px, -${height.toString(10)}px)`;
+    case 3:
+      return `rotate(270deg) translateX(-${width.toString(10)}px)`;
+    default:
+      return 'none';
+  }
+};
+
+interface RotateButtonProps {
+  pageNumber: number;
+  onRotate: () => void;
+}
+
+const RotateButton = ({ pageNumber, onRotate }: RotateButtonProps) => (
+  <button
+    type="button"
+    className="absolute top-2 left-2 z-10 cursor-pointer rounded border border-black/20 bg-white/85 px-1.5 py-1 text-base leading-none opacity-50 shadow-sm transition-opacity hover:opacity-100"
+    onClick={onRotate}
+    title="Roter mot klokken"
+    aria-label={`Roter side ${pageNumber.toString(10)} mot klokken`}
+  >
+    ↺
+  </button>
+);

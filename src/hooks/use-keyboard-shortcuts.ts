@@ -11,9 +11,7 @@ interface UseKeyboardShortcutsParams {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   /** State setter for the current scale value. */
   setScale: React.Dispatch<React.SetStateAction<number>>;
-  /** Whether Cmd/Ctrl+F should open search. */
-  isSinglePdf: boolean;
-  /** Called when the user triggers Cmd/Ctrl+F and `isSinglePdf` is true. */
+  /** Called when the user triggers Cmd/Ctrl+F. */
   onOpenSearch?: () => void;
   /** Navigate to the previous document section. `undefined` when unavailable (e.g. single file). */
   onPreviousDocument?: () => void;
@@ -34,7 +32,6 @@ interface UseKeyboardShortcutsResult {
 export const useKeyboardShortcuts = ({
   scrollContainerRef,
   setScale,
-  isSinglePdf,
   onOpenSearch,
   onPreviousDocument,
   onNextDocument,
@@ -120,10 +117,8 @@ export const useKeyboardShortcuts = ({
           handleZoomOut();
           return;
         case Keys.F:
-          if (isSinglePdf) {
-            event.preventDefault();
-            onOpenSearch?.();
-          }
+          event.preventDefault();
+          onOpenSearch?.();
           return;
         case Keys.ArrowUp:
           event.preventDefault();
@@ -135,7 +130,7 @@ export const useKeyboardShortcuts = ({
           return;
       }
     },
-    [handleZoomIn, handleZoomOut, isSinglePdf, onOpenSearch, handleArrowNavigation],
+    [handleZoomIn, handleZoomOut, onOpenSearch, handleArrowNavigation],
   );
 
   // Ctrl/Cmd + scroll wheel zoom

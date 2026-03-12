@@ -3,6 +3,7 @@ import { Button, HStack, Tag, Tooltip } from '@navikt/ds-react';
 import { useState } from 'react';
 import { useFileViewerConfig } from '@/context';
 import { PdfSearch } from '@/files/pdf/search/pdf-search';
+import type { SearchableDocument } from '@/files/pdf/search/search';
 import type { PageHighlights } from '@/files/pdf/search/types';
 import { MOD_KEY_TEXT } from '@/lib/keys';
 import { NewTabButton } from '@/new-tab-button';
@@ -12,17 +13,15 @@ import { FitPage } from '@/toolbar/fit-page';
 import { FitWidth } from '@/toolbar/fit-width';
 import { Scale } from '@/toolbar/scale';
 import { SettingsModal } from '@/toolbar/settings-modal';
-import type { RotationDegrees } from '@/types';
 
 interface ToolbarProps {
   ref?: React.Ref<HTMLDivElement>;
   scale: number;
   setScale: React.Dispatch<React.SetStateAction<number>>;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
-  isSinglePdf: boolean;
   isSearchOpen: boolean;
   setIsSearchOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  pageRefs: React.RefObject<Map<number, HTMLDivElement>>;
+  searchDocuments: SearchableDocument[];
   onHighlightsChange: (highlights: PageHighlights[]) => void;
   currentMatchIndex: number;
   onCurrentMatchIndexChange: (index: number) => void;
@@ -42,10 +41,9 @@ export const Toolbar = ({
   scale,
   setScale,
   scrollContainerRef,
-  isSinglePdf,
   isSearchOpen,
   setIsSearchOpen,
-  pageRefs,
+  searchDocuments,
   onHighlightsChange,
   currentMatchIndex,
   onCurrentMatchIndexChange,
@@ -92,20 +90,16 @@ export const Toolbar = ({
 
         {newTabUrl !== null ? <NewTabButton url={newTabUrl} tooltip="Åpne alle i ny fane" /> : null}
 
-        {isSinglePdf ? (
-          <PdfSearch
-            isSearchOpen={isSearchOpen}
-            setIsSearchOpen={setIsSearchOpen}
-            pageRefs={pageRefs}
-            onHighlightsChange={onHighlightsChange}
-            currentMatchIndex={currentMatchIndex}
-            onCurrentMatchIndexChange={onCurrentMatchIndexChange}
-            searchInputRef={searchInputRef}
-            rotation={0 as RotationDegrees}
-            scale={scale}
-            scrollContainerRef={scrollContainerRef}
-          />
-        ) : null}
+        <PdfSearch
+          isSearchOpen={isSearchOpen}
+          setIsSearchOpen={setIsSearchOpen}
+          documents={searchDocuments}
+          onHighlightsChange={onHighlightsChange}
+          currentMatchIndex={currentMatchIndex}
+          onCurrentMatchIndexChange={onCurrentMatchIndexChange}
+          searchInputRef={searchInputRef}
+          scrollContainerRef={scrollContainerRef}
+        />
 
         <Tooltip content="Innstillinger" describesChild>
           <Button

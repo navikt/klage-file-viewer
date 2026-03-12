@@ -113,7 +113,6 @@ export default defineConfig({
   },
   resolve: {
     alias: [
-      { find: /^pdfjs-dist$/, replacement: resolve(__dirname, 'node_modules/pdfjs-dist/legacy/build/pdf.min.mjs') },
       { find: '@dev', replacement: resolve(__dirname, 'dev') },
       { find: '@', replacement: resolve(__dirname, 'src') },
       { find: '@package', replacement: resolve(__dirname, 'package.json') },

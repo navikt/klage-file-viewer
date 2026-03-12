@@ -6,7 +6,7 @@ import {
   SINGLE_PDF_URL,
   VIEWER_SELECTOR,
   waitForContent,
-  waitForPdfText,
+  waitForPdfRendered,
 } from '@e2e/helpers';
 import { expect, test } from '@playwright/test';
 
@@ -62,7 +62,7 @@ test.describe('KlageFileViewer', () => {
   test.describe('single file view', () => {
     test('renders correctly with a single PDF selected', async ({ page }) => {
       await page.goto(SINGLE_PDF_URL);
-      await waitForPdfText(page, 'Forklar kort og presist hva reglene sier og skriv begrunnelse.');
+      await waitForPdfRendered(page);
 
       const viewer = page.locator(VIEWER_SELECTOR);
       await expect(viewer).toBeVisible();

@@ -1,198 +1,159 @@
+import type {
+  PdfDocumentObject,
+  PdfEngine,
+  Rect,
+  Rotation,
+  SearchAllPagesResult,
+  SearchResult,
+} from '@embedpdf/models';
+import { MatchFlag } from '@embedpdf/models';
 import type { HighlightRect, PageHighlights, SearchMatch } from '@/files/pdf/search/types';
-
-const ESCAPE_QUERY_REGEX = /[.*+?^${}()|[\]\\]/g;
 
 interface ComputeHighlightsResult {
   highlights: PageHighlights[];
   matches: SearchMatch[];
 }
 
-interface SpanTextInfo {
-  textNode: Text;
-  /** Start index of this span's text within the concatenated page text. */
-  startIndex: number;
-  /** End index (exclusive) of this span's text within the concatenated page text. */
-  endIndex: number;
+export interface SearchableDocument {
+  engine: PdfEngine;
+  doc: PdfDocumentObject;
+  /** The first global page number for this document (1-based). */
+  pageNumberOffset: number;
+  scale: number;
+  /** Per-page rotation map (pageIndex → Rotation). */
+  rotations: Map<number, Rotation>;
 }
 
-export const computeHighlights = (
+interface PageGeometry {
+  scaleFactor: number;
+}
+
+export const computeHighlights = async (
   query: string,
-  pageRefs: React.RefObject<Map<number, HTMLDivElement>>,
+  documents: SearchableDocument[],
   caseSensitive: boolean,
-): ComputeHighlightsResult => {
+): Promise<ComputeHighlightsResult> => {
   if (query.length === 0) {
     return { highlights: [], matches: [] };
   }
 
-  const escapedQuery = query.replaceAll(ESCAPE_QUERY_REGEX, '\\$&');
-  const regex = new RegExp(escapedQuery, caseSensitive ? 'g' : 'gi');
   const highlights: PageHighlights[] = [];
   const matches: SearchMatch[] = [];
   let globalMatchIndex = 0;
 
-  for (const [pageNumber, pageRef] of pageRefs.current?.entries() ?? []) {
-    const textLayer = pageRef.querySelector('.textLayer');
+  for (const document of documents) {
+    const searchResult = await searchDocument(document, query, caseSensitive);
 
-    if (textLayer === null) {
+    if (searchResult === null) {
       continue;
     }
 
-    const textLayerRect = textLayer.getBoundingClientRect();
-    const { highlights: pageHighlights, matchCount } = findMatchesInPage(
-      textLayer,
-      regex,
-      textLayerRect,
-      globalMatchIndex,
-    );
+    const resultsByPage = groupResultsByPage(searchResult.results);
+    const scaleFactor = document.scale / 100;
 
-    for (let i = 0; i < matchCount; i++) {
-      matches.push({ pageNumber, matchIndex: globalMatchIndex + i });
+    for (const [pageIndex, pageResults] of resultsByPage) {
+      const page = document.doc.pages[pageIndex];
+
+      if (page === undefined) {
+        continue;
+      }
+
+      const pageNumber = document.pageNumberOffset + pageIndex + 1;
+      const geometry: PageGeometry = { scaleFactor };
+
+      const { pageHighlights, matchCount } = processPageResults(pageResults, geometry, globalMatchIndex);
+
+      for (let i = 0; i < matchCount; i++) {
+        matches.push({ pageNumber, matchIndex: globalMatchIndex + i });
+      }
+
+      if (pageHighlights.length > 0) {
+        highlights.push({ pageNumber, highlights: mergeHighlightRects(pageHighlights) });
+      }
+
+      globalMatchIndex += matchCount;
     }
-
-    if (pageHighlights.length > 0) {
-      highlights.push({ pageNumber, highlights: pageHighlights });
-    }
-
-    globalMatchIndex += matchCount;
   }
 
   return { highlights, matches };
 };
 
-/**
- * Concatenates text from all spans in the text layer, searches for matches
- * in the concatenated text, and maps match positions back to individual
- * span text nodes for accurate highlight rectangles.
- *
- * This approach handles PDFs where each character is in its own span
- * (e.g., Google Docs exports) as well as normal PDFs where spans contain
- * words or phrases.
- */
-const findMatchesInPage = (
-  textLayer: Element,
-  regex: RegExp,
-  containerRect: DOMRect,
-  globalMatchIndex: number,
-): { highlights: HighlightRect[]; matchCount: number } => {
-  const spanInfos: SpanTextInfo[] = [];
-  let concatenatedText = '';
+const searchDocument = async (
+  document: SearchableDocument,
+  query: string,
+  caseSensitive: boolean,
+): Promise<SearchAllPagesResult | null> => {
+  const { engine, doc } = document;
+  const flags = caseSensitive ? [MatchFlag.MatchCase] : [];
 
-  for (const child of textLayer.childNodes) {
-    if (child.nodeType === Node.ELEMENT_NODE) {
-      const element = child as Element;
+  try {
+    return await engine.searchAllPages(doc, query, { flags }).toPromise();
+  } catch {
+    return null;
+  }
+};
 
-      if (element.nodeName === 'BR') {
-        // Insert a space at line boundaries so cross-line searches work.
-        // This space is not mapped to any span, so it won't produce a highlight rect.
-        if (concatenatedText.length > 0 && !concatenatedText.endsWith(' ')) {
-          concatenatedText += ' ';
-        }
+const groupResultsByPage = (results: SearchResult[]): Map<number, SearchResult[]> => {
+  const resultsByPage = new Map<number, SearchResult[]>();
 
-        continue;
-      }
+  for (const result of results) {
+    const existing = resultsByPage.get(result.pageIndex);
 
-      if (element.nodeName === 'SPAN') {
-        const textNode = findTextNode(element);
-
-        if (textNode === null) {
-          continue;
-        }
-
-        const text = textNode.textContent ?? '';
-
-        if (text.length === 0) {
-          continue;
-        }
-
-        spanInfos.push({
-          textNode,
-          startIndex: concatenatedText.length,
-          endIndex: concatenatedText.length + text.length,
-        });
-
-        concatenatedText += text;
-      }
+    if (existing !== undefined) {
+      existing.push(result);
+    } else {
+      resultsByPage.set(result.pageIndex, [result]);
     }
   }
 
-  if (concatenatedText.length === 0) {
-    return { highlights: [], matchCount: 0 };
-  }
+  return resultsByPage;
+};
 
-  regex.lastIndex = 0;
-
-  const highlights: HighlightRect[] = [];
+const processPageResults = (
+  pageResults: SearchResult[],
+  geometry: PageGeometry,
+  startMatchIndex: number,
+): { pageHighlights: HighlightRect[]; matchCount: number } => {
+  const pageHighlights: HighlightRect[] = [];
   let matchCount = 0;
 
-  for (const match of concatenatedText.matchAll(regex)) {
-    const matchStart = match.index;
-    const matchEnd = matchStart + match[0].length;
-    const currentMatchIndex = globalMatchIndex + matchCount;
+  for (const result of pageResults) {
+    const currentMatchIndex = startMatchIndex + matchCount;
 
-    const matchHighlights = getHighlightRectsForMatch(
-      spanInfos,
-      matchStart,
-      matchEnd,
-      containerRect,
-      currentMatchIndex,
-    );
-    highlights.push(...matchHighlights);
+    for (const rect of result.rects) {
+      const highlight = transformRect(rect, geometry, currentMatchIndex);
+
+      if (highlight !== null) {
+        pageHighlights.push(highlight);
+      }
+    }
 
     matchCount++;
   }
 
-  return { highlights, matchCount };
+  return { pageHighlights, matchCount };
 };
 
 /**
- * For a single match in the concatenated text, find all overlapping spans
- * and create highlight rectangles for the matched portions of each span.
+ * Scale a rect from the engine to screen coordinates.
+ *
+ * The engine already returns rects in device-space (origin top-left, Y-down)
+ * via `convertPagePointToDevicePoint`, so we only need to apply the scale
+ * factor. User-rotation is handled by the CSS transform on the page container.
  */
-const getHighlightRectsForMatch = (
-  spanInfos: SpanTextInfo[],
-  matchStart: number,
-  matchEnd: number,
-  containerRect: DOMRect,
-  matchIndex: number,
-): HighlightRect[] => {
-  const highlights: HighlightRect[] = [];
+const transformRect = (rect: Rect, geometry: PageGeometry, matchIndex: number): HighlightRect | null => {
+  const { scaleFactor } = geometry;
 
-  for (const spanInfo of spanInfos) {
-    // Skip spans that don't overlap with this match
-    if (spanInfo.endIndex <= matchStart || spanInfo.startIndex >= matchEnd) {
-      continue;
-    }
+  const left = rect.origin.x * scaleFactor;
+  const top = rect.origin.y * scaleFactor;
+  const width = rect.size.width * scaleFactor;
+  const height = rect.size.height * scaleFactor;
 
-    // Calculate the overlap range within this span's text node
-    const overlapStart = Math.max(0, matchStart - spanInfo.startIndex);
-    const overlapEnd = Math.min(spanInfo.endIndex - spanInfo.startIndex, matchEnd - spanInfo.startIndex);
-
-    try {
-      const range = document.createRange();
-      range.setStart(spanInfo.textNode, overlapStart);
-      range.setEnd(spanInfo.textNode, overlapEnd);
-
-      const rects = range.getClientRects();
-
-      for (const rect of rects) {
-        if (rect.width === 0 || rect.height === 0) {
-          continue;
-        }
-
-        highlights.push({
-          top: rect.top - containerRect.top,
-          left: rect.left - containerRect.left,
-          width: rect.width,
-          height: rect.height,
-          matchIndex,
-        });
-      }
-    } catch {
-      // Range operations can fail if text content doesn't match DOM state
-    }
+  if (width <= 0 || height <= 0) {
+    return null;
   }
 
-  return mergeHighlightRects(highlights);
+  return { top, left, width, height, matchIndex };
 };
 
 /** Tolerance in pixels for considering two rects to be on the same line. */
@@ -201,7 +162,7 @@ const POSITION_TOLERANCE = 1.5;
 /**
  * Merge horizontally adjacent highlight rects that are on the same line
  * into single wider rects. This reduces DOM elements and produces cleaner
- * highlights, especially for PDFs where each character is its own span.
+ * highlights, especially for PDFs where each character gets its own rect.
  */
 const mergeHighlightRects = (rects: HighlightRect[]): HighlightRect[] => {
   if (rects.length <= 1) {
@@ -249,18 +210,4 @@ const mergeHighlightRects = (rects: HighlightRect[]): HighlightRect[] => {
   }
 
   return merged;
-};
-
-/**
- * Find the first direct text node child of a span.
- * Returns null if the span has no text node children.
- */
-const findTextNode = (span: Element): Text | null => {
-  for (const child of span.childNodes) {
-    if (child.nodeType === Node.TEXT_NODE) {
-      return child as Text;
-    }
-  }
-
-  return null;
 };

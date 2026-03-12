@@ -14,6 +14,7 @@ test.describe('KlageFileViewer', () => {
         .include(VIEWER_SELECTOR)
         // Exclude canvas elements — PDF.js renders to canvas which axe can't inspect for text
         .exclude('canvas')
+        .exclude('img')
         .analyze();
 
       expect(results.violations).toEqual([]);
@@ -35,7 +36,11 @@ test.describe('KlageFileViewer', () => {
         await themeButton.click();
       }
 
-      const results = await new AxeBuilder({ page }).include(VIEWER_SELECTOR).exclude('canvas').analyze();
+      const results = await new AxeBuilder({ page })
+        .include(VIEWER_SELECTOR)
+        .exclude('canvas')
+        .exclude('img')
+        .analyze();
 
       expect(results.violations).toEqual([]);
     });

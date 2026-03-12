@@ -4,6 +4,7 @@ import type { ResolvedVariant } from '@/file-header/variant-types';
 import { ExcelSection } from '@/files/excel/excel-section';
 import { ImageSection } from '@/files/image/image-section';
 import { JsonSection } from '@/files/json/json-section';
+import type { PdfSectionSearchInfo } from '@/files/pdf/loaded-pdf-section';
 import { PdfSection } from '@/files/pdf/pdf-section';
 import type { HighlightRect } from '@/files/pdf/search/types';
 import { UnsupportedSection } from '@/files/unsupported/unsupported-section';
@@ -18,8 +19,8 @@ interface FileSectionProps {
   shouldLoad: boolean;
   /** Called when the section finishes loading its pages so the parent can track cumulative page counts. */
   onPageCountReady: (pageCount: number) => void;
-  /** Shared map so the parent (and search) can reference page elements */
-  setPageRef?: (pageNumber: number, element: HTMLDivElement | null) => void;
+  /** Called when a PDF section's searchable state changes (engine/doc/rotations available or cleared). */
+  onSearchableReady?: (info: PdfSectionSearchInfo | null) => void;
   /** Search highlights keyed by page number */
   highlightsByPage?: Map<number, HighlightRect[]>;
   currentMatchIndex?: number;
@@ -33,7 +34,7 @@ export const FileSection = ({
   scrollContainerRef,
   shouldLoad,
   onPageCountReady,
-  setPageRef,
+  onSearchableReady,
   highlightsByPage,
   currentMatchIndex,
   documentNavigation,
@@ -63,7 +64,7 @@ export const FileSection = ({
           scrollContainerRef={scrollContainerRef}
           shouldLoad={shouldLoad}
           onPageCountReady={onPageCountReady}
-          setPageRef={setPageRef}
+          onSearchableReady={onSearchableReady}
           highlightsByPage={highlightsByPage}
           currentMatchIndex={currentMatchIndex}
           documentNavigation={documentNavigation}

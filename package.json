@@ -11,8 +11,7 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./styles.css": "./dist/styles.css",
-    "./pdf-worker": "./dist/pdf-worker.min.mjs"
+    "./styles.css": "./dist/styles.css"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
@@ -21,7 +20,7 @@
     "dev": "vite",
     "dev:build": "vite build --outDir dist --emptyOutDir",
     "dev:preview": "bun dev/server.ts",
-    "build": "tsup && tailwindcss -i src/styles.css -o dist/styles.css --minify && cp node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs dist/pdf-worker.min.mjs",
+    "build": "tsup && tailwindcss -i src/styles.css -o dist/styles.css --minify",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "knip": "knip",
@@ -45,16 +44,17 @@
     }
   },
   "dependencies": {
-    "pdfjs-dist": "5.5.207"
+    "@embedpdf/engines": "2.8.0",
+    "@embedpdf/models": "2.8.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.1",
     "@biomejs/biome": "2.4.6",
-    "@opentelemetry/api": "1.9.0",
     "@navikt/aksel-icons": "8.7.0",
     "@navikt/ds-css": "8.7.0",
     "@navikt/ds-react": "8.7.0",
     "@navikt/ds-tailwind": "8.7.0",
+    "@opentelemetry/api": "1.9.0",
     "@playwright/test": "1.58.2",
     "@tailwindcss/cli": "4.2.1",
     "@tailwindcss/postcss": "4.2.1",

@@ -1,21 +1,31 @@
+import type { PdfDocumentObject, PdfEngine, Rotation } from '@embedpdf/models';
 import { BodyShort, Loader, VStack } from '@navikt/ds-react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFileViewerConfig } from '@/context';
 import { type DocumentNavigation, FileHeader } from '@/file-header/file-header';
 import type { ResolvedVariant } from '@/file-header/variant-types';
 import { FileErrorLayout } from '@/files/file-error-layout';
-import { PagePlaceholder } from '@/files/pdf/page-placeholder';
-import { PasswordPrompt } from '@/files/pdf/password-prompt';
-import { PasswordProtectedInfoCard } from '@/files/pdf/password-protected-info-card';
-import { getA4Dimensions, PlaceholderWrapper } from '@/files/pdf/pdf-section-placeholder';
-import { RotatablePage } from '@/files/pdf/rotatable-page';
+import { usePdfEngine } from '@/files/pdf/pdf-engine-context';
+import { PdfPage } from '@/files/pdf/pdf-page';
+import { PlaceholderWrapper } from '@/files/pdf/pdf-section-placeholder';
 import type { HighlightRect } from '@/files/pdf/search/types';
-import { PasswordStatus, usePdfDocument } from '@/files/pdf/use-pdf-document';
+import { useCopyHandler } from '@/files/pdf/selection/use-copy-handler';
+import { useTextSelection } from '@/files/pdf/selection/use-text-selection';
+import { usePdfDocument } from '@/files/pdf/use-pdf-document';
+import { usePersistedRotations } from '@/files/pdf/use-persisted-rotations';
+import { useVisiblePages } from '@/files/pdf/use-visible-pages';
 import { useRegisterRefresh } from '@/hooks/use-refresh-registry';
-import { useVisiblePages } from '@/hooks/use-visible-pages';
-import { usePageNavigation } from '@/lib/use-page-navigation';
+import { useScrollToPage } from '@/hooks/use-scroll-to-page';
+import { getMostVisiblePage } from '@/lib/page-scroll';
+import { useToolbarHeight } from '@/toolbar-height-context';
 import type { FileEntry } from '@/types';
 import { useFileData } from '@/use-file-data';
+
+export interface PdfSectionSearchInfo {
+  engine: PdfEngine;
+  doc: PdfDocumentObject;
+  rotations: Map<number, Rotation>;
+}
 
 interface LoadedPdfSectionProps {
   file: FileEntry;
@@ -23,10 +33,9 @@ interface LoadedPdfSectionProps {
   scale: number;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   onPageCountReady: (pageCount: number) => void;
-  setPageRef?: (pageNumber: number, element: HTMLDivElement | null) => void;
+  onSearchableReady?: (info: PdfSectionSearchInfo | null) => void;
   highlightsByPage?: Map<number, HighlightRect[]>;
   currentMatchIndex?: number;
-  /** Document-level navigation callbacks for navigating between file sections. */
   documentNavigation?: DocumentNavigation;
 }
 
@@ -36,58 +45,201 @@ export const LoadedPdfSection = ({
   scale,
   scrollContainerRef,
   onPageCountReady,
-  setPageRef,
+  onSearchableReady,
   highlightsByPage,
   currentMatchIndex,
   documentNavigation,
 }: LoadedPdfSectionProps) => {
-  const { errorComponent: ErrorComponent, commonPasswords } = useFileViewerConfig();
   const { data, loading, fetching, error, refresh } = useFileData(file.url, file.query);
+  const { engine, isLoading: engineLoading, error: engineError } = usePdfEngine();
+  const { commonPasswords } = useFileViewerConfig();
+  const toolbarHeight = useToolbarHeight();
 
   useRegisterRefresh(file.url, refresh);
 
+  const { doc, loading: docLoading, error: docError } = usePdfDocument(engine, data, commonPasswords);
+
+  // Per-page rotation state, persisted to localStorage per file URL + page index.
+  const { rotations, handleRotate } = usePersistedRotations(file.url, doc?.pageCount ?? 0);
+
+  // Text selection
   const {
-    pdfDocument,
-    pages,
-    passwordState,
-    pdfError,
-    usedPassword,
-    autoTryingPasswords,
-    loadedData,
-    setSubmittedPassword,
-  } = usePdfDocument({ data, commonPasswords, fileUrl: file.url });
+    selection,
+    isSelecting,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+    getPageSelectionRange,
+    glyphsRegistry,
+  } = useTextSelection();
 
-  const { currentPage, onPreviousPage, onNextPage, previousPageDisabled, nextPageDisabled, setItemRef } =
-    usePageNavigation(pages.length, scrollContainerRef);
+  useCopyHandler(engine, doc, selection);
 
-  const { visiblePages, setPageElement } = useVisiblePages(scrollContainerRef, pages.length);
+  // Expose search info to parent whenever engine/doc/rotations change
+  useEffect(() => {
+    if (engine !== null && doc !== null) {
+      onSearchableReady?.({ engine, doc, rotations });
+    } else {
+      onSearchableReady?.(null);
+    }
+  }, [engine, doc, rotations, onSearchableReady]);
 
-  const setInternalPageRef = useCallback(
-    (pageNumber: number, element: HTMLDivElement | null) => {
-      setItemRef(pageNumber, element);
-      setPageRef?.(pageNumber, element);
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      onSearchableReady?.(null);
+    };
+  }, [onSearchableReady]);
+
+  // Visibility tracking
+  const { visiblePages, setPageElement } = useVisiblePages(scrollContainerRef, doc?.pageCount ?? 0);
+
+  // Report page count once known
+  useEffect(() => {
+    if (doc !== null) {
+      onPageCountReady(doc.pageCount);
+    }
+  }, [doc, onPageCountReady]);
+
+  // Current page tracking via scroll
+  const [currentPage, setCurrentPage] = useState<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const pageElementsRef = useRef<Map<number, HTMLElement>>(new Map());
+
+  // Stable target tracking — mirrors the pattern in usePageNavigation.
+  // `targetPage` drives the disabled state so that intermediate scroll events
+  // during a smooth scroll don't flip the button to disabled/fallback, which
+  // would cause Chrome to cancel the ongoing smooth scroll.
+  const [targetPage, setTargetPage] = useState<number | null>(null);
+  const targetPageRef = useRef<number | null>(null);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      targetPageRef.current = currentPage;
+      setTargetPage(currentPage);
+    }, 150);
+
+    return () => clearTimeout(syncTimerRef.current);
+  }, [currentPage]);
+
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+
+    if (scrollContainer === null || doc === null) {
+      return;
+    }
+
+    const updateCurrentPage = () => {
+      const page = getMostVisiblePage(scrollContainer, toolbarHeight);
+
+      if (page === null) {
+        return;
+      }
+
+      const attr = page.getAttribute('data-klage-file-viewer-page-number');
+
+      if (attr === null) {
+        return;
+      }
+
+      const pageNumber = Number.parseInt(attr, 10);
+
+      if (!Number.isNaN(pageNumber)) {
+        setCurrentPage(pageNumber);
+      }
+    };
+
+    const handleScroll = () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+
+      rafRef.current = requestAnimationFrame(updateCurrentPage);
+    };
+
+    // Initial calculation
+    updateCurrentPage();
+
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      scrollContainer.removeEventListener('scroll', handleScroll);
+
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [scrollContainerRef, doc, toolbarHeight]);
+
+  // Page navigation callbacks
+  const scrollToPage = useScrollToPage();
+
+  const navigateToPage = useCallback(
+    (pageNumber: number) => {
+      const scrollContainer = scrollContainerRef.current;
+
+      if (scrollContainer === null || doc === null) {
+        return;
+      }
+
+      const clamped = Math.max(1, Math.min(pageNumber, doc.pageCount));
+      const target = pageElementsRef.current.get(clamped);
+
+      if (target === undefined) {
+        return;
+      }
+
+      if (clamped !== targetPageRef.current) {
+        targetPageRef.current = clamped;
+        setTargetPage(clamped);
+        clearTimeout(syncTimerRef.current);
+      }
+
+      scrollToPage(target, scrollContainer, toolbarHeight);
     },
-    [setItemRef, setPageRef],
+    [doc, scrollContainerRef, scrollToPage, toolbarHeight],
   );
 
-  // Report page count to parent for lazy-loading coordination
-  useEffect(() => {
-    if (pages.length > 0) {
-      onPageCountReady(pages.length);
-    } else if (error !== undefined || pdfError !== undefined) {
-      onPageCountReady(0);
+  const handlePreviousPage = useCallback(() => {
+    const page = targetPageRef.current;
+
+    if (page === null || page <= 1) {
+      return;
     }
-  }, [pages.length, error, pdfError, onPageCountReady]);
 
-  const displayError = error ?? pdfError;
-  const pdfLoading = data !== null && data !== loadedData;
-  const isLoaderVisible = loading || pdfLoading || autoTryingPasswords;
-  const showLoadingOverlay = loadedData === null && isLoaderVisible;
-  const isPasswordPromptVisible =
-    passwordState.status !== PasswordStatus.NONE && pdfDocument === null && !autoTryingPasswords;
+    navigateToPage(page - 1);
+  }, [navigateToPage]);
 
-  // Error state (non-password errors)
-  if (displayError !== undefined && displayError !== null && !isPasswordPromptVisible) {
+  const handleNextPage = useCallback(() => {
+    const page = targetPageRef.current;
+
+    if (page === null || doc === null || page >= doc.pageCount) {
+      return;
+    }
+
+    navigateToPage(page + 1);
+  }, [navigateToPage, doc]);
+
+  const handleRegisterElement = useCallback(
+    (pageNumber: number, el: HTMLDivElement | null) => {
+      if (el === null) {
+        pageElementsRef.current.delete(pageNumber);
+      } else {
+        pageElementsRef.current.set(pageNumber, el);
+      }
+
+      setPageElement(pageNumber, el);
+    },
+    [setPageElement],
+  );
+
+  // Error state
+  const displayError = error ?? (engineError !== null ? engineError.message : null) ?? docError;
+
+  if (displayError !== null && displayError !== undefined) {
     return (
       <FileErrorLayout
         file={file}
@@ -96,14 +248,15 @@ export const LoadedPdfSection = ({
         refresh={refresh}
         heading="Feil ved lasting av PDF"
         errorMessage={displayError}
-        ErrorComponent={ErrorComponent}
         documentNavigation={documentNavigation}
       />
     );
   }
 
-  // Password prompt state
-  if (isPasswordPromptVisible) {
+  // Loading state
+  const isLoading = loading || engineLoading || docLoading;
+
+  if (doc === null || engine === null) {
     return (
       <>
         <FileHeader
@@ -113,24 +266,22 @@ export const LoadedPdfSection = ({
           newTabUrl={file.newTabUrl}
           downloadUrl={file.downloadUrl}
           variant={headerVariant}
-          showPasswordIndicator
-          isLoading={fetching}
+          isLoading={isLoading || fetching}
           refresh={refresh}
           documentNavigation={documentNavigation}
         />
 
-        <PasswordProtectedInfoCard />
-
-        <PasswordPrompt passwordState={passwordState} onSubmitPassword={setSubmittedPassword} scale={scale} />
+        <PlaceholderWrapper scale={scale}>
+          <Loader size="3xlarge" />
+          <BodyShort>{engineLoading ? 'Laster PDF-motor ...' : 'Laster PDF ...'}</BodyShort>
+        </PlaceholderWrapper>
       </>
     );
   }
 
-  const numPages = pdfDocument?.numPages ?? null;
-  const a4 = getA4Dimensions(scale);
-
-  const pageContainerStyle: React.CSSProperties | undefined =
-    pages.length === 0 ? { width: a4.width, minHeight: a4.height } : undefined;
+  const numPages = doc.pageCount;
+  const previousPageDisabled = targetPage === null || targetPage <= 1;
+  const nextPageDisabled = targetPage === null || targetPage >= numPages;
 
   return (
     <>
@@ -141,73 +292,44 @@ export const LoadedPdfSection = ({
         newTabUrl={file.newTabUrl}
         downloadUrl={file.downloadUrl}
         variant={headerVariant}
-        showPasswordIndicator={usedPassword !== null}
         isLoading={fetching}
         refresh={refresh}
-        onPreviousPage={onPreviousPage}
-        onNextPage={onNextPage}
+        onPreviousPage={numPages > 1 ? handlePreviousPage : undefined}
+        onNextPage={numPages > 1 ? handleNextPage : undefined}
         previousPageDisabled={previousPageDisabled}
         nextPageDisabled={nextPageDisabled}
         documentNavigation={documentNavigation}
       />
-
-      {usedPassword !== null ? <PasswordProtectedInfoCard password={usedPassword} /> : null}
 
       <VStack
         position="relative"
         align="center"
         gap="space-16"
         width="100%"
-        style={pageContainerStyle}
-        data-klage-file-viewer-document-pages={pages.length}
+        data-klage-file-viewer-document-pages={numPages}
       >
-        {showLoadingOverlay && pages.length === 0 ? (
-          <PlaceholderWrapper scale={scale}>
-            <Loader size="3xlarge" />
-            <BodyShort>{loading ? 'Laster PDF ...' : 'Tegner PDF ...'}</BodyShort>
-          </PlaceholderWrapper>
-        ) : null}
-
-        {pages.map((page) => {
-          const pageHighlights = highlightsByPage?.get(page.pageNumber);
-
-          return (
-            <div
-              key={page.pageNumber}
-              data-klage-file-viewer-page-number={page.pageNumber}
-              data-klage-file-viewer-scalable
-              ref={(el) => {
-                setInternalPageRef(page.pageNumber, el);
-                setPageElement(page.pageNumber, el);
-              }}
-              className="relative w-full overflow-x-auto"
-            >
-              {showLoadingOverlay ? (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-ax-bg-neutral-moderate/70 backdrop-blur-xs">
-                  <VStack align="center" gap="space-8">
-                    <Loader size="3xlarge" />
-                    <BodyShort>{loading ? 'Laster PDF ...' : 'Tegner PDF ...'}</BodyShort>
-                  </VStack>
-                </div>
-              ) : null}
-
-              <div className="mx-auto w-fit">
-                {visiblePages.has(page.pageNumber) ? (
-                  <RotatablePage
-                    page={page}
-                    url={file.url}
-                    scale={scale}
-                    highlights={pageHighlights}
-                    currentMatchIndex={currentMatchIndex}
-                    showPasswordOverlay={usedPassword !== null}
-                  />
-                ) : (
-                  <PagePlaceholder page={page} scale={scale} />
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {doc.pages.map((_page, pageIndex) => (
+          <PdfPage
+            // biome-ignore lint/suspicious/noArrayIndexKey: Pages are static once loaded and never reorder
+            key={pageIndex}
+            engine={engine}
+            doc={doc}
+            pageIndex={pageIndex}
+            scale={scale}
+            rotation={rotations.get(pageIndex) ?? 0}
+            visible={visiblePages.has(pageIndex + 1)}
+            highlights={highlightsByPage?.get(pageIndex + 1)}
+            currentMatchIndex={currentMatchIndex}
+            onRotate={handleRotate}
+            onRegisterElement={handleRegisterElement}
+            selectionRange={getPageSelectionRange(pageIndex)}
+            isSelecting={isSelecting}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            glyphsRegistry={glyphsRegistry}
+          />
+        ))}
       </VStack>
     </>
   );

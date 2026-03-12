@@ -1,6 +1,6 @@
 import type { DocumentNavigation } from '@/file-header/file-header';
 import type { ResolvedVariant } from '@/file-header/variant-types';
-import { LoadedPdfSection } from '@/files/pdf/loaded-pdf-section';
+import { LoadedPdfSection, type PdfSectionSearchInfo } from '@/files/pdf/loaded-pdf-section';
 import { PdfSectionPlaceholder } from '@/files/pdf/pdf-section-placeholder';
 import type { HighlightRect } from '@/files/pdf/search/types';
 import type { FileEntry } from '@/types';
@@ -14,8 +14,8 @@ interface PdfSectionProps {
   shouldLoad: boolean;
   /** Called when the section finishes loading its pages so the parent can track cumulative page counts. */
   onPageCountReady: (pageCount: number) => void;
-  /** Shared map so the parent (and search) can reference page elements */
-  setPageRef?: (pageNumber: number, element: HTMLDivElement | null) => void;
+  /** Called when the section's searchable state changes (engine/doc/rotations available or cleared). */
+  onSearchableReady?: (info: PdfSectionSearchInfo | null) => void;
   /** Search highlights keyed by page number */
   highlightsByPage?: Map<number, HighlightRect[]>;
   currentMatchIndex?: number;
@@ -30,7 +30,7 @@ export const PdfSection = ({
   scrollContainerRef,
   shouldLoad,
   onPageCountReady,
-  setPageRef,
+  onSearchableReady,
   highlightsByPage,
   currentMatchIndex,
   documentNavigation,
@@ -43,7 +43,7 @@ export const PdfSection = ({
         scale={scale}
         scrollContainerRef={scrollContainerRef}
         onPageCountReady={onPageCountReady}
-        setPageRef={setPageRef}
+        onSearchableReady={onSearchableReady}
         highlightsByPage={highlightsByPage}
         currentMatchIndex={currentMatchIndex}
         documentNavigation={documentNavigation}

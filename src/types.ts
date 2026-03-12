@@ -1,5 +1,3 @@
-export type RotationDegrees = 0 | 90 | 180 | 270;
-
 export type FileType = 'PDF' | 'JPEG' | 'PNG' | 'TIFF' | 'XLSX' | 'JSON' | 'XML' | 'AXML' | 'DXML' | 'RTF';
 
 export type VariantFormat = 'ARKIV' | 'SLADDET';

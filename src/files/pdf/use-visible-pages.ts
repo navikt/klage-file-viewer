@@ -2,10 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const PAGE_NUMBER_ATTR = 'data-klage-file-viewer-page-number';
 
-/**
- * Parse the page number from an element's `data-klage-file-viewer-page-number`
- * attribute. Returns `null` if the attribute is missing or not a valid number.
- */
 const getPageNumber = (element: Element): number | null => {
   const attr = element.getAttribute(PAGE_NUMBER_ATTR);
 
@@ -18,10 +14,6 @@ const getPageNumber = (element: Element): number | null => {
   return Number.isNaN(pageNumber) ? null : pageNumber;
 };
 
-/**
- * Apply a batch of `IntersectionObserverEntry` updates to the visible-pages
- * set. Returns the previous set unchanged if nothing actually changed.
- */
 const applyIntersectionEntries = (
   prev: ReadonlySet<number>,
   entries: IntersectionObserverEntry[],
@@ -48,15 +40,6 @@ const applyIntersectionEntries = (
   return changed ? next : prev;
 };
 
-/**
- * Tracks which page elements are in or near the scroll viewport using
- * `IntersectionObserver`. Pages within one viewport-height above and below the
- * visible area are considered "visible", providing a pre-render buffer for
- * smooth scrolling.
- *
- * Only "visible" pages need to be fully rendered. Off-screen pages can show a
- * lightweight placeholder to free canvas memory.
- */
 export const useVisiblePages = (
   scrollContainerRef: React.RefObject<HTMLElement | null>,
   pageCount: number,
@@ -81,8 +64,6 @@ export const useVisiblePages = (
       },
       {
         root: scrollContainer,
-        // Observe pages within one viewport height above and below the visible area.
-        // This pre-renders ~1–2 extra pages in each direction for smooth scrolling.
         rootMargin: '100% 0px',
       },
     );

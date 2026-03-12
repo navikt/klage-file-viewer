@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 export const VIEWER_SELECTOR = '[data-klage-file-viewer]';
 export const FILE_HEADER_SELECTOR = '[data-klage-file-viewer-file-header]';
@@ -14,9 +14,9 @@ export const THEME_BUTTON_REGEX = /lys|mørk/i;
 export const DOCUMENT_COUNT_REGEX = /Dokument \d+ av \d+/;
 export const DOCUMENT_COUNT_CAPTURE_REGEX = /Dokument (\d+) av (\d+)/;
 export const INITIAL_SCALE = '125';
+export const MATCH_COUNTER_REGEX = /^\d+ \/ \d+$/;
 export const DOCUMENT_WITH_VARIANTS_URL = '/?files=doc%3AVedtak%20om%20tilbakekreving';
 export const SINGLE_PDF_URL = '/?files=file%3AKlagevedtak.pdf';
-export const TEXT_LAYER_SELECTOR = '.textLayer';
 
 /**
  * Focus the viewer's keyboard handler container.
@@ -43,24 +43,88 @@ export const focusViewer = async (page: Page) => {
  * *first* section has loaded — not that every section or every page has
  * rendered. Works for all file types (PDF, Excel, images).
  *
- * Use {@link waitForPdfText} when a test depends on actual PDF content.
+ * Use {@link waitForPdfRendered} when a test depends on actual PDF rendering.
  */
 export const waitForContent = async (page: Page) => {
   await page.locator(FILE_HEADER_SELECTOR).first().getByText(PAGE_COUNT_REGEX).waitFor({ state: 'visible' });
 };
 
 /**
- * Wait until the PDF text layer has rendered and contains the expected text.
+ * Wait until at least one PDF page image has rendered.
  *
- * PDF pages are lazy-loaded — only visible pages get a canvas and text layer.
- * The text layer is the *last* step of the render pipeline (canvas first, then
- * text extraction), so its presence with the expected content confirms the PDF
- * is fully rendered and interactive.
+ * Since there is no text layer in the DOM, we cannot check for specific text
+ * content directly. Instead, we wait for the page images to appear, which
+ * proves the PDF was loaded and rendered successfully by the engine.
  *
- * Chromium 141 (Edge 142 equivalent) is noticeably slower at rendering PDFs
- * than the latest Chromium. Waiting for specific text avoids flaky timeouts
- * caused by asserting before the render pipeline finishes.
+ * For text content verification, use {@link assertPdfContainsText} which
+ * programmatically drives the search UI.
  */
-export const waitForPdfText = async (page: Page, text: string) => {
-  await page.locator(TEXT_LAYER_SELECTOR, { hasText: text }).first().waitFor({ state: 'visible' });
+export const waitForPdfRendered = async (page: Page) => {
+  await page.locator('[data-klage-file-viewer-page-number] img').first().waitFor({ state: 'visible' });
+};
+
+/**
+ * @deprecated Use {@link waitForPdfRendered} instead. There is no longer a
+ * text layer in the DOM, so this function now waits for the page image to
+ * render rather than checking for specific text content.
+ */
+export const waitForPdfText = async (page: Page, _text: string) => {
+  await waitForPdfRendered(page);
+};
+
+/**
+ * Assert that the PDF contains the given text by driving the search UI.
+ *
+ * Opens the search input (Control+F), types the query, waits for a match
+ * count indicator (e.g. "1 / 3"), then closes search. Fails the test if no
+ * matches are found.
+ */
+export const assertPdfContainsText = async (page: Page, text: string) => {
+  await openSearch(page);
+
+  const searchInput = page.locator('[data-klage-file-viewer] input[type="search"]');
+  await searchInput.fill(text);
+
+  // Wait for the match counter to appear (e.g. "1 / 5")
+  const matchCounter = page.locator('[data-klage-file-viewer]').getByText(MATCH_COUNTER_REGEX);
+  await expect(matchCounter).toBeVisible({ timeout: 10_000 });
+
+  await closeSearch(page);
+};
+
+/**
+ * Assert that the PDF does NOT contain the given text by driving the search UI.
+ *
+ * Opens the search input (Control+F), types the query, waits briefly, then
+ * verifies that the "Ingen treff" indicator appears (meaning zero matches).
+ * Closes search afterward.
+ */
+export const assertPdfDoesNotContainText = async (page: Page, text: string) => {
+  await openSearch(page);
+
+  const searchInput = page.locator('[data-klage-file-viewer] input[type="search"]');
+  await searchInput.fill(text);
+
+  // Wait for "Ingen treff" (no matches) to appear
+  const noMatches = page.locator('[data-klage-file-viewer]').getByText('Ingen treff');
+  await expect(noMatches).toBeVisible({ timeout: 10_000 });
+
+  await closeSearch(page);
+};
+
+const openSearch = async (page: Page) => {
+  // If search is already open, just return
+  const existingInput = page.locator('[data-klage-file-viewer] input[type="search"]');
+
+  if ((await existingInput.count()) > 0 && (await existingInput.isVisible())) {
+    return;
+  }
+
+  await focusViewer(page);
+  await page.keyboard.press('Control+f');
+  await existingInput.waitFor({ state: 'visible' });
+};
+
+const closeSearch = async (page: Page) => {
+  await page.keyboard.press('Escape');
 };

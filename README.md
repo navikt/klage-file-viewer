@@ -2,7 +2,7 @@
 
 [![Latest version](https://img.shields.io/github/package-json/v/navikt/klage-file-viewer?label=Latest%20version&logo=npm)](https://github.com/navikt/klage-file-viewer/packages)
 
-A reusable file viewer React component for Nav applications. Supports PDF (via [PDF.js](https://mozilla.github.io/pdf.js/)), Excel, image (JPEG, PNG, TIFF), and JSON files with zoom, rotation, search, lazy loading, and multi-document support. Unsupported file types are shown with a download fallback.
+A reusable file viewer React component for Nav applications. Supports PDF (via [PDFium](https://github.com/embedpdf/pdfium)), Excel, image (JPEG, PNG, TIFF), and JSON files with zoom, rotation, search, lazy loading, and multi-document support. Unsupported file types are shown with a download fallback.
 
 ## Installation
 
@@ -23,30 +23,11 @@ This package requires the following peer dependencies:
 
 ## Setup
 
-### 1. CSS
-
 Import the component styles in your CSS **after** `@navikt/ds-css`:
 
 ```css
 @import "@navikt/ds-css";
 @import "@navikt/klage-file-viewer/styles.css";
-```
-
-### 2. PDF.js worker
-
-The PDF.js worker script must be served as a static asset. Copy it from the package to your public/static directory:
-
-```sh
-cp node_modules/@navikt/klage-file-viewer/dist/pdf-worker.min.mjs public/pdf-worker.min.mjs
-```
-
-Or reference it directly using your bundler's URL handling (e.g. in Vite):
-
-```ts
-const pdfWorkerUrl = new URL(
-  "@navikt/klage-file-viewer/pdf-worker",
-  import.meta.url,
-).href;
 ```
 
 ## Usage
@@ -57,7 +38,6 @@ import { KlageFileViewer } from "@navikt/klage-file-viewer";
 const MyComponent = () => (
   <KlageFileViewer
     theme="light"
-    workerSrc="/pdf-worker.min.mjs"
     files={[
       {
         variants: "PDF",
@@ -76,7 +56,6 @@ Pass multiple entries to the `files` array to render them in sequence with a doc
 ```tsx
 <KlageFileViewer
   theme="light"
-  workerSrc="/pdf-worker.min.mjs"
   files={[
     { variants: "PDF", title: "Vedtak", url: "/api/documents/1.pdf" },
     { variants: "PDF", title: "Klage", url: "/api/documents/2.pdf" },
@@ -92,7 +71,6 @@ Provide `onClose` to show a close button in the toolbar:
 ```tsx
 <KlageFileViewer
   theme="light"
-  workerSrc="/pdf-worker.min.mjs"
   files={files}
   onClose={() => setShowViewer(false)}
 />
@@ -105,7 +83,6 @@ Pass configuration props directly to the component:
 ```tsx
 <KlageFileViewer
   theme="light"
-  workerSrc="/pdf-worker.min.mjs"
   files={files}
   commonPasswords={["secret123"]}
   onFetchError={({ url, status, body }) => {
@@ -125,7 +102,6 @@ Pass configuration props directly to the component:
 | ----------------- | ---------------------------------------------- | -------- | ---------------------------------------------------------------------------------------- |
 | `files`           | `FileEntry[]`                                  | Yes      | List of files to render in sequence.                                                     |
 | `theme`           | `'light' \| 'dark'`                            | Yes      | Light or dark theme mode.                                                                |
-| `workerSrc`       | `string`                                       | No       | URL to the PDF.js worker script. Required when any file resolves to `PDF`.               |
 | `onClose`         | `() => void`                                   | No       | Shows a close button; called when clicked.                                               |
 | `newTabUrl`       | `string \| null`                               | No       | Shows a link in the toolbar to open the document set in a new tab.                       |
 | `className`       | `string`                                       | No       | Additional CSS class for the root element.                                               |
@@ -133,6 +109,7 @@ Pass configuration props directly to the component:
 | `errorComponent`  | `React.ComponentType<{ refresh: () => void }>` | No       | Component rendered inside the error alert.                                               |
 | `commonPasswords` | `string[]`                                     | No       | Common passwords to automatically try when a PDF is password-protected.                  |
 | `standalone`      | `boolean`                                      | No       | Shows all fit options (fit-to-width, fit-to-page) when `true`. Defaults to `false`.      |
+| `traceName`       | `string`                                       | No       | Name used as `component.instance` on OpenTelemetry spans. Useful for differentiating multiple viewer instances. |
 | `handleRef`       | `Ref<KlageFileViewerHandle>`                   | No       | Ref exposing `focus()`, `reloadFile()`, and `reloadAll()` methods to control the viewer. |
 
 ### `FileEntry`
@@ -150,12 +127,12 @@ A `FileEntry` represents one file in the viewer:
 
 ### `FileVariant`
 
-| Property    | Type                      | Required | Description                           |
-| ----------- | ------------------------- | -------- | ------------------------------------- |
-| `filtype`   | `FileType`                | Yes      | File type for this variant.           |
-| `hasAccess` | `boolean`                 | Yes      | Whether the user has access.          |
-| `format`    | `'ARKIV' \| 'SLADDET'`    | Yes      | Variant format in the archive.        |
-| `skjerming` | `'POL' \| 'FEIL' \| null` | Yes      | Shielding classification for variant. |
+| Property    | Type             | Required | Description                           |
+| ----------- | ---------------- | -------- | ------------------------------------- |
+| `filtype`   | `FileType`       | Yes      | File type for this variant.           |
+| `hasAccess` | `boolean`        | Yes      | Whether the user has access.          |
+| `format`    | `VariantFormat`  | Yes      | Variant format in the archive.        |
+| `skjerming` | `Skjerming \| null` | Yes   | Shielding classification for variant. |
 
 ### `FileType`
 
@@ -169,6 +146,18 @@ type FileType = 'PDF' | 'XLSX' | 'JPEG' | 'PNG' | 'TIFF' | 'JSON' | 'XML' | 'AXM
 - **`JSON`** — Rendered inline as a collapsible/expandable JSON tree.
 - **All other types** (`XML`, `AXML`, `DXML`, `RTF`) — Shown as an `UnsupportedFileEntry` with a download button.
 
+### `VariantFormat`
+
+```ts
+type VariantFormat = 'ARKIV' | 'SLADDET';
+```
+
+### `Skjerming`
+
+```ts
+type Skjerming = 'POL' | 'FEIL';
+```
+
 ### `KlageFileViewerHandle`
 
 Ref handle exposed via `handleRef`:
@@ -179,13 +168,28 @@ Ref handle exposed via `handleRef`:
 | `reloadFile(url)`  | Re-fetches the file for the URL. Resolves to `true` if a matching file was found and reload was triggered. |
 | `reloadAll()`      | Re-fetches all currently loaded files. Resolves to the number of refreshes triggered.                      |
 
+### `ScaleSettings`
+
+A standalone React component for rendering the initial scale mode settings UI. Can be embedded in external settings pages to let users configure the viewer's initial zoom behavior for files opened in a new tab.
+
+```tsx
+import { ScaleSettings } from "@navikt/klage-file-viewer";
+
+const SettingsPage = () => (
+  <section>
+    <ScaleSettings />
+  </section>
+);
+```
+
+The selected mode and custom scale value are persisted to `localStorage` and applied when `standalone` is `true`.
+
 ## Exports
 
-| Export path                            | Description                                                                                                                                                                          |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@navikt/klage-file-viewer`            | `KlageFileViewer` component, `KlageFileViewerProps`, `KlageFileViewerHandle`, `FileEntry`, `FileType`, `FileVariant`, `FileVariants`, `Skjerming`, `VariantFormat`, `FetchErrorInfo` |
-| `@navikt/klage-file-viewer/styles.css` | Pre-built CSS (Tailwind + PDF.js text layer)                                                                                                                                         |
-| `@navikt/klage-file-viewer/pdf-worker` | PDF.js worker script                                                                                                                                                                 |
+| Export path                            | Description                                                                                                                                                                                           |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@navikt/klage-file-viewer`            | `KlageFileViewer` component, `ScaleSettings` component, `KlageFileViewerProps`, `KlageFileViewerHandle`, `FileEntry`, `FileType`, `FileVariant`, `FileVariants`, `Skjerming`, `VariantFormat`, `FetchErrorInfo` |
+| `@navikt/klage-file-viewer/styles.css` | Pre-built CSS (Tailwind + component styles)                                                                                                                                                           |
 
 ## Features
 
@@ -196,7 +200,7 @@ Ref handle exposed via `handleRef`:
 - **Zoom**: Ctrl/Cmd + scroll wheel, toolbar buttons, or keyboard shortcuts (Cmd+Plus / Cmd+Minus).
 - **Sizing options**: Toolbar buttons to fit height and reset to default size (125%). Fit-to-width and fit-to-page are available when `standalone` is `true`.
 - **Rotation**: Per-page rotation with localStorage persistence (PDF only).
-- **Search**: Ctrl/Cmd+F to search text within a single-document PDF view, with match highlighting and navigation.
+- **Search**: Ctrl/Cmd+F to search text across all PDF documents, with match highlighting and navigation.
 - **Lazy loading**: Sections load progressively as the user scrolls.
 - **Page virtualization**: PDF pages outside the viewport are replaced with lightweight placeholders to free canvas memory. Pages within one viewport-height above and below the visible area are pre-rendered for smooth scrolling.
 - **Multi-document**: Render multiple files in sequence with a document counter.

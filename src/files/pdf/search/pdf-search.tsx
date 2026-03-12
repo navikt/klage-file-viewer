@@ -1,40 +1,45 @@
 import { ChevronLeftIcon, ChevronRightIcon, MagnifyingGlassIcon, XMarkIcon } from '@navikt/aksel-icons';
 import { BodyShort, Button, HStack, Tooltip } from '@navikt/ds-react';
-import { type Dispatch, type KeyboardEvent, type SetStateAction, useCallback, useEffect, useState } from 'react';
+import {
+  type Dispatch,
+  type KeyboardEvent,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import type { SearchableDocument } from '@/files/pdf/search/search';
 import { computeHighlights } from '@/files/pdf/search/search';
 import type { PageHighlights, SearchMatch } from '@/files/pdf/search/types';
 import { CaseSensitiveIcon } from '@/lib/case-sensitive-icon';
 import { isMetaKey, Keys, MOD_KEY_TEXT } from '@/lib/keys';
-import type { RotationDegrees } from '@/types';
 
 type PdfSearchProps = {
   isSearchOpen: boolean;
   setIsSearchOpen: Dispatch<SetStateAction<boolean>>;
-  pageRefs: React.RefObject<Map<number, HTMLDivElement>>;
+  documents: SearchableDocument[];
   onHighlightsChange: (highlights: PageHighlights[]) => void;
   currentMatchIndex: number;
   onCurrentMatchIndexChange: (index: number) => void;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
-  rotation: RotationDegrees;
-  scale: number;
 };
 
 export const PdfSearch = ({
   isSearchOpen,
   setIsSearchOpen,
-  pageRefs,
+  documents,
   onHighlightsChange,
   currentMatchIndex,
   onCurrentMatchIndexChange,
   searchInputRef,
   scrollContainerRef,
-  rotation,
-  scale,
 }: PdfSearchProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [matches, setMatches] = useState<SearchMatch[]>([]);
   const [caseSensitive, setCaseSensitive] = useState(false);
+  const searchVersionRef = useRef(0);
 
   // Clear highlights when component unmounts (search is closed)
   useEffect(() => {
@@ -61,38 +66,57 @@ export const PdfSearch = ({
   }, [currentMatchIndex, matches.length, onCurrentMatchIndexChange]);
 
   const handleSearchChange = useCallback(
-    (value: string) => {
+    async (value: string) => {
       setSearchQuery(value);
-      const { highlights, matches } = computeHighlights(value, pageRefs, caseSensitive);
+      searchVersionRef.current += 1;
+      const version = searchVersionRef.current;
+
+      if (value.length === 0) {
+        onHighlightsChange([]);
+        setMatches([]);
+        onCurrentMatchIndexChange(0);
+        return;
+      }
+
+      const { highlights, matches } = await computeHighlights(value, documents, caseSensitive);
+
+      // Discard stale results
+      if (version !== searchVersionRef.current) {
+        return;
+      }
+
       onHighlightsChange(highlights);
       setMatches(matches);
+
       if (matches.length !== 0) {
         onCurrentMatchIndexChange(0);
       }
     },
-    [pageRefs, onHighlightsChange, onCurrentMatchIndexChange, caseSensitive],
+    [documents, onHighlightsChange, onCurrentMatchIndexChange, caseSensitive],
   );
 
-  // Recalculate highlights when rotation or scale changes
+  // Recalculate highlights when documents change (scale/rotation changed)
   useEffect(() => {
     if (searchQuery.length === 0) {
       return;
     }
 
-    // Use rotation and scale to trigger recalculation - the values themselves aren't needed,
-    // but the text layer positions change when rotation or scale changes
-    void rotation;
-    void scale;
+    searchVersionRef.current += 1;
+    const version = searchVersionRef.current;
 
-    // Small delay to allow the text layer to re-render after rotation/scale change
-    const timeoutId = setTimeout(() => {
-      const { highlights, matches } = computeHighlights(searchQuery, pageRefs, caseSensitive);
+    const runSearch = async () => {
+      const { highlights, matches } = await computeHighlights(searchQuery, documents, caseSensitive);
+
+      if (version !== searchVersionRef.current) {
+        return;
+      }
+
       onHighlightsChange(highlights);
       setMatches(matches);
-    }, 100);
+    };
 
-    return () => clearTimeout(timeoutId);
-  }, [rotation, scale, searchQuery, pageRefs, onHighlightsChange, caseSensitive]);
+    void runSearch();
+  }, [documents, searchQuery, onHighlightsChange, caseSensitive]);
 
   const clearSearch = useCallback(() => {
     setSearchQuery('');
@@ -174,7 +198,7 @@ interface PdfSearchUIProps {
   currentMatchIndex: number;
   goToNextMatch: () => void;
   goToPreviousMatch: () => void;
-  handleSearchChange: (value: string) => void;
+  handleSearchChange: (value: string) => Promise<void>;
   closeSearch: () => void;
   handleClear: () => void;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
@@ -220,7 +244,7 @@ const PdfSearchUI = ({
           type="search"
           ref={searchInputRef}
           value={searchQuery}
-          onChange={({ target }) => handleSearchChange(target.value)}
+          onChange={({ target }) => void handleSearchChange(target.value)}
           onKeyDown={handleInputKeyDown}
           placeholder={`Søk (${MOD_KEY_TEXT}+F)`}
           className="h-full w-40 px-2 focus:outline-none"
@@ -230,7 +254,7 @@ const PdfSearchUI = ({
           variant="tertiary"
           data-color="neutral"
           size="xsmall"
-          onClick={() => handleSearchChange('')}
+          onClick={() => void handleSearchChange('')}
           icon={<XMarkIcon aria-hidden />}
           aria-label="Tøm søk"
         />

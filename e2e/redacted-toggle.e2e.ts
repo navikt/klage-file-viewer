@@ -1,4 +1,11 @@
-import { DOCUMENT_WITH_VARIANTS_URL, TEXT_LAYER_SELECTOR, VIEWER_SELECTOR, waitForContent } from '@e2e/helpers';
+import {
+  assertPdfContainsText,
+  assertPdfDoesNotContainText,
+  DOCUMENT_WITH_VARIANTS_URL,
+  VIEWER_SELECTOR,
+  waitForContent,
+  waitForPdfRendered,
+} from '@e2e/helpers';
 import { expect, test } from '@playwright/test';
 
 test.describe('KlageFileViewer', () => {
@@ -7,6 +14,7 @@ test.describe('KlageFileViewer', () => {
       // Navigate directly to only the document with both ARKIV and SLADDET variants
       await page.goto(DOCUMENT_WITH_VARIANTS_URL);
       await waitForContent(page);
+      await waitForPdfRendered(page);
     });
 
     test('shows redacted version by default', async ({ page }) => {
@@ -16,14 +24,14 @@ test.describe('KlageFileViewer', () => {
       await expect(viewer.getByRole('checkbox', { name: 'Sladdet' })).toBeChecked();
 
       // "hunter2" is only present in the unredacted (ARKIV) version
-      await expect(viewer.locator(TEXT_LAYER_SELECTOR, { hasText: 'hunter2' })).toBeHidden();
+      await assertPdfDoesNotContainText(page, 'hunter2');
     });
 
     test('switches to unredacted version when unchecking Sladdet', async ({ page }) => {
       const viewer = page.locator(VIEWER_SELECTOR);
 
-      // Verify we start with the redacted version — "hunter2" should not be visible
-      await expect(viewer.locator(TEXT_LAYER_SELECTOR, { hasText: 'hunter2' })).toBeHidden();
+      // Verify we start with the redacted version — "hunter2" should not be found
+      await assertPdfDoesNotContainText(page, 'hunter2');
 
       // The checkbox should be checked by default (showing redacted/SLADDET version)
       const checkbox = viewer.getByRole('checkbox', { name: 'Sladdet' });
@@ -35,8 +43,11 @@ test.describe('KlageFileViewer', () => {
       // The checkbox should now be unchecked and show "Usladdet"
       await expect(viewer.getByRole('checkbox', { name: 'Usladdet' })).not.toBeChecked();
 
-      // Wait for the unredacted text to appear — "hunter2" is only in ARKIV
-      await expect(viewer.locator(TEXT_LAYER_SELECTOR, { hasText: 'hunter2' })).toBeVisible();
+      // Wait for re-render after variant switch
+      await waitForPdfRendered(page);
+
+      // "hunter2" should now be found via search — it's only in ARKIV
+      await assertPdfContainsText(page, 'hunter2');
     });
 
     test('switches back to redacted version when checking Sladdet', async ({ page }) => {
@@ -44,7 +55,8 @@ test.describe('KlageFileViewer', () => {
 
       // Uncheck to switch to unredacted first
       await viewer.getByRole('checkbox', { name: 'Sladdet' }).click();
-      await expect(viewer.locator(TEXT_LAYER_SELECTOR, { hasText: 'hunter2' })).toBeVisible();
+      await waitForPdfRendered(page);
+      await assertPdfContainsText(page, 'hunter2');
 
       // Check again to switch back to redacted
       await viewer.getByRole('checkbox', { name: 'Usladdet' }).click();
@@ -52,8 +64,11 @@ test.describe('KlageFileViewer', () => {
       // The checkbox should be checked again showing "Sladdet"
       await expect(viewer.getByRole('checkbox', { name: 'Sladdet' })).toBeChecked();
 
-      // "hunter2" should no longer be present
-      await expect(viewer.locator(TEXT_LAYER_SELECTOR, { hasText: 'hunter2' })).toBeHidden();
+      // Wait for re-render after variant switch
+      await waitForPdfRendered(page);
+
+      // "hunter2" should no longer be found
+      await assertPdfDoesNotContainText(page, 'hunter2');
     });
   });
 });
