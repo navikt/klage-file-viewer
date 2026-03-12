@@ -1,3 +1,4 @@
+import type { Rotation } from '@embedpdf/models';
 import { useCallback, useRef } from 'react';
 import type { PageSelectionRange, ScreenGlyph } from '@/files/pdf/selection/types';
 
@@ -9,6 +10,9 @@ interface SelectionOverlayProps {
   onPointerMove: (pageIndex: number, charIndex: number) => void;
   onPointerUp: () => void;
   isSelecting: boolean;
+  rotation: Rotation;
+  baseWidth: number;
+  baseHeight: number;
 }
 
 export const SelectionOverlay = ({
@@ -19,6 +23,9 @@ export const SelectionOverlay = ({
   onPointerMove,
   onPointerUp,
   isSelecting,
+  rotation,
+  baseWidth,
+  baseHeight,
 }: SelectionOverlayProps) => {
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -29,8 +36,30 @@ export const SelectionOverlay = ({
       }
 
       const rect = overlayRef.current.getBoundingClientRect();
-      const x = clientX - rect.left;
-      const y = clientY - rect.top;
+
+      // When the page is rotated via CSS transform, getBoundingClientRect()
+      // returns the axis-aligned bounding box in screen space. The coordinates
+      // (clientX - rect.left, clientY - rect.top) are therefore in the
+      // *rotated* screen space. We need to map them back into the
+      // untransformed coordinate space where glyph positions live.
+      //
+      // The CSS transform uses transformOrigin: '0 0', so:
+      //   rotation 0:   no transform
+      //   rotation 1:   rotate(90deg) translateY(-baseHeight)
+      //   rotation 2:   rotate(180deg) translate(-baseWidth, -baseHeight)
+      //   rotation 3:   rotate(270deg) translateX(-baseWidth)
+      //
+      // The visible bounding box for rotations 1 and 3 has its width and
+      // height swapped relative to the untransformed element. For rotation 2
+      // the AABB is the same size but shifted.
+      //
+      // We compute screen-relative coordinates, then apply the inverse of the
+      // rotation to arrive at the glyph coordinate system.
+
+      const sx = clientX - rect.left;
+      const sy = clientY - rect.top;
+
+      const { x, y } = screenToGlyph(sx, sy, rotation, baseWidth, baseHeight);
 
       // Find the closest glyph by checking containment first, then nearest
       let closestIndex = -1;
@@ -66,7 +95,7 @@ export const SelectionOverlay = ({
 
       return -1;
     },
-    [glyphs],
+    [glyphs, rotation, baseWidth, baseHeight],
   );
 
   const handlePointerDown = useCallback(
@@ -135,6 +164,48 @@ export const SelectionOverlay = ({
       ))}
     </div>
   );
+};
+
+/**
+ * Map screen-space coordinates (relative to the rotated bounding box)
+ * back to the untransformed glyph coordinate system.
+ *
+ * The CSS transforms (with transformOrigin '0 0') produce these mappings
+ * from untransformed (gx, gy) → screen AABB (sx, sy):
+ *
+ *   rotation 0: sx = gx,                sy = gy
+ *   rotation 1: sx = baseHeight - gy,   sy = gx
+ *                (AABB is baseHeight × baseWidth)
+ *   rotation 2: sx = baseWidth - gx,    sy = baseHeight - gy
+ *                (AABB is baseWidth × baseHeight)
+ *   rotation 3: sx = gy,                sy = baseWidth - gx
+ *                (AABB is baseHeight × baseWidth)
+ *
+ * Inverting:
+ *   rotation 0: gx = sx,                gy = sy
+ *   rotation 1: gx = sy,                gy = baseHeight - sx
+ *   rotation 2: gx = baseWidth - sx,    gy = baseHeight - sy
+ *   rotation 3: gx = baseWidth - sy,    gy = sx
+ */
+const screenToGlyph = (
+  sx: number,
+  sy: number,
+  rotation: Rotation,
+  baseWidth: number,
+  baseHeight: number,
+): { x: number; y: number } => {
+  switch (rotation) {
+    case 0:
+      return { x: sx, y: sy };
+    case 1:
+      return { x: sy, y: baseHeight - sx };
+    case 2:
+      return { x: baseWidth - sx, y: baseHeight - sy };
+    case 3:
+      return { x: baseWidth - sy, y: sx };
+    default:
+      return { x: sx, y: sy };
+  }
 };
 
 interface SelectionRect {

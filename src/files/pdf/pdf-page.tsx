@@ -92,6 +92,9 @@ export const PdfPage = ({
             pageIndex={pageIndex}
             page={page}
             scale={scale}
+            rotation={rotation}
+            baseWidth={baseWidth}
+            baseHeight={baseHeight}
             visible={visible}
             selectionRange={selectionRange}
             isSelecting={isSelecting}
@@ -121,6 +124,9 @@ interface PageSelectionLayerProps {
   pageIndex: number;
   page: import('@embedpdf/models').PdfPageObject;
   scale: number;
+  rotation: Rotation;
+  baseWidth: number;
+  baseHeight: number;
   visible: boolean;
   selectionRange: PageSelectionRange | null;
   isSelecting: boolean;
@@ -136,6 +142,9 @@ const PageSelectionLayer = ({
   pageIndex,
   page,
   scale,
+  rotation,
+  baseWidth,
+  baseHeight,
   visible,
   selectionRange,
   isSelecting,
@@ -166,6 +175,9 @@ const PageSelectionLayer = ({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       isSelecting={isSelecting}
+      rotation={rotation}
+      baseWidth={baseWidth}
+      baseHeight={baseHeight}
     />
   );
 };
