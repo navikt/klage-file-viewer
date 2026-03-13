@@ -25,7 +25,8 @@ export const resolveVariantUrl = (
   }
 
   const url = new URL(baseUrl, window.location.origin);
-  url.searchParams.append('format', variant.format);
+  url.searchParams.set('format', variant.format);
 
-  return url.toString();
+  // Return a path-relative URL to avoid origin mismatches in proxied environments.
+  return `${url.pathname}${url.search}`;
 };
