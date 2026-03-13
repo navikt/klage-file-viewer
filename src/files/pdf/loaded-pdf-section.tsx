@@ -122,6 +122,7 @@ export const LoadedPdfSection = ({
 
   // Current page tracking via scroll
   const [currentPage, setCurrentPage] = useState<number | null>(null);
+  const [hasOcr, setHasOcr] = useState(false);
   const rafRef = useRef<number | null>(null);
   const pageElementsRef = useRef<Map<number, HTMLElement>>(new Map());
 
@@ -255,6 +256,8 @@ export const LoadedPdfSection = ({
     [setPageElement],
   );
 
+  const handleOcrDetected = useCallback(() => setHasOcr(true), []);
+
   // Error state
   const displayError = error ?? (engineError !== null ? engineError.message : null) ?? docError;
 
@@ -339,6 +342,7 @@ export const LoadedPdfSection = ({
         onPrint={handlePrint}
         variant={headerVariant}
         showPasswordIndicator={usedPassword !== null}
+        showOcrIndicator={hasOcr}
         isLoading={fetching}
         refresh={refresh}
         onPreviousPage={numPages > 1 ? handlePreviousPage : undefined}
@@ -378,6 +382,7 @@ export const LoadedPdfSection = ({
             onPointerUp={handlePointerUp}
             geometryRegistry={geometryRegistry}
             showPasswordOverlay={usedPassword !== null}
+            onOcrDetected={handleOcrDetected}
           />
         ))}
       </VStack>

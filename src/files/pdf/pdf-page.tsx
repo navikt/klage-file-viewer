@@ -28,6 +28,7 @@ interface PdfPageProps {
   onPointerUp: () => void;
   geometryRegistry: React.RefObject<Map<number, ScreenPageGeometry>>;
   showPasswordOverlay?: boolean;
+  onOcrDetected?: () => void;
 }
 
 export const PdfPage = ({
@@ -48,6 +49,7 @@ export const PdfPage = ({
   onPointerUp,
   geometryRegistry,
   showPasswordOverlay,
+  onOcrDetected,
 }: PdfPageProps) => {
   const pageNumber = pageIndex + 1;
 
@@ -116,6 +118,7 @@ export const PdfPage = ({
             visible={visible}
             baseWidth={baseWidth}
             baseHeight={baseHeight}
+            onOcrDetected={onOcrDetected}
           />
           {highlights !== undefined && highlights.length > 0 ? (
             <HighlightLayer highlights={highlights} currentMatchIndex={currentMatchIndex ?? 0} />
@@ -237,10 +240,26 @@ interface PageOcrLayerProps {
   visible: boolean;
   baseWidth: number;
   baseHeight: number;
+  onOcrDetected?: () => void;
 }
 
-const PageOcrLayer = ({ engine, doc, page, pageIndex, visible, baseWidth, baseHeight }: PageOcrLayerProps) => {
+const PageOcrLayer = ({
+  engine,
+  doc,
+  page,
+  pageIndex,
+  visible,
+  baseWidth,
+  baseHeight,
+  onOcrDetected,
+}: PageOcrLayerProps) => {
   const { words } = useOcrPage(engine, doc, page, pageIndex, visible);
+
+  useEffect(() => {
+    if (words !== null && words.length > 0) {
+      onOcrDetected?.();
+    }
+  }, [words, onOcrDetected]);
 
   if (words === null || words.length === 0) {
     return null;
