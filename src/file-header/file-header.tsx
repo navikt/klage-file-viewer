@@ -52,6 +52,7 @@ interface FileHeaderProps {
   onPrint?: () => void;
   variant?: ResolvedVariant;
   showPasswordIndicator?: boolean;
+  showOcrIndicator?: boolean;
   isLoading: boolean;
   refresh?: () => void;
   onPreviousPage?: () => void;
@@ -70,6 +71,7 @@ export const FileHeader = ({
   onPrint,
   variant,
   showPasswordIndicator,
+  showOcrIndicator,
   isLoading,
   refresh,
   onPreviousPage,
@@ -113,6 +115,17 @@ export const FileHeader = ({
         {showPasswordIndicator === true ? (
           <Tooltip content="Passordbeskyttet PDF" describesChild>
             <PadlockLockedFillIcon aria-label="Passordbeskyttet" className="shrink-0 text-ax-text-danger-decoration" />
+          </Tooltip>
+        ) : null}
+
+        {showOcrIndicator === true ? (
+          <Tooltip
+            content="Teksten i dette dokumentet er hentet med tekstgjenkjenning (OCR) og kan inneholde feil"
+            maxChar={1000}
+          >
+            <Tag data-color="info" variant="moderate" size="xsmall" className="shrink-0 cursor-help">
+              OCR
+            </Tag>
           </Tooltip>
         ) : null}
 
