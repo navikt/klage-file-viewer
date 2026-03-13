@@ -1,11 +1,12 @@
 import { BodyShort, Loader } from '@navikt/ds-react';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useFileViewerConfig } from '@/context';
 import { type DocumentNavigation, FileHeader } from '@/file-header/file-header';
 import type { ResolvedVariant } from '@/file-header/variant-types';
 import { FileErrorLayout } from '@/files/file-error-layout';
 import { PlaceholderWrapper } from '@/files/pdf/pdf-section-placeholder';
 import { useRegisterRefresh } from '@/hooks/use-refresh-registry';
+import { usePrint } from '@/lib/print-frame';
 import type { FileEntry } from '@/types';
 import { useFileData } from '@/use-file-data';
 
@@ -25,9 +26,16 @@ export const LoadedImageSection = ({
   documentNavigation,
 }: LoadedImageSectionProps) => {
   const { errorComponent: ErrorComponent } = useFileViewerConfig();
+  const { printBlob } = usePrint();
   const { data, fetching, error, refresh } = useFileData(file.url, file.query);
 
   useRegisterRefresh(file.url, refresh);
+
+  const handlePrint = useCallback(() => {
+    if (data !== null) {
+      printBlob(data, data.type || 'image/jpeg');
+    }
+  }, [data, printBlob]);
 
   const objectUrl = useMemo(() => {
     if (data === null) {
@@ -99,6 +107,7 @@ export const LoadedImageSection = ({
         numPages={1}
         newTabUrl={file.newTabUrl}
         downloadUrl={file.downloadUrl}
+        onPrint={handlePrint}
         variant={headerVariant}
         isLoading={fetching}
         refresh={refresh}

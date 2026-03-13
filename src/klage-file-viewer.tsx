@@ -12,6 +12,7 @@ import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useLazyLoading } from '@/hooks/use-lazy-loading';
 import { RefreshRegistryProvider, useRefreshRegistry } from '@/hooks/use-refresh-registry';
 import { useSectionVisibility } from '@/hooks/use-section-visibility';
+import { PrintProvider } from '@/lib/print-frame';
 import { Toolbar } from '@/toolbar/toolbar';
 import { ToolbarHeightProvider, useToolbarHeight } from '@/toolbar-height-context';
 import type { FileEntry } from '@/types';
@@ -57,16 +58,18 @@ export const KlageFileViewer = ({
     <FileViewerProvider {...config} theme={theme}>
       <RefreshRegistryProvider>
         <PdfEngineProvider pdfiumWasmUrl={pdfiumWasmUrl}>
-          <ToolbarHeightProvider toolbarRef={toolbarRef}>
-            <KlageFileViewerInner
-              files={files}
-              onClose={onClose}
-              newTabUrl={newTabUrl}
-              handleRef={handleRef}
-              className={className === undefined ? 'klage-file-viewer' : `klage-file-viewer ${className}`}
-              toolbarRef={toolbarRef}
-            />
-          </ToolbarHeightProvider>
+          <PrintProvider>
+            <ToolbarHeightProvider toolbarRef={toolbarRef}>
+              <KlageFileViewerInner
+                files={files}
+                onClose={onClose}
+                newTabUrl={newTabUrl}
+                handleRef={handleRef}
+                className={className === undefined ? 'klage-file-viewer' : `klage-file-viewer ${className}`}
+                toolbarRef={toolbarRef}
+              />
+            </ToolbarHeightProvider>
+          </PrintProvider>
         </PdfEngineProvider>
       </RefreshRegistryProvider>
     </FileViewerProvider>

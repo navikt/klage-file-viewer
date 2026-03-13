@@ -14,6 +14,7 @@ import type { ReactNode } from 'react';
 import { DownloadButton } from '@/file-header/download-button';
 import type { DocumentNavigation } from '@/file-header/page-navigation';
 import { PageNavigation } from '@/file-header/page-navigation';
+import { PrintButton } from '@/file-header/print-button';
 import { RedactedSwitch } from '@/file-header/redacted-switch';
 import { ReloadButton } from '@/file-header/reload-button';
 import { SkjermingTag } from '@/file-header/skjerming-tag';
@@ -48,6 +49,7 @@ interface FileHeaderProps {
   numPages: number | null;
   newTabUrl?: string;
   downloadUrl?: string;
+  onPrint?: () => void;
   variant?: ResolvedVariant;
   showPasswordIndicator?: boolean;
   isLoading: boolean;
@@ -65,6 +67,7 @@ export const FileHeader = ({
   numPages,
   newTabUrl,
   downloadUrl,
+  onPrint,
   variant,
   showPasswordIndicator,
   isLoading,
@@ -120,6 +123,8 @@ export const FileHeader = ({
         {resolvedDownloadUrl !== undefined ? (
           <DownloadButton url={resolvedDownloadUrl} tooltip="Last ned dokument" />
         ) : null}
+
+        {onPrint !== undefined ? <PrintButton onPrint={onPrint} tooltip="Skriv ut dokument" /> : null}
       </HStack>
 
       <HStack gap="space-4" align="center" wrap={false}>

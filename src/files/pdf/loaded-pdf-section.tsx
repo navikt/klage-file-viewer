@@ -17,6 +17,7 @@ import { useVisiblePages } from '@/files/pdf/use-visible-pages';
 import { useRegisterRefresh } from '@/hooks/use-refresh-registry';
 import { useScrollToPage } from '@/hooks/use-scroll-to-page';
 import { getMostVisiblePage } from '@/lib/page-scroll';
+import { usePrint } from '@/lib/print-frame';
 import { useToolbarHeight } from '@/toolbar-height-context';
 import type { FileEntry } from '@/types';
 import { useFileData } from '@/use-file-data';
@@ -55,12 +56,20 @@ export const LoadedPdfSection = ({
   const { commonPasswords } = useFileViewerConfig();
   const toolbarHeight = useToolbarHeight();
 
+  const { printBlob } = usePrint();
+
   useRegisterRefresh(file.url, refresh);
 
   const { doc, loading: docLoading, error: docError } = usePdfDocument(engine, data, commonPasswords);
 
   // Per-page rotation state, persisted to localStorage per file URL + page index.
   const { rotations, handleRotate } = usePersistedRotations(file.url, doc?.pageCount ?? 0);
+
+  const handlePrint = useCallback(() => {
+    if (data !== null) {
+      printBlob(data, 'application/pdf');
+    }
+  }, [data, printBlob]);
 
   // Text selection
   const {
@@ -291,6 +300,7 @@ export const LoadedPdfSection = ({
         numPages={numPages}
         newTabUrl={file.newTabUrl}
         downloadUrl={file.downloadUrl}
+        onPrint={handlePrint}
         variant={headerVariant}
         isLoading={fetching}
         refresh={refresh}
