@@ -1,5 +1,57 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import type { OcrWord } from '@/files/pdf/ocr/use-ocr-page';
+
+interface OcrLine {
+  words: OcrWord[];
+  lineY: number;
+  lineHeight: number;
+  /** Left edge of the first word (0–1 fraction). */
+  left: number;
+  /** Width from first word's left to last word's right (0–1 fraction). */
+  width: number;
+}
+
+const groupIntoLines = (words: OcrWord[]): OcrLine[] => {
+  const lines: OcrLine[] = [];
+  let current: OcrWord[] = [];
+  let currentY = -1;
+
+  for (const word of words) {
+    if (word.lineY !== currentY) {
+      if (current.length > 0) {
+        lines.push(buildLine(current));
+      }
+
+      current = [word];
+      currentY = word.lineY;
+    } else {
+      current.push(word);
+    }
+  }
+
+  if (current.length > 0) {
+    lines.push(buildLine(current));
+  }
+
+  return lines;
+};
+
+const buildLine = (words: OcrWord[]): OcrLine => {
+  const first = words[0];
+  const last = words[words.length - 1];
+
+  if (first === undefined || last === undefined) {
+    return { words, lineY: 0, lineHeight: 0, left: 0, width: 0 };
+  }
+
+  return {
+    words,
+    lineY: first.lineY,
+    lineHeight: first.lineHeight,
+    left: first.x,
+    width: last.x + last.width - first.x,
+  };
+};
 
 interface OcrTextLayerProps {
   words: OcrWord[];
@@ -9,21 +61,17 @@ interface OcrTextLayerProps {
 
 /**
  * Renders OCR-detected words as invisible but selectable text positioned over
- * the page image. This enables browser-native text selection (drag / Ctrl+A)
- * and find-in-page (Ctrl+F) for scanned documents.
- *
- * All words on the same line share the Tesseract line bbox for top/height,
- * giving them a uniform fontSize and vertical position. A post-render layout
- * effect measures actual rendered width and applies scaleX to match the OCR
- * bounding box width. Each word includes a trailing space so that copied text
- * has whitespace between words.
+ * the page image. Words are grouped into block-level line `<div>`s so that
+ * triple-click selects a line, and block boundaries produce line breaks when
+ * copying. A post-render layout effect measures each line's natural width and
+ * applies scaleX to match the OCR bounding box.
  */
 export const OcrTextLayer = ({ words, baseWidth, baseHeight }: OcrTextLayerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const lines = useMemo(() => groupIntoLines(words), [words]);
 
-  // Measure actual rendered width of each span and apply scaleX to match
-  // the OCR bounding box width. Runs synchronously after render (before
-  // paint) to prevent a flash of incorrectly sized text.
+  // Measure each line div's natural width and apply scaleX to match the
+  // OCR line width. Runs before paint to prevent a flash of wrong width.
   useLayoutEffect(() => {
     const container = containerRef.current;
 
@@ -31,41 +79,40 @@ export const OcrTextLayer = ({ words, baseWidth, baseHeight }: OcrTextLayerProps
       return;
     }
 
-    const spans = container.querySelectorAll<HTMLSpanElement>('span[data-ocr-word]');
+    const lineDivs = container.querySelectorAll<HTMLDivElement>('div[data-ocr-line]');
 
-    // Reset transforms so getBoundingClientRect returns unscaled widths.
-    for (const span of spans) {
-      span.style.transform = 'none';
+    for (const div of lineDivs) {
+      div.style.transform = 'none';
     }
 
-    for (const span of spans) {
-      const targetWidth = Number(span.dataset.targetWidth);
+    for (const div of lineDivs) {
+      const targetWidth = Number(div.dataset.targetWidth);
 
       if (Number.isNaN(targetWidth) || targetWidth <= 0) {
         continue;
       }
 
-      const actualWidth = span.getBoundingClientRect().width;
+      const actualWidth = div.getBoundingClientRect().width;
 
       if (actualWidth > 0) {
-        span.style.transform = `scaleX(${(targetWidth / actualWidth).toString(10)})`;
+        div.style.transform = `scaleX(${(targetWidth / actualWidth).toString(10)})`;
       }
     }
   });
 
   return (
-    <div ref={containerRef} className="absolute inset-0 z-3 select-text" style={{ overflow: 'hidden', lineHeight: 1 }}>
-      {words.map((word, i) => {
-        const left = word.x * baseWidth;
-        const top = word.lineY * baseHeight;
-        const targetWidth = word.width * baseWidth;
-        const fontSize = word.lineHeight * baseHeight;
+    <div ref={containerRef} className="absolute inset-0 z-3 select-text" style={{ overflow: 'hidden' }}>
+      {lines.map((line, li) => {
+        const top = line.lineY * baseHeight;
+        const left = line.left * baseWidth;
+        const targetWidth = line.width * baseWidth;
+        const fontSize = line.lineHeight * baseHeight;
 
         return (
-          <span
-            // biome-ignore lint/suspicious/noArrayIndexKey: OCR words are static once computed and never reorder
-            key={i}
-            data-ocr-word=""
+          <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: OCR lines are static once computed and never reorder
+            key={li}
+            data-ocr-line=""
             data-target-width={targetWidth}
             style={{
               position: 'absolute',
@@ -74,13 +121,19 @@ export const OcrTextLayer = ({ words, baseWidth, baseHeight }: OcrTextLayerProps
               fontSize: Math.max(fontSize, 1),
               fontFamily: 'sans-serif',
               color: 'transparent',
-              whiteSpace: 'pre',
+              whiteSpace: 'nowrap',
+              lineHeight: 1,
               transformOrigin: 'left top',
             }}
           >
-            {word.text}
-            {word.endOfLine ? '\n' : ' '}
-          </span>
+            {line.words.map((word, wi) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: OCR words are static once computed and never reorder
+              <span key={wi}>
+                {word.text}
+                {word.endOfLine ? '' : ' '}
+              </span>
+            ))}
+          </div>
         );
       })}
     </div>
