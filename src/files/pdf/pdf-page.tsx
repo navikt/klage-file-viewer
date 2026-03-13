@@ -77,12 +77,12 @@ export const PdfPage = ({
     >
       <div className="relative" style={{ width, height }}>
         <div
+          className="relative select-none"
           style={{
             width: baseWidth,
             height: baseHeight,
             transformOrigin: '0 0',
             transform: rotationMatrix,
-            position: 'relative',
           }}
         >
           <PdfPageImage engine={engine} doc={doc} page={page} scale={scale} visible={visible} />
