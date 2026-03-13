@@ -66,11 +66,11 @@ export const LoadedPdfSection = ({
   const {
     selection,
     isSelecting,
-    handlePointerDown,
+    handleMouseDown,
     handlePointerMove,
     handlePointerUp,
     getPageSelectionRange,
-    glyphsRegistry,
+    geometryRegistry,
   } = useTextSelection();
 
   useCopyHandler(engine, doc, selection);
@@ -324,10 +324,10 @@ export const LoadedPdfSection = ({
             onRegisterElement={handleRegisterElement}
             selectionRange={getPageSelectionRange(pageIndex)}
             isSelecting={isSelecting}
-            onPointerDown={handlePointerDown}
+            onMouseDown={handleMouseDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            glyphsRegistry={glyphsRegistry}
+            geometryRegistry={geometryRegistry}
           />
         ))}
       </VStack>

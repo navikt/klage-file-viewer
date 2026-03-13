@@ -4,8 +4,8 @@ import { PdfPageImage } from '@/files/pdf/pdf-page-image';
 import { HighlightLayer } from '@/files/pdf/search/highlight-layer';
 import type { HighlightRect } from '@/files/pdf/search/types';
 import { SelectionOverlay } from '@/files/pdf/selection/selection-overlay';
-import type { PageSelectionRange, ScreenGlyph } from '@/files/pdf/selection/types';
-import { usePageGlyphs } from '@/files/pdf/selection/use-page-glyphs';
+import type { PageSelectionRange, ScreenPageGeometry } from '@/files/pdf/selection/types';
+import { usePageGeometry } from '@/files/pdf/selection/use-page-geometry';
 
 interface PdfPageProps {
   engine: PdfEngine;
@@ -20,10 +20,10 @@ interface PdfPageProps {
   onRegisterElement: (pageNumber: number, element: HTMLDivElement | null) => void;
   selectionRange: PageSelectionRange | null;
   isSelecting: boolean;
-  onPointerDown: (pageIndex: number, charIndex: number, isDoubleClick: boolean) => void;
+  onMouseDown: (pageIndex: number, charIndex: number, detail: number) => void;
   onPointerMove: (pageIndex: number, charIndex: number) => void;
   onPointerUp: () => void;
-  glyphsRegistry: React.RefObject<Map<number, ScreenGlyph[]>>;
+  geometryRegistry: React.RefObject<Map<number, ScreenPageGeometry>>;
 }
 
 export const PdfPage = ({
@@ -39,10 +39,10 @@ export const PdfPage = ({
   onRegisterElement,
   selectionRange,
   isSelecting,
-  onPointerDown,
+  onMouseDown,
   onPointerMove,
   onPointerUp,
-  glyphsRegistry,
+  geometryRegistry,
 }: PdfPageProps) => {
   const pageNumber = pageIndex + 1;
 
@@ -98,10 +98,10 @@ export const PdfPage = ({
             visible={visible}
             selectionRange={selectionRange}
             isSelecting={isSelecting}
-            onPointerDown={onPointerDown}
+            onMouseDown={onMouseDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
-            glyphsRegistry={glyphsRegistry}
+            geometryRegistry={geometryRegistry}
           />
           {highlights !== undefined && highlights.length > 0 ? (
             <HighlightLayer highlights={highlights} currentMatchIndex={currentMatchIndex ?? 0} />
@@ -114,7 +114,7 @@ export const PdfPage = ({
 };
 
 /**
- * Inner component that calls `usePageGlyphs` — extracted so the hook is not
+ * Inner component that calls `usePageGeometry` — extracted so the hook is not
  * called conditionally (the early return for `page === undefined` above would
  * violate the rules of hooks if the hook lived in the parent).
  */
@@ -130,10 +130,10 @@ interface PageSelectionLayerProps {
   visible: boolean;
   selectionRange: PageSelectionRange | null;
   isSelecting: boolean;
-  onPointerDown: (pageIndex: number, charIndex: number, isDoubleClick: boolean) => void;
+  onMouseDown: (pageIndex: number, charIndex: number, detail: number) => void;
   onPointerMove: (pageIndex: number, charIndex: number) => void;
   onPointerUp: () => void;
-  glyphsRegistry: React.RefObject<Map<number, ScreenGlyph[]>>;
+  geometryRegistry: React.RefObject<Map<number, ScreenPageGeometry>>;
 }
 
 const PageSelectionLayer = ({
@@ -148,30 +148,30 @@ const PageSelectionLayer = ({
   visible,
   selectionRange,
   isSelecting,
-  onPointerDown,
+  onMouseDown,
   onPointerMove,
   onPointerUp,
-  glyphsRegistry,
+  geometryRegistry,
 }: PageSelectionLayerProps) => {
-  const { glyphs } = usePageGlyphs(engine, doc, page, scale, visible);
+  const { geometry } = usePageGeometry(engine, doc, page, scale, visible);
 
-  // Register glyphs in the shared registry so useTextSelection can access them for word expansion
+  // Register geometry in the shared registry so useTextSelection can access it for word/line expansion
   useEffect(() => {
-    if (glyphs !== null) {
-      glyphsRegistry.current.set(pageIndex, glyphs);
+    if (geometry !== null) {
+      geometryRegistry.current.set(pageIndex, geometry);
     }
 
     return () => {
-      glyphsRegistry.current.delete(pageIndex);
+      geometryRegistry.current.delete(pageIndex);
     };
-  }, [glyphs, glyphsRegistry, pageIndex]);
+  }, [geometry, geometryRegistry, pageIndex]);
 
   return (
     <SelectionOverlay
-      glyphs={glyphs}
+      geometry={geometry}
       selectionRange={selectionRange}
       pageIndex={pageIndex}
-      onPointerDown={onPointerDown}
+      onMouseDown={onMouseDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       isSelecting={isSelecting}

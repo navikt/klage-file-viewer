@@ -1,12 +1,29 @@
 import type { Rotation } from '@embedpdf/models';
 import { useCallback, useRef } from 'react';
-import type { PageSelectionRange, ScreenGlyph } from '@/files/pdf/selection/types';
+import type { PageSelectionRange, ScreenPageGeometry, ScreenRun, ScreenRunGlyph } from '@/files/pdf/selection/types';
+import { GLYPH_FLAG_EMPTY } from '@/files/pdf/selection/types';
+
+// ---------------------------------------------------------------------------
+// Glyph bounds helpers — used by both hit-testing passes
+// ---------------------------------------------------------------------------
+
+/** Read the effective bounding box of a glyph, preferring tight bounds. */
+const glyphBounds = (g: ScreenRunGlyph): { gx: number; gy: number; gw: number; gh: number } => ({
+  gx: g.tightX ?? g.x,
+  gy: g.tightY ?? g.y,
+  gw: g.tightWidth ?? g.width,
+  gh: g.tightHeight ?? g.height,
+});
+
+/** Check whether a point falls inside a rectangle. */
+const pointInRect = (px: number, py: number, rx: number, ry: number, rw: number, rh: number): boolean =>
+  px >= rx && px <= rx + rw && py >= ry && py <= ry + rh;
 
 interface SelectionOverlayProps {
-  glyphs: ScreenGlyph[] | null;
+  geometry: ScreenPageGeometry | null;
   selectionRange: PageSelectionRange | null;
   pageIndex: number;
-  onPointerDown: (pageIndex: number, charIndex: number, isDoubleClick: boolean) => void;
+  onMouseDown: (pageIndex: number, charIndex: number, detail: number) => void;
   onPointerMove: (pageIndex: number, charIndex: number) => void;
   onPointerUp: () => void;
   isSelecting: boolean;
@@ -16,10 +33,10 @@ interface SelectionOverlayProps {
 }
 
 export const SelectionOverlay = ({
-  glyphs,
+  geometry,
   selectionRange,
   pageIndex,
-  onPointerDown,
+  onMouseDown,
   onPointerMove,
   onPointerUp,
   isSelecting,
@@ -31,7 +48,7 @@ export const SelectionOverlay = ({
 
   const hitTest = useCallback(
     (clientX: number, clientY: number): number => {
-      if (glyphs === null || glyphs.length === 0 || overlayRef.current === null) {
+      if (geometry === null || geometry.runs.length === 0 || overlayRef.current === null) {
         return -1;
       }
 
@@ -42,79 +59,53 @@ export const SelectionOverlay = ({
       // (clientX - rect.left, clientY - rect.top) are therefore in the
       // *rotated* screen space. We need to map them back into the
       // untransformed coordinate space where glyph positions live.
-      //
-      // The CSS transform uses transformOrigin: '0 0', so:
-      //   rotation 0:   no transform
-      //   rotation 1:   rotate(90deg) translateY(-baseHeight)
-      //   rotation 2:   rotate(180deg) translate(-baseWidth, -baseHeight)
-      //   rotation 3:   rotate(270deg) translateX(-baseWidth)
-      //
-      // The visible bounding box for rotations 1 and 3 has its width and
-      // height swapped relative to the untransformed element. For rotation 2
-      // the AABB is the same size but shifted.
-      //
-      // We compute screen-relative coordinates, then apply the inverse of the
-      // rotation to arrive at the glyph coordinate system.
-
       const sx = clientX - rect.left;
       const sy = clientY - rect.top;
 
       const { x, y } = screenToGlyph(sx, sy, rotation, baseWidth, baseHeight);
 
-      // Find the closest glyph by checking containment first, then nearest
-      let closestIndex = -1;
-      let closestDistance = Number.POSITIVE_INFINITY;
-
-      for (const glyph of glyphs) {
-        if (glyph.isSpace || glyph.isEmpty) {
-          continue;
-        }
-
-        // Check containment
-        if (x >= glyph.x && x <= glyph.x + glyph.width && y >= glyph.y && y <= glyph.y + glyph.height) {
-          return glyph.charIndex;
-        }
-
-        // Track closest glyph by distance to center
-        const cx = glyph.x + glyph.width / 2;
-        const cy = glyph.y + glyph.height / 2;
-        const dist = Math.abs(x - cx) + Math.abs(y - cy);
-
-        if (dist < closestDistance) {
-          closestDistance = dist;
-          closestIndex = glyph.charIndex;
-        }
-      }
-
-      // Only return closest if within a reasonable tolerance (half a line height)
-      const tolerance = glyphs[0]?.height ?? 20;
-
-      if (closestDistance <= tolerance * 1.5) {
-        return closestIndex;
-      }
-
-      return -1;
+      return glyphAt(geometry, x, y);
     },
-    [glyphs, rotation, baseWidth, baseHeight],
+    [geometry, rotation, baseWidth, baseHeight],
   );
 
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
+  /**
+   * Use mousedown for click-detail detection. The browser increments
+   * `e.detail` on `mousedown` (1 = single, 2 = double, 3 = triple),
+   * whereas `pointerdown` always reports `detail === 0` in most browsers.
+   */
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
       // Only handle left button
       if (e.button !== 0) {
         return;
       }
 
       const charIndex = hitTest(e.clientX, e.clientY);
-      const isDoubleClick = e.detail === 2;
 
-      onPointerDown(pageIndex, charIndex, isDoubleClick);
+      onMouseDown(pageIndex, charIndex, e.detail);
+    },
+    [hitTest, pageIndex, onMouseDown],
+  );
+
+  /**
+   * Use pointerdown solely for setting pointer capture, which ensures
+   * pointermove/pointerup keep firing even when the pointer leaves the
+   * overlay element during a drag.
+   */
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) {
+        return;
+      }
+
+      const charIndex = hitTest(e.clientX, e.clientY);
 
       if (charIndex >= 0) {
         overlayRef.current?.setPointerCapture(e.pointerId);
       }
     },
-    [hitTest, pageIndex, onPointerDown],
+    [hitTest],
   );
 
   const handlePointerMove = useCallback(
@@ -137,27 +128,30 @@ export const SelectionOverlay = ({
     [onPointerUp],
   );
 
-  // Build selection rectangles
-  const selectionRects = selectionRange !== null && glyphs !== null ? buildSelectionRects(glyphs, selectionRange) : [];
+  // Build selection rectangles from runs
+  const selectionRects =
+    selectionRange !== null && geometry !== null ? buildSelectionRects(geometry, selectionRange) : [];
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: This is a custom text selection overlay, not a semantic interactive element
     <div
       ref={overlayRef}
       className="absolute inset-0 z-2 cursor-text"
+      onMouseDown={handleMouseDown}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
-      {selectionRects.map((rect, i) => (
+      {selectionRects.map((r, i) => (
         <div
           // biome-ignore lint/suspicious/noArrayIndexKey: Selection rects are ephemeral and position-based
           key={i}
           className="pointer-events-none absolute"
           style={{
-            top: rect.y,
-            left: rect.x,
-            width: rect.width,
-            height: rect.height,
+            top: r.y,
+            left: r.x,
+            width: r.width,
+            height: r.height,
             backgroundColor: 'rgba(59, 130, 246, 0.3)',
           }}
         />
@@ -165,6 +159,148 @@ export const SelectionOverlay = ({
     </div>
   );
 };
+
+// ---------------------------------------------------------------------------
+// Hit-testing — adapted from EmbedPDF's `glyphAt` (two-pass approach)
+// ---------------------------------------------------------------------------
+
+/**
+ * Default tolerance factor — multiplied by average glyph height to derive
+ * the tolerance radius for the second pass. Matches Chromium's
+ * `pdfium-page.cc` kTolerance of 1.5.
+ */
+const DEFAULT_TOLERANCE_FACTOR = 1.5;
+
+/**
+ * Two-pass hit-test mirroring PDFium's `FPDFText_GetCharIndexAtPos` /
+ * `CPDF_TextPage::GetIndexAtPos`:
+ *
+ *  1. **Exact match**: return the glyph whose tight bounding box (or loose
+ *     bbox if tight is unavailable) contains the point.
+ *  2. **Tolerance expansion**: expand each glyph box by `tolerance/2` on
+ *     every side, then pick the closest glyph by Manhattan distance.
+ *
+ * Using runs to quickly skip entire text objects that are nowhere near the
+ * click point.
+ */
+const glyphAt = (geo: ScreenPageGeometry, x: number, y: number): number => {
+  // --- Pass 1: exact bounding-box match using tight bounds ---
+  const exact = glyphAtExact(geo, x, y);
+
+  if (exact !== -1) {
+    return exact;
+  }
+
+  // --- Pass 2: tolerance-expanded match ---
+  return glyphAtWithTolerance(geo, x, y, DEFAULT_TOLERANCE_FACTOR);
+};
+
+/** Pass 1: find a glyph whose tight bbox contains the point exactly. */
+const glyphAtExact = (geo: ScreenPageGeometry, x: number, y: number): number => {
+  for (const run of geo.runs) {
+    if (!pointInRect(x, y, run.rect.x, run.rect.y, run.rect.width, run.rect.height)) {
+      continue;
+    }
+
+    const hitIdx = run.glyphs.findIndex((g) => {
+      if (g.flags === GLYPH_FLAG_EMPTY) {
+        return false;
+      }
+
+      const { gx, gy, gw, gh } = glyphBounds(g);
+
+      return pointInRect(x, y, gx, gy, gw, gh);
+    });
+
+    if (hitIdx !== -1) {
+      return run.charStart + hitIdx;
+    }
+  }
+
+  return -1;
+};
+
+/** Pass 2: expand each glyph box by tolerance and pick closest by Manhattan distance. */
+const glyphAtWithTolerance = (geo: ScreenPageGeometry, x: number, y: number, toleranceFactor: number): number => {
+  const tolerance = computeTolerance(geo, toleranceFactor);
+
+  if (tolerance <= 0) {
+    return -1;
+  }
+
+  const halfTol = tolerance / 2;
+  let bestIndex = -1;
+  let bestDist = Number.POSITIVE_INFINITY;
+
+  for (const run of geo.runs) {
+    if (
+      !pointInRect(
+        x,
+        y,
+        run.rect.x - halfTol,
+        run.rect.y - halfTol,
+        run.rect.width + tolerance,
+        run.rect.height + tolerance,
+      )
+    ) {
+      continue;
+    }
+
+    for (let i = 0; i < run.glyphs.length; i++) {
+      const g = run.glyphs[i];
+
+      if (g === undefined || g.flags === GLYPH_FLAG_EMPTY) {
+        continue;
+      }
+
+      const { gx, gy, gw, gh } = glyphBounds(g);
+
+      if (!pointInRect(x, y, gx - halfTol, gy - halfTol, gw + tolerance, gh + tolerance)) {
+        continue;
+      }
+
+      const curXdif = Math.min(Math.abs(x - gx), Math.abs(x - (gx + gw)));
+      const curYdif = Math.min(Math.abs(y - gy), Math.abs(y - (gy + gh)));
+      const dist = curXdif + curYdif;
+
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIndex = run.charStart + i;
+      }
+    }
+  }
+
+  return bestIndex;
+};
+
+/**
+ * Derive a tolerance value from the average non-empty glyph height on the page.
+ */
+const computeTolerance = (geo: ScreenPageGeometry, factor: number): number => {
+  let totalHeight = 0;
+  let count = 0;
+
+  for (const run of geo.runs) {
+    for (const g of run.glyphs) {
+      if (g.flags === GLYPH_FLAG_EMPTY) {
+        continue;
+      }
+
+      totalHeight += g.height;
+      count++;
+    }
+  }
+
+  if (count === 0) {
+    return 0;
+  }
+
+  return (totalHeight / count) * factor;
+};
+
+// ---------------------------------------------------------------------------
+// Coordinate mapping
+// ---------------------------------------------------------------------------
 
 /**
  * Map screen-space coordinates (relative to the rotated bounding box)
@@ -175,11 +311,8 @@ export const SelectionOverlay = ({
  *
  *   rotation 0: sx = gx,                sy = gy
  *   rotation 1: sx = baseHeight - gy,   sy = gx
- *                (AABB is baseHeight × baseWidth)
  *   rotation 2: sx = baseWidth - gx,    sy = baseHeight - gy
- *                (AABB is baseWidth × baseHeight)
  *   rotation 3: sx = gy,                sy = baseWidth - gx
- *                (AABB is baseHeight × baseWidth)
  *
  * Inverting:
  *   rotation 0: gx = sx,                gy = sy
@@ -208,6 +341,11 @@ const screenToGlyph = (
   }
 };
 
+// ---------------------------------------------------------------------------
+// Selection rect building — adapted from EmbedPDF's `rectsWithinSlice` +
+// Chromium's `MergeAdjacentRects`
+// ---------------------------------------------------------------------------
+
 interface SelectionRect {
   x: number;
   y: number;
@@ -215,64 +353,221 @@ interface SelectionRect {
   height: number;
 }
 
-/** Tolerance in pixels for merging adjacent rects on the same line. */
-const POSITION_TOLERANCE = 1.5;
+/**
+ * Maximum gap between consecutive glyphs (as a multiple of average glyph
+ * width in the sub-run) before a new sub-run rect is flushed. This prevents
+ * a single selection highlight from spanning a large horizontal gap (e.g.
+ * across columns). Matches EmbedPDF's `CHAR_DISTANCE_FACTOR`.
+ */
+const CHAR_DISTANCE_FACTOR = 2.5;
 
-const buildSelectionRects = (glyphs: ScreenGlyph[], range: PageSelectionRange): SelectionRect[] => {
+/**
+ * Minimum vertical overlap ratio for two text run rects to be merged into a
+ * single highlight band. Matches EmbedPDF/Chromium's threshold.
+ */
+const VERTICAL_OVERLAP_THRESHOLD_MERGE = 0.8;
+
+/**
+ * Maximum font-size ratio between two runs before they are considered too
+ * different to merge. Matches Chromium's `FONT_SIZE_RATIO_THRESHOLD`.
+ */
+const FONT_SIZE_RATIO_THRESHOLD = 1.5;
+
+interface TextRunInfo {
+  rect: SelectionRect;
+  charCount: number;
+  fontSize: number | undefined;
+}
+
+/**
+ * Build the set of highlight rectangles for a selection range within one page.
+ *
+ * Iterates through runs, extracts sub-run rects for the selected glyph
+ * slice, then merges adjacent sub-runs that share the same visual line
+ * using Chromium's horizontal-overlap heuristic.
+ */
+const buildSelectionRects = (geo: ScreenPageGeometry, range: PageSelectionRange): SelectionRect[] => {
   const { startCharIndex, endCharIndex } = range;
-  const selected: ScreenGlyph[] = [];
+  const textRuns: TextRunInfo[] = [];
 
-  for (const glyph of glyphs) {
-    if (glyph.charIndex >= startCharIndex && glyph.charIndex <= endCharIndex) {
-      selected.push(glyph);
-    }
-  }
+  for (const run of geo.runs) {
+    const runStart = run.charStart;
+    const runEnd = runStart + run.glyphs.length - 1;
 
-  if (selected.length === 0) {
-    return [];
-  }
-
-  // Sort by y then x for merging
-  const sorted = selected.toSorted((a, b) => {
-    const yDiff = a.y - b.y;
-
-    if (Math.abs(yDiff) > POSITION_TOLERANCE) {
-      return yDiff;
-    }
-
-    return a.x - b.x;
-  });
-
-  const first = sorted[0];
-
-  if (first === undefined) {
-    return [];
-  }
-
-  // Merge adjacent glyphs on the same line
-  const merged: SelectionRect[] = [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-
-  for (let i = 1; i < sorted.length; i++) {
-    const current = sorted[i];
-    const previous = merged[merged.length - 1];
-
-    if (current === undefined || previous === undefined) {
+    // Skip runs entirely outside the selection
+    if (runEnd < startCharIndex || runStart > endCharIndex) {
       continue;
     }
 
-    const sameLine =
-      Math.abs(current.y - previous.y) <= POSITION_TOLERANCE &&
-      Math.abs(current.height - previous.height) <= POSITION_TOLERANCE;
+    // Determine the slice of this run that is selected
+    const sIdx = Math.max(startCharIndex, runStart) - runStart;
+    const eIdx = Math.min(endCharIndex, runEnd) - runStart;
 
-    const adjacent = current.x <= previous.x + previous.width + POSITION_TOLERANCE;
+    collectSubRunRects(run, sIdx, eIdx, textRuns);
+  }
 
-    if (sameLine && adjacent) {
-      const mergedRight = Math.max(previous.x + previous.width, current.x + current.width);
-      previous.width = mergedRight - previous.x;
-    } else {
-      merged.push({ x: current.x, y: current.y, width: current.width, height: current.height });
+  if (textRuns.length === 0) {
+    return [];
+  }
+
+  return mergeAdjacentRects(textRuns);
+};
+
+/**
+ * Walk through the selected slice of a run, flushing a new sub-run rect
+ * whenever a large horizontal gap is encountered (indicating a column break
+ * or similar structural discontinuity).
+ */
+const collectSubRunRects = (run: ScreenRun, sIdx: number, eIdx: number, out: TextRunInfo[]): void => {
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  let charCount = 0;
+  let widthSum = 0;
+  let prevRight = Number.NEGATIVE_INFINITY;
+
+  const flush = () => {
+    if (minX !== Number.POSITIVE_INFINITY && charCount > 0) {
+      out.push({
+        rect: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+        charCount,
+        fontSize: run.fontSize,
+      });
+    }
+
+    minX = Number.POSITIVE_INFINITY;
+    maxX = Number.NEGATIVE_INFINITY;
+    minY = Number.POSITIVE_INFINITY;
+    maxY = Number.NEGATIVE_INFINITY;
+    charCount = 0;
+    widthSum = 0;
+    prevRight = Number.NEGATIVE_INFINITY;
+  };
+
+  for (let i = sIdx; i <= eIdx; i++) {
+    const g = run.glyphs[i];
+
+    if (g === undefined || g.flags === GLYPH_FLAG_EMPTY) {
+      continue;
+    }
+
+    // If there's a large horizontal gap, flush the current sub-run
+    if (charCount > 0 && prevRight > Number.NEGATIVE_INFINITY) {
+      const gap = Math.abs(g.x - prevRight);
+      const avgWidth = widthSum / charCount;
+
+      if (avgWidth > 0 && gap > CHAR_DISTANCE_FACTOR * avgWidth) {
+        flush();
+      }
+    }
+
+    minX = Math.min(minX, g.x);
+    maxX = Math.max(maxX, g.x + g.width);
+    minY = Math.min(minY, g.y);
+    maxY = Math.max(maxY, g.y + g.height);
+
+    charCount++;
+    widthSum += g.width;
+    prevRight = g.x + g.width;
+  }
+
+  flush();
+};
+
+// ---------------------------------------------------------------------------
+// Chromium-style rectangle merging
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a ratio between [0, 1] representing vertical overlap of two rects.
+ * A value of 1 means one rect fully contains the other vertically.
+ */
+const getVerticalOverlap = (a: SelectionRect, b: SelectionRect): number => {
+  if (a.height <= 0 || b.height <= 0) {
+    return 0;
+  }
+
+  const unionTop = Math.min(a.y, b.y);
+  const unionBottom = Math.max(a.y + a.height, b.y + b.height);
+  const unionHeight = unionBottom - unionTop;
+
+  if (unionHeight === a.height || unionHeight === b.height) {
+    return 1.0;
+  }
+
+  const intersectTop = Math.max(a.y, b.y);
+  const intersectBottom = Math.min(a.y + a.height, b.y + b.height);
+  const intersectHeight = Math.max(0, intersectBottom - intersectTop);
+
+  return intersectHeight / unionHeight;
+};
+
+/**
+ * Determine whether two text-run rects should be merged into a single
+ * highlight band. Checks font-size compatibility, vertical overlap, and
+ * horizontal proximity. Adapted from Chromium's `shouldMergeHorizontalRects`.
+ */
+const shouldMerge = (a: TextRunInfo, b: TextRunInfo): boolean => {
+  // Font-size guard
+  if (a.fontSize !== undefined && b.fontSize !== undefined && a.fontSize > 0 && b.fontSize > 0) {
+    const ratio = Math.max(a.fontSize, b.fontSize) / Math.min(a.fontSize, b.fontSize);
+
+    if (ratio > FONT_SIZE_RATIO_THRESHOLD) {
+      return false;
     }
   }
 
-  return merged;
+  // Vertical overlap check
+  if (getVerticalOverlap(a.rect, b.rect) < VERTICAL_OVERLAP_THRESHOLD_MERGE) {
+    return false;
+  }
+
+  // Horizontal proximity — expand each rect by one average-character-width
+  // on each side and check if they overlap.
+  const avgWidthA = a.rect.width / a.charCount;
+  const avgWidthB = b.rect.width / b.charCount;
+
+  const aLeft = a.rect.x - avgWidthA;
+  const aRight = a.rect.x + a.rect.width + avgWidthA;
+  const bLeft = b.rect.x - avgWidthB;
+  const bRight = b.rect.x + b.rect.width + avgWidthB;
+
+  return aLeft < bRight && aRight > bLeft;
+};
+
+/**
+ * Merge adjacent text-run rects that share the same visual line.
+ * Adapted from Chromium's `MergeAdjacentRects` (pdfium_range.cc).
+ */
+const mergeAdjacentRects = (textRuns: TextRunInfo[]): SelectionRect[] => {
+  const results: SelectionRect[] = [];
+  let prevRun: TextRunInfo | null = null;
+  let currentRect: SelectionRect | null = null;
+
+  for (const textRun of textRuns) {
+    if (prevRun !== null && currentRect !== null && shouldMerge(prevRun, textRun)) {
+      // Union the current accumulated rect with the new run's rect
+      const left = Math.min(currentRect.x, textRun.rect.x);
+      const top = Math.min(currentRect.y, textRun.rect.y);
+      const right = Math.max(currentRect.x + currentRect.width, textRun.rect.x + textRun.rect.width);
+      const bottom = Math.max(currentRect.y + currentRect.height, textRun.rect.y + textRun.rect.height);
+
+      currentRect = { x: left, y: top, width: right - left, height: bottom - top };
+    } else {
+      if (currentRect !== null && currentRect.width > 0 && currentRect.height > 0) {
+        results.push(currentRect);
+      }
+
+      currentRect = { ...textRun.rect };
+    }
+
+    prevRun = textRun;
+  }
+
+  if (currentRect !== null && currentRect.width > 0 && currentRect.height > 0) {
+    results.push(currentRect);
+  }
+
+  return results;
 };
