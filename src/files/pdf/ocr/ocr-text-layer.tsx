@@ -133,7 +133,7 @@ export const OcrTextLayer = ({ words, baseWidth, baseHeight }: OcrTextLayerProps
               // biome-ignore lint/suspicious/noArrayIndexKey: OCR words are static once computed and never reorder
               <span key={wi}>
                 {word.text}
-                {word.endOfLine ? '' : ' '}
+                {word.endOfLine ? '\n' : ' '}
               </span>
             ))}
           </div>
