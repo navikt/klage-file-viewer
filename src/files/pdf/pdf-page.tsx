@@ -1,6 +1,6 @@
 import type { PdfDocumentObject, PdfEngine, Rotation } from '@embedpdf/models';
 import { PadlockLockedFillIcon } from '@navikt/aksel-icons';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { OcrTextLayer } from '@/files/pdf/ocr/ocr-text-layer';
 import { useOcrPage } from '@/files/pdf/ocr/use-ocr-page';
 import { PdfPageImage } from '@/files/pdf/pdf-page-image';
@@ -23,6 +23,7 @@ interface PdfPageProps {
   onRegisterElement: (pageNumber: number, element: HTMLDivElement | null) => void;
   selectionRange: PageSelectionRange | null;
   isSelecting: boolean;
+  clearSelection: () => void;
   onMouseDown: (pageIndex: number, charIndex: number, detail: number) => void;
   onPointerMove: (pageIndex: number, charIndex: number) => void;
   onPointerUp: () => void;
@@ -44,6 +45,7 @@ export const PdfPage = ({
   onRegisterElement,
   selectionRange,
   isSelecting,
+  clearSelection,
   onMouseDown,
   onPointerMove,
   onPointerUp,
@@ -52,6 +54,7 @@ export const PdfPage = ({
   onOcrDetected,
 }: PdfPageProps) => {
   const pageNumber = pageIndex + 1;
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const handleRef = useCallback(
     (el: HTMLDivElement | null) => {
@@ -59,6 +62,22 @@ export const PdfPage = ({
     },
     [onRegisterElement, pageNumber],
   );
+
+  useEffect(() => {
+    if (selectionRange === null) {
+      return;
+    }
+
+    const handleDocumentMouseDown = (e: MouseEvent): void => {
+      if (!contentRef.current?.contains(e.target as Node)) {
+        clearSelection();
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+
+    return () => document.removeEventListener('mousedown', handleDocumentMouseDown);
+  }, [selectionRange, clearSelection]);
 
   const page = doc.pages[pageIndex];
 
@@ -82,7 +101,7 @@ export const PdfPage = ({
       data-klage-file-viewer-scalable
       className="relative flex w-full justify-center"
     >
-      <div className="relative" style={{ width, height }}>
+      <div ref={contentRef} className="relative" style={{ width, height }}>
         <div
           className="relative select-none"
           style={{
