@@ -10,7 +10,7 @@ import { KlageFileViewer } from '@/index';
 
 const PDFIUM_WASM_URL = `${window.location.origin}/pdfium.wasm`;
 
-const COMMON_PASSWORDS = ['123', 'passord'];
+const COMMON_PASSWORDS: string[] = ['passord'];
 
 const App = () => {
   const { availableItems, selectedKeys, error, toggleItem } = useFileSelection();

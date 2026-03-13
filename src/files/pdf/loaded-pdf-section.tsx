@@ -5,13 +5,15 @@ import { useFileViewerConfig } from '@/context';
 import { type DocumentNavigation, FileHeader } from '@/file-header/file-header';
 import type { ResolvedVariant } from '@/file-header/variant-types';
 import { FileErrorLayout } from '@/files/file-error-layout';
+import { PasswordPrompt } from '@/files/pdf/password-prompt';
+import { PasswordProtectedInfoCard } from '@/files/pdf/password-protected-info-card';
 import { usePdfEngine } from '@/files/pdf/pdf-engine-context';
 import { PdfPage } from '@/files/pdf/pdf-page';
 import { PlaceholderWrapper } from '@/files/pdf/pdf-section-placeholder';
 import type { HighlightRect } from '@/files/pdf/search/types';
 import { useCopyHandler } from '@/files/pdf/selection/use-copy-handler';
 import { useTextSelection } from '@/files/pdf/selection/use-text-selection';
-import { usePdfDocument } from '@/files/pdf/use-pdf-document';
+import { PasswordStatus, usePdfDocument } from '@/files/pdf/use-pdf-document';
 import { usePersistedRotations } from '@/files/pdf/use-persisted-rotations';
 import { useVisiblePages } from '@/files/pdf/use-visible-pages';
 import { useRegisterRefresh } from '@/hooks/use-refresh-registry';
@@ -60,7 +62,15 @@ export const LoadedPdfSection = ({
 
   useRegisterRefresh(file.url, refresh);
 
-  const { doc, loading: docLoading, error: docError } = usePdfDocument(engine, data, commonPasswords);
+  const {
+    doc,
+    loading: docLoading,
+    error: docError,
+    passwordState,
+    usedPassword,
+    autoTryingPasswords,
+    submitPassword,
+  } = usePdfDocument(engine, data, { commonPasswords, fileUrl: file.url });
 
   // Per-page rotation state, persisted to localStorage per file URL + page index.
   const { rotations, handleRotate } = usePersistedRotations(file.url, doc?.pageCount ?? 0);
@@ -262,6 +272,32 @@ export const LoadedPdfSection = ({
     );
   }
 
+  // Password prompt state
+  const isPasswordPromptVisible = passwordState.status !== PasswordStatus.NONE && doc === null && !autoTryingPasswords;
+
+  if (isPasswordPromptVisible) {
+    return (
+      <>
+        <FileHeader
+          title={file.title}
+          currentPage={null}
+          numPages={null}
+          newTabUrl={file.newTabUrl}
+          downloadUrl={file.downloadUrl}
+          variant={headerVariant}
+          showPasswordIndicator
+          isLoading={fetching}
+          refresh={refresh}
+          documentNavigation={documentNavigation}
+        />
+
+        <PasswordProtectedInfoCard />
+
+        <PasswordPrompt passwordState={passwordState} onSubmitPassword={submitPassword} scale={scale} />
+      </>
+    );
+  }
+
   // Loading state
   const isLoading = loading || engineLoading || docLoading;
 
@@ -302,6 +338,7 @@ export const LoadedPdfSection = ({
         downloadUrl={file.downloadUrl}
         onPrint={handlePrint}
         variant={headerVariant}
+        showPasswordIndicator={usedPassword !== null}
         isLoading={fetching}
         refresh={refresh}
         onPreviousPage={numPages > 1 ? handlePreviousPage : undefined}
@@ -310,6 +347,8 @@ export const LoadedPdfSection = ({
         nextPageDisabled={nextPageDisabled}
         documentNavigation={documentNavigation}
       />
+
+      {usedPassword !== null ? <PasswordProtectedInfoCard password={usedPassword} /> : null}
 
       <VStack
         position="relative"
@@ -338,6 +377,7 @@ export const LoadedPdfSection = ({
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             geometryRegistry={geometryRegistry}
+            showPasswordOverlay={usedPassword !== null}
           />
         ))}
       </VStack>

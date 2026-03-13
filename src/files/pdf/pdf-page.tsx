@@ -1,4 +1,5 @@
 import type { PdfDocumentObject, PdfEngine, Rotation } from '@embedpdf/models';
+import { PadlockLockedFillIcon } from '@navikt/aksel-icons';
 import { useCallback, useEffect } from 'react';
 import { PdfPageImage } from '@/files/pdf/pdf-page-image';
 import { HighlightLayer } from '@/files/pdf/search/highlight-layer';
@@ -24,6 +25,7 @@ interface PdfPageProps {
   onPointerMove: (pageIndex: number, charIndex: number) => void;
   onPointerUp: () => void;
   geometryRegistry: React.RefObject<Map<number, ScreenPageGeometry>>;
+  showPasswordOverlay?: boolean;
 }
 
 export const PdfPage = ({
@@ -43,6 +45,7 @@ export const PdfPage = ({
   onPointerMove,
   onPointerUp,
   geometryRegistry,
+  showPasswordOverlay,
 }: PdfPageProps) => {
   const pageNumber = pageIndex + 1;
 
@@ -107,6 +110,7 @@ export const PdfPage = ({
             <HighlightLayer highlights={highlights} currentMatchIndex={currentMatchIndex ?? 0} />
           ) : null}
         </div>
+        {showPasswordOverlay === true ? <PasswordUnlockedOverlay /> : null}
         <RotateButton pageNumber={pageNumber} onRotate={() => onRotate(pageIndex)} />
       </div>
     </div>
@@ -212,4 +216,13 @@ const RotateButton = ({ pageNumber, onRotate }: RotateButtonProps) => (
   >
     ↺
   </button>
+);
+
+const PasswordUnlockedOverlay = () => (
+  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+    <PadlockLockedFillIcon
+      aria-hidden
+      className="h-full max-h-1/2 w-full max-w-1/2 text-ax-text-danger-decoration opacity-50"
+    />
+  </div>
 );
