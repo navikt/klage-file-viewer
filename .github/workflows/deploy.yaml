@@ -82,6 +82,27 @@ jobs:
           project_id: ${{ vars.NAIS_MANAGEMENT_PROJECT_ID }}
           identity_provider: ${{ secrets.NAIS_WORKLOAD_IDENTITY_PROVIDER }}
 
+      - name: Prepare Tesseract CDN files
+        env:
+          TESSERACT_VERSION: ${{ needs.build-and-test.outputs.tesseract-version }}
+        run: |
+          mkdir -p tesseract-cdn/lang
+          cp node_modules/tesseract.js/dist/worker.min.js tesseract-cdn/
+          cp node_modules/tesseract.js-core/tesseract-core*.wasm.js tesseract-cdn/
+          curl -fsSL -o tesseract-cdn/lang/nor.traineddata.gz "https://cdn.jsdelivr.net/npm/@tesseract.js-data/nor/4.0.0_best_int/nor.traineddata.gz"
+          curl -fsSL -o tesseract-cdn/lang/eng.traineddata.gz "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz"
+          curl -fsSL -o tesseract-cdn/lang/pol.traineddata.gz "https://cdn.jsdelivr.net/npm/@tesseract.js-data/pol/4.0.0_best_int/pol.traineddata.gz"
+
+      - name: Upload Tesseract files to CDN
+        uses: nais/deploy/actions/cdn-upload/v2@master
+        with:
+          team: klage
+          source: tesseract-cdn/
+          source_keep_parent_name: false
+          destination: klage-file-viewer/tesseract/v${{ needs.build-and-test.outputs.tesseract-version }}
+          project_id: ${{ vars.NAIS_MANAGEMENT_PROJECT_ID }}
+          identity_provider: ${{ secrets.NAIS_WORKLOAD_IDENTITY_PROVIDER }}
+
       - name: Publish package
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}

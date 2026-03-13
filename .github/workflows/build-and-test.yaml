@@ -19,6 +19,9 @@ on:
       pdfium-hash:
         description: "The hash of the PDFium WASM file"
         value: ${{ jobs.build-and-test.outputs.pdfium-hash }}
+      tesseract-version:
+        description: "The installed tesseract.js version"
+        value: ${{ jobs.build-and-test.outputs.tesseract-version }}
 
 jobs:
   build-and-test:
@@ -31,6 +34,7 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.56.1-noble
     outputs:
       pdfium-hash: ${{ steps.pdfium-hash.outputs.hash }}
+      tesseract-version: ${{ steps.tesseract-version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -60,6 +64,11 @@ jobs:
         id: pdfium-hash
         run: echo "hash=$(sha256sum node_modules/@embedpdf/pdfium/dist/pdfium.wasm | cut -c1-12)" >> "$GITHUB_OUTPUT"
 
+      - name: Read Tesseract.js version
+        if: success() || failure()
+        id: tesseract-version
+        run: echo "version=$(node -e "console.log(require('tesseract.js/package.json').version)")" >> "$GITHUB_OUTPUT"
+
       - name: Typecheck
         if: success() || failure()
         run: bun typecheck
@@ -76,6 +85,7 @@ jobs:
         if: success() || failure()
         env:
           PDFIUM_WASM_HASH: ${{ steps.pdfium-hash.outputs.hash }}
+          TESSERACT_CDN_URL: https://cdn.nav.no/klage/klage-file-viewer/tesseract/v${{ steps.tesseract-version.outputs.version }}
         run: bun run build
 
       - name: Run unit tests
@@ -96,3 +106,5 @@ jobs:
             dist/
             package.json
             node_modules/@embedpdf/pdfium/dist/pdfium.wasm
+            node_modules/tesseract.js/dist/worker.min.js
+            node_modules/tesseract.js-core/tesseract-core*.wasm.js

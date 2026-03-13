@@ -4,7 +4,7 @@ import { buildDownloadFilename, parseDocumentRequest, parseDownloadRequest, reso
 
 const PORT = 5172;
 const DIST_DIR = resolve(import.meta.dirname, 'dist');
-const PDFIUM_WASM_PATH = resolve(import.meta.dirname, '../node_modules/@embedpdf/pdfium/dist/pdfium.wasm');
+const NODE_MODULES = resolve(import.meta.dirname, '../node_modules');
 
 // --- Response helpers ---
 
@@ -15,10 +15,18 @@ const jsonResponse = (data: unknown): Response =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+const serveFile = (filePath: string, contentType: string): Response => {
+  if (!existsSync(filePath)) {
+    return textResponse('Not found', 404);
+  }
+
+  return new Response(Bun.file(filePath), {
+    headers: { 'Content-Type': contentType },
+  });
+};
+
 const downloadResponse = (filePath: string, downloadFilename: string): Response => {
-  try {
-    statSync(filePath);
-  } catch {
+  if (!existsSync(filePath)) {
     return textResponse('File not found', 404);
   }
 
@@ -50,18 +58,7 @@ const handleApiDocument = (url: URL): Response => {
 
   const filePath = resolveDocumentPath(DIST_DIR, result.documentName, result.format);
 
-  try {
-    const stat = statSync(filePath);
-
-    return new Response(Bun.file(filePath), {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Length': stat.size.toString(10),
-      },
-    });
-  } catch {
-    return textResponse(`Variant "${result.format}" not found for document "${result.documentName}"`, 404);
-  }
+  return serveFile(filePath, 'application/pdf');
 };
 
 const handleApiDownload = (url: URL): Response => {
@@ -82,14 +79,26 @@ const handleApiDownload = (url: URL): Response => {
     return downloadResponse(filePath, downloadFilename);
   }
 
-  const filePath = resolve(DIST_DIR, result.filename);
+  return downloadResponse(resolve(DIST_DIR, result.filename), result.filename);
+};
 
-  return downloadResponse(filePath, result.filename);
+/** Proxy Tesseract language data from jsdelivr. */
+const proxyLangData = async (lang: string): Promise<Response> => {
+  const cdnUrl = `https://cdn.jsdelivr.net/npm/@tesseract.js-data/${lang}/4.0.0_best_int/${lang}.traineddata.gz`;
+  const cdnRes = await fetch(cdnUrl);
+
+  if (!cdnRes.ok) {
+    return textResponse(`Failed to fetch ${lang} language data`, cdnRes.status);
+  }
+
+  return new Response(cdnRes.body, {
+    headers: { 'Content-Type': 'application/octet-stream' },
+  });
 };
 
 // --- Request handler ---
 
-const handleRequest = (req: Request): Response => {
+const handleRequest = async (req: Request): Promise<Response> => {
   const url = new URL(req.url);
   const { pathname } = url;
 
@@ -106,19 +115,29 @@ const handleRequest = (req: Request): Response => {
     return handleApiDownload(url);
   }
 
+  // PDFium WASM from node_modules
   if (pathname === '/pdfium.wasm') {
-    if (!existsSync(PDFIUM_WASM_PATH)) {
-      return textResponse('pdfium.wasm not found', 404);
-    }
+    return serveFile(resolve(NODE_MODULES, '@embedpdf/pdfium/dist/pdfium.wasm'), 'application/wasm');
+  }
 
-    const stat = statSync(PDFIUM_WASM_PATH);
+  // Tesseract worker script
+  if (pathname === '/tesseract/worker.min.js') {
+    return serveFile(resolve(NODE_MODULES, 'tesseract.js/dist/worker.min.js'), 'application/javascript');
+  }
 
-    return new Response(Bun.file(PDFIUM_WASM_PATH), {
-      headers: {
-        'Content-Type': 'application/wasm',
-        'Content-Length': stat.size.toString(10),
-      },
-    });
+  // Tesseract WASM core (multiple variants, auto-selected by CPU features)
+  if (pathname.startsWith('/tesseract/tesseract-core')) {
+    return serveFile(
+      resolve(NODE_MODULES, 'tesseract.js-core', pathname.slice('/tesseract/'.length)),
+      'application/javascript',
+    );
+  }
+
+  // Tesseract language data (proxied from jsdelivr)
+  if (pathname.startsWith('/tesseract/lang/')) {
+    const lang = pathname.slice('/tesseract/lang/'.length).replace('.traineddata.gz', '');
+
+    return proxyLangData(lang);
   }
 
   // Static files from dist dir
@@ -126,9 +145,7 @@ const handleRequest = (req: Request): Response => {
     const filePath = resolve(DIST_DIR, `.${pathname}`);
 
     try {
-      const stat = statSync(filePath);
-
-      if (stat.isFile()) {
+      if (statSync(filePath).isFile()) {
         return new Response(Bun.file(filePath));
       }
     } catch {

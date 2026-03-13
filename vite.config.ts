@@ -13,6 +13,21 @@ import {
 } from './dev/api';
 
 const LEADING_SLASH_REGEX = /^\//;
+const NODE_MODULES = resolve(__dirname, 'node_modules');
+
+const serveNodeModule = (res: ServerResponse, modulePath: string, contentType: string): void => {
+  const filePath = resolve(NODE_MODULES, modulePath);
+
+  if (!existsSync(filePath)) {
+    res.statusCode = 404;
+    res.end('Not found');
+
+    return;
+  }
+
+  res.setHeader('Content-Type', contentType);
+  createReadStream(filePath).pipe(res);
+};
 
 const sendFile = (res: ServerResponse, filePath: string, downloadFilename: string): void => {
   try {
@@ -33,21 +48,43 @@ const pdfListPlugin = (): Plugin => ({
   configureServer(server) {
     const publicDir = resolve(__dirname, 'dev/public');
 
-    const pdfiumWasmPath = resolve(__dirname, 'node_modules/@embedpdf/pdfium/dist/pdfium.wasm');
-
+    // PDFium WASM from node_modules
     server.middlewares.use('/pdfium.wasm', (_req, res) => {
-      if (!existsSync(pdfiumWasmPath)) {
-        res.statusCode = 404;
-        res.end('pdfium.wasm not found');
+      serveNodeModule(res, '@embedpdf/pdfium/dist/pdfium.wasm', 'application/wasm');
+    });
 
-        return;
+    // Tesseract worker script
+    server.middlewares.use('/tesseract/worker.min.js', (_req, res) => {
+      serveNodeModule(res, 'tesseract.js/dist/worker.min.js', 'application/javascript');
+    });
+
+    // Tesseract WASM core (multiple variants, auto-selected by CPU features)
+    server.middlewares.use('/tesseract', (req, res) => {
+      const filename = (req.url ?? '').replace(LEADING_SLASH_REGEX, '');
+      serveNodeModule(res, `tesseract.js-core/${filename}`, 'application/javascript');
+    });
+
+    // Tesseract language data (proxied from jsdelivr)
+    server.middlewares.use('/tesseract/lang', async (req, res) => {
+      const lang = (req.url ?? '').replace(LEADING_SLASH_REGEX, '').replace('.traineddata.gz', '');
+      const cdnUrl = `https://cdn.jsdelivr.net/npm/@tesseract.js-data/${lang}/4.0.0_best_int/${lang}.traineddata.gz`;
+
+      try {
+        const cdnRes = await fetch(cdnUrl);
+
+        if (!cdnRes.ok) {
+          res.statusCode = cdnRes.status;
+          res.end(`Failed to fetch ${lang} language data`);
+
+          return;
+        }
+
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.end(Buffer.from(await cdnRes.arrayBuffer()));
+      } catch {
+        res.statusCode = 502;
+        res.end(`Failed to fetch ${lang} language data`);
       }
-
-      const stat = statSync(pdfiumWasmPath);
-
-      res.setHeader('Content-Type', 'application/wasm');
-      res.setHeader('Content-Length', stat.size);
-      createReadStream(pdfiumWasmPath).pipe(res);
     });
 
     server.middlewares.use('/api/document/', (req, res) => {
@@ -133,9 +170,10 @@ export default defineConfig({
     },
   },
   define: {
-    // Build-time constant injected by tsup during production builds (see tsup.config.ts).
-    // Empty string here so the dev server falls back to the unhashed pdfium.wasm URL.
+    // Build-time constants injected by tsup during production builds (see tsup.config.ts).
+    // Empty strings here so the dev server falls back to default CDN URLs.
     __PDFIUM_WASM_HASH__: JSON.stringify(''),
+    __TESSERACT_CDN_URL__: JSON.stringify(''),
   },
   optimizeDeps: {
     include: ['@embedpdf/engines/pdfium-worker-engine', '@embedpdf/engines/pdfium-direct-engine'],
