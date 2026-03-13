@@ -29,25 +29,9 @@ export const Scale = ({ scale, setScale }: Props) => {
     setScale(clamp(parsed, MIN_SCALE, MAX_SCALE));
   };
 
-  const handleZoomIn = useCallback(
-    (step: number) =>
-      setScale((prev) => {
-        const snapped = snapUp(prev, step, MAX_SCALE);
-        setInput(snapped.toString(10));
-        return snapped;
-      }),
-    [setScale],
-  );
+  const handleZoomIn = useCallback((step: number) => setScale((prev) => snapUp(prev, step, MAX_SCALE)), [setScale]);
 
-  const handleZoomOut = useCallback(
-    (step: number) =>
-      setScale((prev) => {
-        const snapped = snapDown(prev, step, MIN_SCALE);
-        setInput(snapped.toString(10));
-        return snapped;
-      }),
-    [setScale],
-  );
+  const handleZoomOut = useCallback((step: number) => setScale((prev) => snapDown(prev, step, MIN_SCALE)), [setScale]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     switch (event.key) {
