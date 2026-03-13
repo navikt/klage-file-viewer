@@ -18,10 +18,11 @@ export const usePdfEngine = () => useContext(PdfEngineContext);
 
 interface PdfEngineProviderProps {
   children: ReactNode;
+  pdfiumWasmUrl: string;
 }
 
-export const PdfEngineProvider = ({ children }: PdfEngineProviderProps) => {
-  const { engine, isLoading, error } = usePdfiumEngine();
+export const PdfEngineProvider = ({ children, pdfiumWasmUrl }: PdfEngineProviderProps) => {
+  const { engine, isLoading, error } = usePdfiumEngine({ wasmUrl: pdfiumWasmUrl });
 
   return <PdfEngineContext.Provider value={{ engine, isLoading, error }}>{children}</PdfEngineContext.Provider>;
 };

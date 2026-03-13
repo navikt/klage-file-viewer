@@ -30,6 +30,10 @@ Import the component styles in your CSS **after** `@navikt/ds-css`:
 @import "@navikt/klage-file-viewer/styles.css";
 ```
 
+### PDFium WASM
+
+This library uses [PDFium](https://pdfium.googlesource.com/pdfium/) compiled to WebAssembly for PDF rendering. The WASM binary is hosted on the Nav CDN and loaded by default. You can override the URL via the optional `pdfiumWasmUrl` prop if you need to serve the binary from a different location.
+
 ## Usage
 
 ```tsx
@@ -98,19 +102,20 @@ Pass configuration props directly to the component:
 
 ### `KlageFileViewer` props
 
-| Prop              | Type                                           | Required | Description                                                                              |
-| ----------------- | ---------------------------------------------- | -------- | ---------------------------------------------------------------------------------------- |
-| `files`           | `FileEntry[]`                                  | Yes      | List of files to render in sequence.                                                     |
-| `theme`           | `'light' \| 'dark'`                            | Yes      | Light or dark theme mode.                                                                |
-| `onClose`         | `() => void`                                   | No       | Shows a close button; called when clicked.                                               |
-| `newTabUrl`       | `string \| null`                               | No       | Shows a link in the toolbar to open the document set in a new tab.                       |
-| `className`       | `string`                                       | No       | Additional CSS class for the root element.                                               |
-| `onFetchError`    | `(error: FetchErrorInfo) => void`              | No       | Called when a file fetch fails.                                                          |
-| `errorComponent`  | `React.ComponentType<{ refresh: () => void }>` | No       | Component rendered inside the error alert.                                               |
-| `commonPasswords` | `string[]`                                     | No       | Common passwords to automatically try when a PDF is password-protected.                  |
-| `standalone`      | `boolean`                                      | No       | Shows all fit options (fit-to-width, fit-to-page) when `true`. Defaults to `false`.      |
+| Prop              | Type                                           | Required | Description                                                                                                     |
+| ----------------- | ---------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
+| `files`           | `FileEntry[]`                                  | Yes      | List of files to render in sequence.                                                                            |
+| `pdfiumWasmUrl`   | `string`                                       | No       | URL to the PDFium WASM binary. Defaults to the Nav CDN-hosted version.                   |
+| `theme`           | `'light' \| 'dark'`                            | Yes      | Light or dark theme mode.                                                                                       |
+| `onClose`         | `() => void`                                   | No       | Shows a close button; called when clicked.                                                                      |
+| `newTabUrl`       | `string \| null`                               | No       | Shows a link in the toolbar to open the document set in a new tab.                                              |
+| `className`       | `string`                                       | No       | Additional CSS class for the root element.                                                                      |
+| `onFetchError`    | `(error: FetchErrorInfo) => void`              | No       | Called when a file fetch fails.                                                                                 |
+| `errorComponent`  | `React.ComponentType<{ refresh: () => void }>` | No       | Component rendered inside the error alert.                                                                      |
+| `commonPasswords` | `string[]`                                     | No       | Common passwords to automatically try when a PDF is password-protected.                                         |
+| `standalone`      | `boolean`                                      | No       | Shows all fit options (fit-to-width, fit-to-page) when `true`. Defaults to `false`.                             |
 | `traceName`       | `string`                                       | No       | Name used as `component.instance` on OpenTelemetry spans. Useful for differentiating multiple viewer instances. |
-| `handleRef`       | `Ref<KlageFileViewerHandle>`                   | No       | Ref exposing `focus()`, `reloadFile()`, and `reloadAll()` methods to control the viewer. |
+| `handleRef`       | `Ref<KlageFileViewerHandle>`                   | No       | Ref exposing `focus()`, `reloadFile()`, and `reloadAll()` methods to control the viewer.                        |
 
 ### `FileEntry`
 
@@ -186,10 +191,10 @@ The selected mode and custom scale value are persisted to `localStorage` and app
 
 ## Exports
 
-| Export path                            | Description                                                                                                                                                                                           |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Export path                            | Description                                                                                                                                                                                                     |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@navikt/klage-file-viewer`            | `KlageFileViewer` component, `ScaleSettings` component, `KlageFileViewerProps`, `KlageFileViewerHandle`, `FileEntry`, `FileType`, `FileVariant`, `FileVariants`, `Skjerming`, `VariantFormat`, `FetchErrorInfo` |
-| `@navikt/klage-file-viewer/styles.css` | Pre-built CSS (Tailwind + component styles)                                                                                                                                                           |
+| `@navikt/klage-file-viewer/styles.css` | Pre-built CSS (Tailwind + component styles)                                                                                                                                                                     |
 
 ## Features
 

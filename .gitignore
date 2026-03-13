@@ -4,9 +4,6 @@ dist
 .DS_Store
 
 # Playwright
-.chromium/
 test-results/
 playwright-report/
 blob-report/
-
-.reference

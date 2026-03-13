@@ -1,4 +1,4 @@
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, existsSync, statSync } from 'node:fs';
 import type { ServerResponse } from 'node:http';
 import { resolve } from 'node:path';
 import { parse } from 'node:url';
@@ -32,6 +32,23 @@ const pdfListPlugin = (): Plugin => ({
   name: 'file-list-api',
   configureServer(server) {
     const publicDir = resolve(__dirname, 'dev/public');
+
+    const pdfiumWasmPath = resolve(__dirname, 'node_modules/@embedpdf/pdfium/dist/pdfium.wasm');
+
+    server.middlewares.use('/pdfium.wasm', (_req, res) => {
+      if (!existsSync(pdfiumWasmPath)) {
+        res.statusCode = 404;
+        res.end('pdfium.wasm not found');
+
+        return;
+      }
+
+      const stat = statSync(pdfiumWasmPath);
+
+      res.setHeader('Content-Type', 'application/wasm');
+      res.setHeader('Content-Length', stat.size);
+      createReadStream(pdfiumWasmPath).pipe(res);
+    });
 
     server.middlewares.use('/api/document/', (req, res) => {
       const parsed = parse(req.url ?? '', true);
@@ -110,6 +127,18 @@ export default defineConfig({
     warmup: {
       clientFiles: ['./main.tsx'],
     },
+    forwardConsole: {
+      unhandledErrors: true,
+      logLevels: ['warn', 'error', 'log'],
+    },
+  },
+  define: {
+    // Build-time constant injected by tsup during production builds (see tsup.config.ts).
+    // Empty string here so the dev server falls back to the unhashed pdfium.wasm URL.
+    __PDFIUM_WASM_HASH__: JSON.stringify(''),
+  },
+  optimizeDeps: {
+    include: ['@embedpdf/engines/pdfium-worker-engine', '@embedpdf/engines/pdfium-direct-engine'],
   },
   resolve: {
     alias: [

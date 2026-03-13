@@ -22,7 +22,3 @@
 
 ## Tooling notes
 - Use `--no-pager` with Git commands that may invoke a pager (e.g., `git --no-pager diff`)
-
-## Reference code
-- EmbedPDF source code is in .reference/embed-pdf-viewer
-- PDFium source code is in .reference/pdfium

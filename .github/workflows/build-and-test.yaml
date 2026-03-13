@@ -1,10 +1,12 @@
 name: Build and test
 
 on:
+  workflow_dispatch:
+
   workflow_call:
     inputs:
-      publish:
-        description: "Whether to publish the package"
+      upload-artifacts:
+        description: "Whether to upload build artifacts for publishing"
         required: false
         default: false
         type: boolean
@@ -12,16 +14,23 @@ on:
     secrets:
       READER_TOKEN:
         required: true
-      PUBLISH_TOKEN:
-        required: false
+
+    outputs:
+      pdfium-hash:
+        description: "The hash of the PDFium WASM file"
+        value: ${{ jobs.build-and-test.outputs.pdfium-hash }}
 
 jobs:
   build-and-test:
     name: Build and test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     container:
       # Faster than installing browser and OS dependencies every time. Even with caching of the browser binaries.
-      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    outputs:
+      pdfium-hash: ${{ steps.pdfium-hash.outputs.hash }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -38,49 +47,52 @@ jobs:
             https://registry.npmjs.org/
             @navikt:https://npm.pkg.github.com|$TOKEN
 
-      - name: Check if version is newer than the published version
-        env:
-          READER_TOKEN: ${{ secrets.READER_TOKEN }}
-        run: bun .github/scripts/check-version.ts
-
-      # When not publishing (sanity build), continue on failure to collect all errors.
-      # failure() is used explicitly instead of just !inputs.publish to avoid running on cancellation.
+      # Continue on failure to collect all errors.
+      # failure() is used explicitly to avoid running on cancellation.
       - name: Install dependencies
-        if: success() || (!inputs.publish && failure())
+        if: success() || failure()
         env:
           TOKEN: ${{ secrets.READER_TOKEN }}
         run: bun install --frozen-lockfile
 
+      - name: Compute PDFium WASM hash
+        if: success() || failure()
+        id: pdfium-hash
+        run: echo "hash=$(sha256sum node_modules/@embedpdf/pdfium/dist/pdfium.wasm | cut -c1-12)" >> "$GITHUB_OUTPUT"
+
       - name: Typecheck
-        if: success() || (!inputs.publish && failure())
+        if: success() || failure()
         run: bun typecheck
 
       - name: Lint
-        if: success() || (!inputs.publish && failure())
+        if: success() || failure()
         run: bun lint
 
       - name: Knip
-        if: success() || (!inputs.publish && failure())
+        if: success() || failure()
         run: bun knip
 
       - name: Build package
-        if: success() || (!inputs.publish && failure())
+        if: success() || failure()
+        env:
+          PDFIUM_WASM_HASH: ${{ steps.pdfium-hash.outputs.hash }}
         run: bun run build
 
       - name: Run unit tests
-        if: success() || (!inputs.publish && failure())
+        if: success() || failure()
         run: bun test
 
-      - name: Download Chromium 142 (Applikasjonsportalen)
-        if: success() || (!inputs.publish && failure())
-        run: scripts/download-chromium.sh
-
       - name: Run E2E tests
-        if: success() || (!inputs.publish && failure())
+        if: success() || failure()
         run: bun e2e
 
-      - name: Publish package
-        if: inputs.publish && success()
-        env:
-          TOKEN: ${{ secrets.PUBLISH_TOKEN }}
-        run: bun publish
+      - name: Upload build artifacts
+        if: inputs.upload-artifacts && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          retention-days: 1
+          path: |
+            dist/
+            package.json
+            node_modules/@embedpdf/pdfium/dist/pdfium.wasm

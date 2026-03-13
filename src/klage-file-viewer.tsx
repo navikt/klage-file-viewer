@@ -16,6 +16,13 @@ import { Toolbar } from '@/toolbar/toolbar';
 import { ToolbarHeightProvider, useToolbarHeight } from '@/toolbar-height-context';
 import type { FileEntry } from '@/types';
 
+declare const __PDFIUM_WASM_HASH__: string;
+
+const DEFAULT_PDFIUM_WASM_URL =
+  __PDFIUM_WASM_HASH__.length === 0
+    ? 'https://cdn.nav.no/klage/klage-file-viewer/pdfium/pdfium.wasm'
+    : `https://cdn.nav.no/klage/klage-file-viewer/pdfium/pdfium-${__PDFIUM_WASM_HASH__}.wasm`;
+
 export interface KlageFileViewerHandle {
   /** Moves focus to the scroll container. */
   focus: () => void;
@@ -27,7 +34,10 @@ export interface KlageFileViewerHandle {
 
 export interface KlageFileViewerProps
   extends Omit<KlageFileViewerInnerProps, 'toolbarRef'>,
-    KlageFileViewerProviderProps {}
+    KlageFileViewerProviderProps {
+  /** URL to the PDFium WASM binary. Defaults to the Nav CDN-hosted version. */
+  pdfiumWasmUrl?: string;
+}
 
 const PADDING = 16;
 
@@ -38,6 +48,7 @@ export const KlageFileViewer = ({
   theme,
   className,
   handleRef,
+  pdfiumWasmUrl = DEFAULT_PDFIUM_WASM_URL,
   ...config
 }: KlageFileViewerProps) => {
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -45,7 +56,7 @@ export const KlageFileViewer = ({
   return (
     <FileViewerProvider {...config} theme={theme}>
       <RefreshRegistryProvider>
-        <PdfEngineProvider>
+        <PdfEngineProvider pdfiumWasmUrl={pdfiumWasmUrl}>
           <ToolbarHeightProvider toolbarRef={toolbarRef}>
             <KlageFileViewerInner
               files={files}

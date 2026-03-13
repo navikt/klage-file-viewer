@@ -1,9 +1,10 @@
-import { statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { buildDownloadFilename, parseDocumentRequest, parseDownloadRequest, resolveDocumentPath, scanDir } from './api';
 
-const PORT = 5173;
+const PORT = 5172;
 const DIST_DIR = resolve(import.meta.dirname, 'dist');
+const PDFIUM_WASM_PATH = resolve(import.meta.dirname, '../node_modules/@embedpdf/pdfium/dist/pdfium.wasm');
 
 // --- Response helpers ---
 
@@ -103,6 +104,21 @@ const handleRequest = (req: Request): Response => {
 
   if (pathname === '/api/download') {
     return handleApiDownload(url);
+  }
+
+  if (pathname === '/pdfium.wasm') {
+    if (!existsSync(PDFIUM_WASM_PATH)) {
+      return textResponse('pdfium.wasm not found', 404);
+    }
+
+    const stat = statSync(PDFIUM_WASM_PATH);
+
+    return new Response(Bun.file(PDFIUM_WASM_PATH), {
+      headers: {
+        'Content-Type': 'application/wasm',
+        'Content-Length': stat.size.toString(10),
+      },
+    });
   }
 
   // Static files from dist dir

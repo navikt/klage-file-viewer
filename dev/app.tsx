@@ -8,6 +8,8 @@ import { Alert, Box, Theme } from '@navikt/ds-react';
 import { useMemo } from 'react';
 import { KlageFileViewer } from '@/index';
 
+const PDFIUM_WASM_URL = `${window.location.origin}/pdfium.wasm`;
+
 const COMMON_PASSWORDS = ['123', 'passord'];
 
 const App = () => {
@@ -75,6 +77,7 @@ const App = () => {
             data-dev-app-wrapper
           >
             <KlageFileViewer
+              pdfiumWasmUrl={PDFIUM_WASM_URL}
               files={files}
               newTabUrl={topLevelNewTabUrl}
               theme={theme}

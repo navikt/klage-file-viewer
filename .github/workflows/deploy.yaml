@@ -1,6 +1,14 @@
 name: Build and publish package
 
 on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Whether to publish the package"
+        required: false
+        default: false
+        type: boolean
+
   push:
     branches:
       - main
@@ -20,13 +28,61 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
-  build-test-publish:
-    name: Build, test and publish package
+  build-and-test:
+    name: Build and test
     uses: ./.github/workflows/build-and-test.yaml
     with:
-      publish: true
+      upload-artifacts: true
     secrets:
       READER_TOKEN: ${{ secrets.READER_TOKEN }}
-      PUBLISH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    name: Upload to CDN and publish package
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          registries: |
+            https://registry.npmjs.org/
+            @navikt:https://npm.pkg.github.com|$TOKEN
+
+      - name: Check if version is newer than the published version
+        env:
+          READER_TOKEN: ${{ secrets.READER_TOKEN }}
+        run: bun .github/scripts/check-version.ts
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
+      - name: Rename PDFium WASM with hash
+        run: mv node_modules/@embedpdf/pdfium/dist/pdfium.wasm "node_modules/@embedpdf/pdfium/dist/pdfium-${{ needs.build-and-test.outputs.pdfium-hash }}.wasm"
+
+      - name: Upload PDFium WASM to CDN
+        uses: nais/deploy/actions/cdn-upload/v2@master
+        with:
+          team: klage
+          source: node_modules/@embedpdf/pdfium/dist/pdfium-${{ needs.build-and-test.outputs.pdfium-hash }}.wasm
+          source_keep_parent_name: false
+          destination: klage-file-viewer/pdfium
+          project_id: ${{ vars.NAIS_MANAGEMENT_PROJECT_ID }}
+          identity_provider: ${{ secrets.NAIS_WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Publish package
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun publish
