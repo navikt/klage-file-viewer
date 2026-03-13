@@ -12,5 +12,13 @@
     *::after {
       box-sizing: inherit;
     }
+
+    [data-ocr-line]::selection,
+    [data-ocr-line] *::selection {
+      /* biome-ignore lint/complexity/noImportantStyles: Must not be overridden by consumer */
+      background: rgba(59, 130, 246, 0.3) !important;
+      /* biome-ignore lint/complexity/noImportantStyles: Must not be overridden by consumer */
+      color: transparent !important;
+    }
   }
 }
