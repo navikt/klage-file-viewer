@@ -85,6 +85,7 @@ export const LoadedPdfSection = ({
   const {
     selection,
     isSelecting,
+    clearSelection,
     handleMouseDown,
     handlePointerMove,
     handlePointerUp,
@@ -377,6 +378,7 @@ export const LoadedPdfSection = ({
             onRegisterElement={handleRegisterElement}
             selectionRange={getPageSelectionRange(pageIndex)}
             isSelecting={isSelecting}
+            clearSelection={clearSelection}
             onMouseDown={handleMouseDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
