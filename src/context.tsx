@@ -18,10 +18,13 @@ interface KlageFileViewerConfig extends Omit<Props, 'children'> {
   setInvertColors: (value: boolean) => void;
   smoothScrolling: boolean;
   setSmoothScrolling: (value: boolean) => void;
+  antiAliasing: boolean;
+  setAntiAliasing: (value: boolean) => void;
 }
 
 const INVERT_COLORS_STORAGE_KEY = 'klage-file-viewer/settings/invertColorsInDarkMode';
 const SMOOTH_SCROLLING_STORAGE_KEY = 'klage-file-viewer/settings/smoothScrolling';
+const ANTI_ALIASING_STORAGE_KEY = 'klage-file-viewer/settings/antiAliasing';
 
 const readInvertColorsSetting = (): boolean => {
   try {
@@ -45,6 +48,17 @@ const readSmoothScrollingSetting = (): boolean => {
   return true;
 };
 
+const readAntiAliasingSetting = (): boolean => {
+  try {
+    // If not explicitly set to 'false', we treat the setting as enabled.
+    return localStorage.getItem(ANTI_ALIASING_STORAGE_KEY) !== 'false';
+  } catch {
+    // Ignore errors (e.g. localStorage unavailable).
+  }
+
+  return true;
+};
+
 const DEFAULT_CONFIG: KlageFileViewerConfig = {
   standalone: false,
   traceName: undefined,
@@ -53,6 +67,8 @@ const DEFAULT_CONFIG: KlageFileViewerConfig = {
   setInvertColors: () => undefined,
   smoothScrolling: true,
   setSmoothScrolling: () => undefined,
+  antiAliasing: true,
+  setAntiAliasing: () => undefined,
 };
 
 const FileViewerConfigContext = createContext<KlageFileViewerConfig>(DEFAULT_CONFIG);
@@ -88,6 +104,7 @@ export const FileViewerProvider = ({
 }: Props) => {
   const [invertColors, setInvertColorsState] = useState<boolean>(() => readInvertColorsSetting());
   const [smoothScrolling, setSmoothScrollingState] = useState<boolean>(() => readSmoothScrollingSetting());
+  const [antiAliasing, setAntiAliasingState] = useState<boolean>(() => readAntiAliasingSetting());
 
   const setInvertColors = useCallback((newValue: boolean) => {
     setInvertColorsState(newValue);
@@ -117,6 +134,20 @@ export const FileViewerProvider = ({
     }
   }, []);
 
+  const setAntiAliasing = useCallback((newValue: boolean) => {
+    setAntiAliasingState(newValue);
+
+    try {
+      localStorage.setItem(ANTI_ALIASING_STORAGE_KEY, newValue ? 'true' : 'false');
+    } catch (error) {
+      if (error instanceof Error) {
+        console.warn('Could not save setting to localStorage', error);
+      } else {
+        console.warn('Could not save setting to localStorage');
+      }
+    }
+  }, []);
+
   const config = useMemo<KlageFileViewerConfig>(
     () => ({
       standalone,
@@ -129,6 +160,8 @@ export const FileViewerProvider = ({
       setInvertColors,
       smoothScrolling,
       setSmoothScrolling,
+      antiAliasing,
+      setAntiAliasing,
     }),
     [
       standalone,
@@ -141,6 +174,8 @@ export const FileViewerProvider = ({
       setInvertColors,
       smoothScrolling,
       setSmoothScrolling,
+      antiAliasing,
+      setAntiAliasing,
     ],
   );
 

@@ -13,7 +13,7 @@ interface PdfPageImageProps {
 export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImageProps) => {
   const [src, setSrc] = useState<string | null>(null);
   const prevUrlRef = useRef<string | null>(null);
-  const { theme, invertColors } = useFileViewerConfig();
+  const { theme, invertColors, antiAliasing } = useFileViewerConfig();
 
   useEffect(() => {
     if (!visible) {
@@ -72,6 +72,7 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
   );
 
   const filterStyle = invertColors && theme === ThemeMode.Dark ? 'hue-rotate(180deg) invert(1)' : 'none';
+  const imageRendering = antiAliasing ? 'auto' : 'pixelated';
 
   if (src === null) {
     return <div className="h-full w-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.3)]" />;
@@ -83,7 +84,7 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
       alt=""
       draggable={false}
       className="h-full w-full"
-      style={{ filter: filterStyle, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
+      style={{ filter: filterStyle, imageRendering, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
     />
   );
 };

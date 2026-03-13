@@ -8,7 +8,8 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
-  const { invertColors, setInvertColors, smoothScrolling, setSmoothScrolling } = useFileViewerConfig();
+  const { invertColors, setInvertColors, smoothScrolling, setSmoothScrolling, antiAliasing, setAntiAliasing } =
+    useFileViewerConfig();
 
   return (
     <Modal
@@ -38,6 +39,18 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
           }}
         >
           Animert/jevn skrolling
+        </Switch>
+
+        <Switch
+          checked={antiAliasing}
+          onChange={(e) => {
+            setAntiAliasing(e.target.checked);
+          }}
+        >
+          <div className="flex flex-row items-center gap-2">
+            <span>Anti-aliasing på bilder og PDFer</span>
+            <HelpText>Når av, vises piksler skarpt uten utjevning. Nyttig for skannede dokumenter.</HelpText>
+          </div>
         </Switch>
 
         <ScaleSettings />

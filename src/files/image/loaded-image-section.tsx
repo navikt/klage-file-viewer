@@ -25,7 +25,8 @@ export const LoadedImageSection = ({
   onPageCountReady,
   documentNavigation,
 }: LoadedImageSectionProps) => {
-  const { errorComponent: ErrorComponent } = useFileViewerConfig();
+  const { errorComponent: ErrorComponent, antiAliasing } = useFileViewerConfig();
+  const imageRendering = antiAliasing ? 'auto' : ('pixelated' as const);
   const { printBlob } = usePrint();
   const { data, fetching, error, refresh } = useFileData(file.url, file.query);
 
@@ -123,7 +124,7 @@ export const LoadedImageSection = ({
           src={objectUrl}
           alt={file.title}
           className="block max-w-none shadow-ax-dialog"
-          style={{ width: `calc(210mm * ${scaleFactor.toString()})` }}
+          style={{ width: `calc(210mm * ${scaleFactor.toString()})`, imageRendering }}
           draggable={false}
         />
       </div>
