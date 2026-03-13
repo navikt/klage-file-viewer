@@ -92,7 +92,10 @@ export const OcrTextLayer = ({ words, baseWidth, baseHeight }: OcrTextLayerProps
         continue;
       }
 
-      const actualWidth = div.getBoundingClientRect().width;
+      // Use offsetWidth instead of getBoundingClientRect().width because
+      // getBoundingClientRect includes ancestor CSS transforms (rotation),
+      // which swaps width/height and produces incorrect scaleX values.
+      const actualWidth = div.offsetWidth;
 
       if (actualWidth > 0) {
         div.style.transform = `scaleX(${(targetWidth / actualWidth).toString(10)})`;
