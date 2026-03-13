@@ -1,5 +1,5 @@
 import type { Rotation } from '@embedpdf/models';
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { PageSelectionRange, ScreenPageGeometry, ScreenRun, ScreenRunGlyph } from '@/files/pdf/selection/types';
 import { GLYPH_FLAG_EMPTY } from '@/files/pdf/selection/types';
 
@@ -45,6 +45,7 @@ export const SelectionOverlay = ({
   baseHeight,
 }: SelectionOverlayProps) => {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const [isOverText, setIsOverText] = useState(false);
 
   const hitTest = useCallback(
     (clientX: number, clientY: number): number => {
@@ -110,12 +111,13 @@ export const SelectionOverlay = ({
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
-      if (isSelecting !== true) {
-        return;
-      }
-
       const charIndex = hitTest(e.clientX, e.clientY);
-      onPointerMove(pageIndex, charIndex);
+
+      setIsOverText(charIndex >= 0);
+
+      if (isSelecting) {
+        onPointerMove(pageIndex, charIndex);
+      }
     },
     [isSelecting, hitTest, pageIndex, onPointerMove],
   );
@@ -136,7 +138,8 @@ export const SelectionOverlay = ({
     // biome-ignore lint/a11y/noStaticElementInteractions: This is a custom text selection overlay, not a semantic interactive element
     <div
       ref={overlayRef}
-      className="absolute inset-0 z-2 cursor-text"
+      className="absolute inset-0 z-2"
+      style={{ cursor: isOverText ? 'text' : 'auto' }}
       onMouseDown={handleMouseDown}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
