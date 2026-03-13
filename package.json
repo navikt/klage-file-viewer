@@ -44,7 +44,8 @@
   },
   "dependencies": {
     "@embedpdf/engines": "2.8.0",
-    "@embedpdf/models": "2.8.0"
+    "@embedpdf/models": "2.8.0",
+    "tesseract.js": "7.0.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.1",

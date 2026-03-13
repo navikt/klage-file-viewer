@@ -1,6 +1,8 @@
 import type { PdfDocumentObject, PdfEngine, Rotation } from '@embedpdf/models';
 import { PadlockLockedFillIcon } from '@navikt/aksel-icons';
 import { useCallback, useEffect } from 'react';
+import { OcrTextLayer } from '@/files/pdf/ocr/ocr-text-layer';
+import { useOcrPage } from '@/files/pdf/ocr/use-ocr-page';
 import { PdfPageImage } from '@/files/pdf/pdf-page-image';
 import { HighlightLayer } from '@/files/pdf/search/highlight-layer';
 import type { HighlightRect } from '@/files/pdf/search/types';
@@ -105,6 +107,15 @@ export const PdfPage = ({
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             geometryRegistry={geometryRegistry}
+          />
+          <PageOcrLayer
+            engine={engine}
+            doc={doc}
+            page={page}
+            pageIndex={pageIndex}
+            visible={visible}
+            baseWidth={baseWidth}
+            baseHeight={baseHeight}
           />
           {highlights !== undefined && highlights.length > 0 ? (
             <HighlightLayer highlights={highlights} currentMatchIndex={currentMatchIndex ?? 0} />
@@ -217,6 +228,26 @@ const RotateButton = ({ pageNumber, onRotate }: RotateButtonProps) => (
     ↺
   </button>
 );
+
+interface PageOcrLayerProps {
+  engine: PdfEngine;
+  doc: PdfDocumentObject;
+  page: import('@embedpdf/models').PdfPageObject;
+  pageIndex: number;
+  visible: boolean;
+  baseWidth: number;
+  baseHeight: number;
+}
+
+const PageOcrLayer = ({ engine, doc, page, pageIndex, visible, baseWidth, baseHeight }: PageOcrLayerProps) => {
+  const { words } = useOcrPage(engine, doc, page, pageIndex, visible);
+
+  if (words === null || words.length === 0) {
+    return null;
+  }
+
+  return <OcrTextLayer words={words} baseWidth={baseWidth} baseHeight={baseHeight} />;
+};
 
 const PasswordUnlockedOverlay = () => (
   <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
