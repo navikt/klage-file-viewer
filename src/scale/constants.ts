@@ -16,5 +16,5 @@ export const MIN_SCALE = 50;
 export const MAX_SCALE = 900;
 export const SCALE_STEP = 25;
 export const SCROLL_STEP = 5;
-export const KLAGE_FILE_VIEWER_SCALE_MODE_KEY = 'klage-file-viewer/settings/scale/mode';
-export const KLAGE_FILE_VIEWER_SCALE_VALUE_KEY = 'klage-file-viewer/settings/scale/value';
+export const KLAGE_FILE_VIEWER_SCALE_MODE_KEY = 'klage-file-viewer/settings/scale-mode';
+export const KLAGE_FILE_VIEWER_SCALE_VALUE_KEY = 'klage-file-viewer/settings/scale-value';

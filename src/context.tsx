@@ -22,9 +22,9 @@ interface KlageFileViewerConfig extends Omit<Props, 'children'> {
   setAntiAliasing: (value: boolean) => void;
 }
 
-const INVERT_COLORS_STORAGE_KEY = 'klage-file-viewer/settings/invertColorsInDarkMode';
-const SMOOTH_SCROLLING_STORAGE_KEY = 'klage-file-viewer/settings/smoothScrolling';
-const ANTI_ALIASING_STORAGE_KEY = 'klage-file-viewer/settings/antiAliasing';
+const INVERT_COLORS_STORAGE_KEY = 'klage-file-viewer/settings/invert-colors-in-dark-mode';
+const SMOOTH_SCROLLING_STORAGE_KEY = 'klage-file-viewer/settings/smooth-scrolling';
+const ANTI_ALIASING_STORAGE_KEY = 'klage-file-viewer/settings/anti-aliasing';
 
 const readInvertColorsSetting = (): boolean => {
   try {
