@@ -123,7 +123,7 @@ export const FileHeader = ({
             content="Teksten i dette dokumentet er hentet med tekstgjenkjenning (OCR) og kan inneholde feil"
             maxChar={1000}
           >
-            <Tag data-color="info" variant="moderate" size="xsmall" className="shrink-0 cursor-help">
+            <Tag data-color="warning" variant="moderate" size="xsmall" className="shrink-0">
               OCR
             </Tag>
           </Tooltip>
