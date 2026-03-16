@@ -1,4 +1,4 @@
-import type { Span, Tracer } from '@opentelemetry/api';
+import { context, type Span, type Tracer } from '@opentelemetry/api';
 import { name as packageName, version as packageVersion } from '@package';
 
 let cachedTracer: Tracer | null = null;
@@ -38,13 +38,16 @@ type SpanCallback<T> = (span?: Span) => T;
  * @param fn - Callback receiving the span (or `undefined` when OTel is unavailable).
  */
 export const startSpan = async <T>(name: string, traceName: string | undefined, fn: SpanCallback<T>): Promise<T> => {
+  // Capture the active context now, synchronously, before any `await` breaks the StackContextManager's context chain.
+  const parentContext = context.active();
+
   const tracer = await tracerPromise;
 
   if (tracer === null) {
     return fn();
   }
 
-  return tracer.startActiveSpan(name, (span: Span) => {
+  return tracer.startActiveSpan(name, {}, parentContext, (span: Span) => {
     if (traceName !== undefined) {
       span.setAttribute('component.instance', traceName);
     }
@@ -80,13 +83,16 @@ export const startAsyncSpan = async <T>(
   traceName: string | undefined,
   fn: SpanCallback<Promise<T>>,
 ): Promise<T> => {
+  // Capture the active context now, synchronously, before any `await` breaks the StackContextManager's context chain.
+  const parentContext = context.active();
+
   const tracer = await tracerPromise;
 
   if (tracer === null) {
     return fn();
   }
 
-  return tracer.startActiveSpan(name, async (span: Span) => {
+  return tracer.startActiveSpan(name, {}, parentContext, async (span: Span) => {
     if (traceName !== undefined) {
       span.setAttribute('component.instance', traceName);
     }
