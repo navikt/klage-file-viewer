@@ -1,5 +1,5 @@
-import type { PdfDocumentObject, PdfEngine, PdfPageObject } from '@embedpdf/models';
-import { useEffect, useRef, useState } from 'react';
+import type { ImageDataLike, PdfDocumentObject, PdfEngine, PdfPageObject } from '@embedpdf/models';
+import { useCallback, useEffect, useRef } from 'react';
 import { ThemeMode, useFileViewerConfig } from '@/context';
 
 interface PdfPageImageProps {
@@ -11,17 +11,14 @@ interface PdfPageImageProps {
 }
 
 export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImageProps) => {
-  const [src, setSrc] = useState<string | null>(null);
-  const prevUrlRef = useRef<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const renderedRef = useRef(false);
   const { theme, invertColors, antiAliasing } = useFileViewerConfig();
 
   useEffect(() => {
     if (!visible) {
-      if (prevUrlRef.current !== null) {
-        URL.revokeObjectURL(prevUrlRef.current);
-        prevUrlRef.current = null;
-        setSrc(null);
-      }
+      clearCanvas(canvasRef.current);
+      renderedRef.current = false;
 
       return;
     }
@@ -37,27 +34,16 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
       `[PdfPageImage] Rendering page ${page.index.toString(10)} at ${renderedWidth.toString(10)}x${renderedHeight.toString(10)}px (scale: ${scale.toString(10)}%, dpr: ${dpr.toString(10)})`,
     );
 
-    const task = engine.renderPage(doc, page, {
-      scaleFactor,
-      rotation: 0,
-      dpr,
-      imageType: 'image/png',
-      imageQuality: 1,
-    });
+    const task = engine.renderPageRaw(doc, page, { scaleFactor, rotation: 0, dpr });
 
     task.wait(
-      (blob) => {
+      (raw) => {
         if (cancelled) {
           return;
         }
 
-        if (prevUrlRef.current !== null) {
-          URL.revokeObjectURL(prevUrlRef.current);
-        }
-
-        const url = URL.createObjectURL(blob);
-        prevUrlRef.current = url;
-        setSrc(url);
+        paintToCanvas(canvasRef.current, raw);
+        renderedRef.current = true;
       },
       () => {
         // Render error — show nothing (placeholder stays)
@@ -69,30 +55,56 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
     };
   }, [engine, doc, page, scale, visible]);
 
-  // Revoke blob URL on unmount
-  useEffect(
-    () => () => {
-      if (prevUrlRef.current !== null) {
-        URL.revokeObjectURL(prevUrlRef.current);
-        prevUrlRef.current = null;
-      }
-    },
-    [],
-  );
-
-  if (src === null) {
-    return <div className="h-full w-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.3)]" />;
-  }
-
   const filterStyle = invertColors && theme === ThemeMode.Dark ? 'hue-rotate(180deg) invert(1)' : 'none';
 
+  const setCanvasRef = useCallback((el: HTMLCanvasElement | null) => {
+    canvasRef.current = el;
+
+    // When React re-mounts the canvas (e.g. key change), re-paint the last rendered frame.
+    if (el !== null && !renderedRef.current) {
+      clearCanvas(el);
+    }
+  }, []);
+
   return (
-    <img
-      src={src}
-      alt=""
-      draggable={false}
+    <canvas
+      ref={setCanvasRef}
       className={`h-full w-full ${antiAliasing ? '' : 'crisp-edges'}`}
       style={{ filter: filterStyle, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
     />
   );
+};
+
+const paintToCanvas = (canvas: HTMLCanvasElement | null, raw: ImageDataLike): void => {
+  if (canvas === null) {
+    return;
+  }
+
+  canvas.width = raw.width;
+  canvas.height = raw.height;
+
+  const ctx = canvas.getContext('2d');
+
+  if (ctx === null) {
+    return;
+  }
+
+  const imageData = new ImageData(raw.data, raw.width, raw.height, { colorSpace: raw.colorSpace });
+  ctx.putImageData(imageData, 0, 0);
+};
+
+const clearCanvas = (canvas: HTMLCanvasElement | null): void => {
+  if (canvas === null) {
+    return;
+  }
+
+  const ctx = canvas.getContext('2d');
+
+  if (ctx === null) {
+    return;
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  canvas.width = 0;
+  canvas.height = 0;
 };
