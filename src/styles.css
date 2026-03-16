@@ -3,6 +3,12 @@
 @config "../tailwind.config.js";
 
 @layer klage-file-viewer {
+  .crisp-edges {
+    image-rendering: -webkit-optimize-contrast;
+    /* biome-ignore lint/suspicious/noDuplicateProperties: Progressive enhancement — Chrome needs `-webkit-optimize-contrast` as a fallback for `crisp-edges` */
+    image-rendering: crisp-edges;
+  }
+
   .klage-file-viewer {
     box-sizing: border-box;
     height: 100%;

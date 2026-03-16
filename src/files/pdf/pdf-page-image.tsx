@@ -1,5 +1,5 @@
 import type { PdfDocumentObject, PdfEngine, PdfPageObject } from '@embedpdf/models';
-import { type CSSProperties, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ThemeMode, useFileViewerConfig } from '@/context';
 
 interface PdfPageImageProps {
@@ -77,19 +77,13 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
 
   const filterStyle = invertColors && theme === ThemeMode.Dark ? 'hue-rotate(180deg) invert(1)' : 'none';
 
-  // `crisp-edges` preserves edges/contrast better than `pixelated` (pure
-  // nearest-neighbor) while still avoiding the blurriness of bilinear
-  // interpolation. Combined with the higher-DPR render this keeps thin
-  // strokes in text intact.
-  const imageRendering: CSSProperties['imageRendering'] = antiAliasing ? 'auto' : 'crisp-edges';
-
   return (
     <img
       src={src}
       alt=""
       draggable={false}
-      className="h-full w-full"
-      style={{ filter: filterStyle, imageRendering, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
+      className={`h-full w-full ${antiAliasing ? '' : 'crisp-edges'}`}
+      style={{ filter: filterStyle, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
     />
   );
 };
