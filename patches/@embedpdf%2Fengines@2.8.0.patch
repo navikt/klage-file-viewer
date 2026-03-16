@@ -1,0 +1,13 @@
+diff --git a/dist/direct-engine-BOkKwXM0.js b/dist/direct-engine-BOkKwXM0.js
+index 6566787c9ce3d4b61807f616b890257110381c1c..d9f6a51040a3c759a5d9981a9a52c9f61859a799 100644
+--- a/dist/direct-engine-BOkKwXM0.js
++++ b/dist/direct-engine-BOkKwXM0.js
+@@ -7376,7 +7376,7 @@ class PdfiumNative {
+     const clipPtr = this.memoryManager.malloc(4 * 4);
+     const clipView = new Float32Array(this.pdfiumModule.pdfium.HEAPF32.buffer, clipPtr, 4);
+     clipView.set([0, 0, wDev, hDev]);
+-    let flags = 16;
++    let flags = 16 | 2; // 16 = REVERSE_BYTE_ORDER, 2 = LCD_TEXT for subpixel text rendering
+     if ((options == null ? void 0 : options.withAnnotations) ?? false) flags |= 1;
+     try {
+       this.pdfiumModule.FPDF_RenderPageBitmapWithMatrix(
