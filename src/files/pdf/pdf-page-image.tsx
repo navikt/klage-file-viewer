@@ -28,7 +28,7 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
 
     let cancelled = false;
 
-    const dpr = window.devicePixelRatio * 2;
+    const dpr = window.devicePixelRatio;
     const scaleFactor = scale / 100;
     const renderedWidth = Math.round(page.size.width * scaleFactor * dpr);
     const renderedHeight = Math.round(page.size.height * scaleFactor * dpr);
@@ -41,8 +41,8 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
       scaleFactor,
       rotation: 0,
       dpr,
-      imageType: 'image/webp',
-      imageQuality: 0.92,
+      imageType: 'image/png',
+      imageQuality: 1,
     });
 
     task.wait(
