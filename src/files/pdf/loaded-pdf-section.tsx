@@ -361,15 +361,12 @@ export const LoadedPdfSection = ({
         tabIndex={-1}
         style={{
           position: 'absolute',
+          top: -9999,
+          left: -9999,
           width: 1,
           height: 1,
-          padding: 0,
-          margin: -1,
           overflow: 'hidden',
-          clip: 'rect(0, 0, 0, 0)',
           whiteSpace: 'pre',
-          border: 0,
-          pointerEvents: 'none',
         }}
       />
 

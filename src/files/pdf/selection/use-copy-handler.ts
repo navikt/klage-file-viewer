@@ -70,11 +70,31 @@ export const useCopyHandler = (
       },
     );
 
+    const handleMouseDown = (e: MouseEvent): void => {
+      if (el.textContent === null || el.textContent.length === 0) {
+        return;
+      }
+
+      if (e.button === 2) {
+        // Intercept right-click to move the selection under the mouse
+        // so the native context menu includes the "Copy" option.
+        el.style.setProperty('position', 'fixed');
+        el.style.setProperty('top', `${e.clientY}px`);
+        el.style.setProperty('left', `${e.clientX}px`);
+        el.style.setProperty('z-index', '2147483647');
+      } else {
+        el.style.setProperty('position', 'absolute');
+        el.style.setProperty('top', '-9999px');
+        el.style.setProperty('left', '-9999px');
+        el.style.setProperty('z-index', 'auto');
+      }
+    };
+
     // Fallback: intercept the copy event and set clipboard data synchronously.
     const handleCopy = (e: ClipboardEvent): void => {
       const text = el.textContent;
 
-      if (text === null || text.length === 0) {
+      if (text.length === 0) {
         return;
       }
 
@@ -91,8 +111,12 @@ export const useCopyHandler = (
     };
 
     document.addEventListener('copy', handleCopy);
+    document.addEventListener('mousedown', handleMouseDown);
 
-    return () => document.removeEventListener('copy', handleCopy);
+    return () => {
+      document.removeEventListener('copy', handleCopy);
+      document.removeEventListener('mousedown', handleMouseDown);
+    };
   }, [engine, doc, selection, geometryRegistry]);
 
   return hiddenRef;
