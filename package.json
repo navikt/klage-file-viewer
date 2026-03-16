@@ -1,6 +1,6 @@
 {
   "name": "@navikt/klage-file-viewer",
-  "version": "0.0.76",
+  "version": "0.0.77",
   "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
