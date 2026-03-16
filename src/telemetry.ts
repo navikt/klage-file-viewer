@@ -1,29 +1,38 @@
-import { context, type Span, type Tracer } from '@opentelemetry/api';
+import type { Context, Span, SpanStatusCode, Tracer } from '@opentelemetry/api';
 import { name as packageName, version as packageVersion } from '@package';
 
-let cachedTracer: Tracer | null = null;
-let resolveAttempted = false;
-let otelApi: typeof import('@opentelemetry/api') | null = null;
+interface OtelResolved {
+  tracer: Tracer;
+  getActiveContext: () => Context;
+  ERROR: SpanStatusCode;
+}
 
-const resolveTracer = async (): Promise<Tracer | null> => {
+let cached: OtelResolved | null = null;
+let resolveAttempted = false;
+
+const resolveOtel = async (): Promise<OtelResolved | null> => {
   if (resolveAttempted) {
-    return cachedTracer;
+    return cached;
   }
 
   resolveAttempted = true;
 
   try {
-    otelApi = await import('@opentelemetry/api');
-    cachedTracer = otelApi.trace.getTracer(packageName, packageVersion);
+    const api = await import('@opentelemetry/api');
+    cached = {
+      tracer: api.trace.getTracer(packageName, packageVersion),
+      getActiveContext: () => api.context.active(),
+      ERROR: api.SpanStatusCode.ERROR,
+    };
   } catch {
-    cachedTracer = null;
+    cached = null;
   }
 
-  return cachedTracer;
+  return cached;
 };
 
-// Eagerly attempt to resolve the tracer so it's ready when needed.
-const tracerPromise = resolveTracer();
+// Eagerly attempt to resolve OTel so it's ready when needed.
+const otelPromise = resolveOtel();
 
 type SpanCallback<T> = (span?: Span) => T;
 
@@ -39,15 +48,15 @@ type SpanCallback<T> = (span?: Span) => T;
  */
 export const startSpan = async <T>(name: string, traceName: string | undefined, fn: SpanCallback<T>): Promise<T> => {
   // Capture the active context now, synchronously, before any `await` breaks the StackContextManager's context chain.
-  const parentContext = context.active();
+  const parentContext = cached?.getActiveContext();
 
-  const tracer = await tracerPromise;
+  const otel = await otelPromise;
 
-  if (tracer === null) {
+  if (otel === null || parentContext === undefined) {
     return fn();
   }
 
-  return tracer.startActiveSpan(name, {}, parentContext, (span: Span) => {
+  return otel.tracer.startActiveSpan(name, {}, parentContext, (span: Span) => {
     if (traceName !== undefined) {
       span.setAttribute('component.instance', traceName);
     }
@@ -55,10 +64,7 @@ export const startSpan = async <T>(name: string, traceName: string | undefined, 
     try {
       return fn(span);
     } catch (error) {
-      if (otelApi !== null) {
-        span.setStatus({ code: otelApi.SpanStatusCode.ERROR });
-      }
-
+      span.setStatus({ code: otel.ERROR });
       span.recordException(error instanceof Error ? error : String(error));
 
       throw error;
@@ -84,15 +90,15 @@ export const startAsyncSpan = async <T>(
   fn: SpanCallback<Promise<T>>,
 ): Promise<T> => {
   // Capture the active context now, synchronously, before any `await` breaks the StackContextManager's context chain.
-  const parentContext = context.active();
+  const parentContext = cached?.getActiveContext();
 
-  const tracer = await tracerPromise;
+  const otel = await otelPromise;
 
-  if (tracer === null) {
+  if (otel === null || parentContext === undefined) {
     return fn();
   }
 
-  return tracer.startActiveSpan(name, {}, parentContext, async (span: Span) => {
+  return otel.tracer.startActiveSpan(name, {}, parentContext, async (span: Span) => {
     if (traceName !== undefined) {
       span.setAttribute('component.instance', traceName);
     }
@@ -100,10 +106,7 @@ export const startAsyncSpan = async <T>(
     try {
       return await fn(span);
     } catch (error) {
-      if (otelApi !== null) {
-        span.setStatus({ code: otelApi.SpanStatusCode.ERROR });
-      }
-
+      span.setStatus({ code: otel.ERROR });
       span.recordException(error instanceof Error ? error : String(error));
 
       throw error;
