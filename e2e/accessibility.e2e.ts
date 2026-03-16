@@ -12,9 +12,8 @@ test.describe('KlageFileViewer', () => {
     test('should not have any automatically detectable a11y violations on initial load', async ({ page }) => {
       const results = await new AxeBuilder({ page })
         .include(VIEWER_SELECTOR)
-        // Exclude canvas elements — PDF.js renders to canvas which axe can't inspect for text
+        // Exclude canvas elements — PDFium renders to canvas which axe can't inspect for text
         .exclude('canvas')
-        .exclude('img')
         .analyze();
 
       expect(results.violations).toEqual([]);
@@ -36,11 +35,7 @@ test.describe('KlageFileViewer', () => {
         await themeButton.click();
       }
 
-      const results = await new AxeBuilder({ page })
-        .include(VIEWER_SELECTOR)
-        .exclude('canvas')
-        .exclude('img')
-        .analyze();
+      const results = await new AxeBuilder({ page }).include(VIEWER_SELECTOR).exclude('canvas').analyze();
 
       expect(results.violations).toEqual([]);
     });

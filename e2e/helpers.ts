@@ -60,7 +60,7 @@ export const waitForContent = async (page: Page) => {
  * programmatically drives the search UI.
  */
 export const waitForPdfRendered = async (page: Page) => {
-  await page.locator('[data-klage-file-viewer-page-number] img').first().waitFor({ state: 'visible' });
+  await page.locator('[data-klage-file-viewer-page-number] canvas').first().waitFor({ state: 'visible' });
 };
 
 /**
