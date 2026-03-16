@@ -16,8 +16,7 @@ interface RawPageData {
  * Fetch page geometry (runs of glyphs grouped by their underlying
  * `CPDF_TextObject`) from the engine and transform to screen coordinates.
  *
- * This replaces the older `usePageGlyphs` hook. Instead of a flat
- * `ScreenGlyph[]` array, the caller gets `ScreenPageGeometry` whose `runs`
+ * The caller gets `ScreenPageGeometry` whose `runs`
  * array preserves the structural information that PDFium provides:
  *
  *  - Each run corresponds to a single PDF text object.

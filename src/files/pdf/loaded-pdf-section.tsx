@@ -93,7 +93,7 @@ export const LoadedPdfSection = ({
     geometryRegistry,
   } = useTextSelection();
 
-  useCopyHandler(engine, doc, selection);
+  const copyTargetRef = useCopyHandler(engine, doc, selection, geometryRegistry);
 
   // Expose search info to parent whenever engine/doc/rotations change
   useEffect(() => {
@@ -354,6 +354,24 @@ export const LoadedPdfSection = ({
       />
 
       {usedPassword !== null ? <PasswordProtectedInfoCard password={usedPassword} /> : null}
+
+      <div
+        ref={copyTargetRef}
+        aria-hidden
+        tabIndex={-1}
+        style={{
+          position: 'absolute',
+          width: 1,
+          height: 1,
+          padding: 0,
+          margin: -1,
+          overflow: 'hidden',
+          clip: 'rect(0, 0, 0, 0)',
+          whiteSpace: 'pre',
+          border: 0,
+          pointerEvents: 'none',
+        }}
+      />
 
       <VStack
         position="relative"

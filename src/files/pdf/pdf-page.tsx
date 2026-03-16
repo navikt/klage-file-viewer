@@ -69,7 +69,7 @@ export const PdfPage = ({
     }
 
     const handleDocumentMouseDown = (e: MouseEvent): void => {
-      if (!contentRef.current?.contains(e.target as Node)) {
+      if (e.button === 0 && !contentRef.current?.contains(e.target as Node)) {
         clearSelection();
       }
     };
