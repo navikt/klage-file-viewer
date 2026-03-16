@@ -28,10 +28,19 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
 
     let cancelled = false;
 
+    const dpr = window.devicePixelRatio * 2;
+    const scaleFactor = scale / 100;
+    const renderedWidth = Math.round(page.size.width * scaleFactor * dpr);
+    const renderedHeight = Math.round(page.size.height * scaleFactor * dpr);
+
+    console.debug(
+      `[PdfPageImage] Rendering page ${page.index.toString(10)} at ${renderedWidth.toString(10)}x${renderedHeight.toString(10)}px (scale: ${scale.toString(10)}%, dpr: ${dpr.toString(10)})`,
+    );
+
     const task = engine.renderPage(doc, page, {
-      scaleFactor: scale / 100,
+      scaleFactor,
       rotation: 0,
-      dpr: window.devicePixelRatio * 2,
+      dpr,
       imageType: 'image/webp',
       imageQuality: 0.92,
     });
