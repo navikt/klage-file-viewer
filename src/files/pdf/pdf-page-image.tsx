@@ -31,7 +31,7 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
     const task = engine.renderPage(doc, page, {
       scaleFactor: scale / 100,
       rotation: 0,
-      dpr: window.devicePixelRatio,
+      dpr: window.devicePixelRatio * 2,
       imageType: 'image/webp',
       imageQuality: 0.92,
     });
