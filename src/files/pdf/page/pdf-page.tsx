@@ -111,7 +111,7 @@ export const PdfPage = ({
             transform: rotationMatrix,
           }}
         >
-          <PdfPageImage engine={engine} doc={doc} page={page} scale={scale} visible={visible} />
+          <PdfPageImage engine={engine} doc={doc} page={page} visible={visible} />
           <PageSelectionLayer
             engine={engine}
             doc={doc}
