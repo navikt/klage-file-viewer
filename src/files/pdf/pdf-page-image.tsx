@@ -69,7 +69,7 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
   return (
     <canvas
       ref={setCanvasRef}
-      className={`h-full w-full ${antiAliasing ? '' : 'crisp-edges'}`}
+      className={`h-full w-full ${antiAliasing ? 'crisp-edges' : 'pixelated'}`}
       style={{ filter: filterStyle, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
     />
   );
