@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 
-const getDpr = (): number => Math.max(window.devicePixelRatio, 1);
-
 /**
  * Reactively tracks `window.devicePixelRatio`.
  *
@@ -12,7 +10,7 @@ const getDpr = (): number => Math.max(window.devicePixelRatio, 1);
  * approach since `devicePixelRatio` itself is not observable.
  */
 export const useDpr = (): number => {
-  const [dpr, setDpr] = useState(getDpr);
+  const [dpr, setDpr] = useState(window.devicePixelRatio);
 
   useEffect(() => {
     let active = true;
@@ -23,7 +21,7 @@ export const useDpr = (): number => {
         return;
       }
 
-      setDpr(getDpr());
+      setDpr(window.devicePixelRatio);
       listen();
     };
 

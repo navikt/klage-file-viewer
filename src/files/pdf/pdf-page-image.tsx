@@ -1,5 +1,5 @@
 import type { ImageDataLike, PdfDocumentObject, PdfEngine, PdfPageObject } from '@embedpdf/models';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeMode, useFileViewerConfig } from '@/context';
 import { useDpr } from '@/hooks/use-dpr';
 
@@ -11,16 +11,23 @@ interface PdfPageImageProps {
   visible: boolean;
 }
 
+interface RenderedSize {
+  width: number;
+  height: number;
+}
+
 export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImageProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderedRef = useRef(false);
   const { theme, invertColors, antiAliasing } = useFileViewerConfig();
   const dpr = useDpr();
+  const [renderedSize, setRenderedSize] = useState<RenderedSize | null>(null);
 
   useEffect(() => {
     if (!visible) {
       clearCanvas(canvasRef.current);
       renderedRef.current = false;
+      setRenderedSize(null);
 
       return;
     }
@@ -28,13 +35,6 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
     let cancelled = false;
 
     const scaleFactor = scale / 100;
-    const renderedWidth = Math.round(page.size.width * scaleFactor * dpr);
-    const renderedHeight = Math.round(page.size.height * scaleFactor * dpr);
-
-    console.debug(
-      `[PdfPageImage] Rendering page ${page.index.toString(10)} at ${renderedWidth.toString(10)}x${renderedHeight.toString(10)}px (scale: ${scale.toString(10)}%, dpr: ${dpr.toString(10)})`,
-    );
-
     const task = engine.renderPageRaw(doc, page, { scaleFactor, rotation: 0, dpr });
 
     task.wait(
@@ -45,6 +45,11 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
 
         paintToCanvas(canvasRef.current, raw);
         renderedRef.current = true;
+        setRenderedSize({ width: raw.width, height: raw.height });
+
+        console.debug(
+          `[PdfPageImage] Rendering page ${page.index.toString(10)} at ${raw.width.toString(10)}x${raw.height.toString(10)}px (scale: ${scale.toString(10)}%, dpr: ${dpr.toString(10)})`,
+        );
       },
       () => {
         // Render error — show nothing (placeholder stays)
@@ -67,11 +72,22 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
     }
   }, []);
 
+  // Compute explicit CSS dimensions from the rendered bitmap size and current DPR.
+  // This ensures a 1:1 mapping between canvas pixels and physical device pixels,
+  // avoiding browser resampling that causes blurriness or uneven text at fractional DPRs.
+  const cssWidth = renderedSize !== null ? renderedSize.width / dpr : undefined;
+  const cssHeight = renderedSize !== null ? renderedSize.height / dpr : undefined;
+
   return (
     <canvas
       ref={setCanvasRef}
-      className={`h-full w-full ${antiAliasing ? 'crisp-edges' : 'pixelated'}`}
-      style={{ filter: filterStyle, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
+      className={antiAliasing ? 'crisp-edges' : 'pixelated'}
+      style={{
+        width: cssWidth !== undefined ? `${cssWidth.toString(10)}px` : '100%',
+        height: cssHeight !== undefined ? `${cssHeight.toString(10)}px` : '100%',
+        filter: filterStyle,
+        boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+      }}
     />
   );
 };
