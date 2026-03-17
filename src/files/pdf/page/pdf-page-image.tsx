@@ -44,7 +44,7 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
           return;
         }
 
-        paintToCanvas(canvasRef.current, raw);
+        paintToCanvas(canvasRef.current, raw, dpr);
         renderedRef.current = true;
 
         console.debug(
@@ -72,28 +72,49 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
     }
   }, []);
 
-  // With DPR-folding, the canvas backing store matches physical pixels at any
-  // DPR, so the browser performs no scaling and image-rendering has no effect.
-  // We still set it for the DPR ≥ 1 case where the user's antiAliasing
-  // preference controls the sharpness/smoothness tradeoff.
   const imageRenderingClass = antiAliasing ? 'crisp-edges' : 'pixelated';
+
+  // When DPR < 1, position the canvas absolutely and let paintToCanvas set
+  // explicit CSS dimensions + a compositor-level transform for true 1:1 pixel
+  // mapping (no image-rendering rasterisation step). For DPR ≥ 1, standard
+  // w-full h-full CSS scaling is fine — the backing store has excess pixels
+  // and the downscale is lossless.
+  const canvasClass = dpr < 1 ? `absolute top-0 left-0 ${imageRenderingClass}` : `h-full w-full ${imageRenderingClass}`;
 
   return (
     <canvas
       ref={setCanvasRef}
-      className={`h-full w-full ${imageRenderingClass}`}
+      className={canvasClass}
       style={{ filter: filterStyle, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
     />
   );
 };
 
-const paintToCanvas = (canvas: HTMLCanvasElement | null, raw: ImageDataLike): void => {
+const paintToCanvas = (canvas: HTMLCanvasElement | null, raw: ImageDataLike, dpr: number): void => {
   if (canvas === null) {
     return;
   }
 
   canvas.width = raw.width;
   canvas.height = raw.height;
+
+  if (dpr < 1) {
+    // Set CSS dimensions to match the backing store exactly (1:1 pixel mapping).
+    // Use a compositor-level transform to scale the visual output to fill the
+    // container, bypassing the image-rendering rasterisation step entirely.
+    // scale(1/dpr) ≈ containerSize/backingSize (sub-pixel rounding difference).
+    const invDpr = (1 / dpr).toString(10);
+    canvas.style.width = `${raw.width.toString(10)}px`;
+    canvas.style.height = `${raw.height.toString(10)}px`;
+    canvas.style.transformOrigin = '0 0';
+    canvas.style.transform = `scale(${invDpr})`;
+  } else {
+    // Reset any inline styles left over from a previous DPR < 1 render.
+    canvas.style.width = '';
+    canvas.style.height = '';
+    canvas.style.transform = '';
+    canvas.style.transformOrigin = '';
+  }
 
   const ctx = canvas.getContext('2d');
 
@@ -119,4 +140,10 @@ const clearCanvas = (canvas: HTMLCanvasElement | null): void => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   canvas.width = 0;
   canvas.height = 0;
+
+  // Reset inline styles from DPR < 1 path.
+  canvas.style.width = '';
+  canvas.style.height = '';
+  canvas.style.transform = '';
+  canvas.style.transformOrigin = '';
 };
