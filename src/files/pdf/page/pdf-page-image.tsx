@@ -29,11 +29,14 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
 
     const scaleFactor = scale / 100;
 
-    // The engine clamps DPR to ≥1, so when the true DPR is below 1 the bitmap
-    // will have more pixels than the physical screen. That's fine — the browser
-    // downsamples uniformly as long as we avoid nearest-neighbor interpolation
-    // (see imageRenderingClass below).
-    const task = engine.renderPageRaw(doc, page, { scaleFactor, rotation: 0, dpr });
+    // The engine clamps DPR to Math.max(1, dpr). To render at the exact
+    // physical pixel count when DPR < 1, we fold the DPR into scaleFactor
+    // so the engine produces: pageSize × scaleFactor × dpr pixels — a 1:1
+    // match for the CSS container's physical size. No browser scaling needed.
+    const engineScale = dpr < 1 ? scaleFactor * dpr : scaleFactor;
+    const engineDpr = dpr < 1 ? 1 : dpr;
+
+    const task = engine.renderPageRaw(doc, page, { scaleFactor: engineScale, rotation: 0, dpr: engineDpr });
 
     task.wait(
       (raw) => {
@@ -69,11 +72,11 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
     }
   }, []);
 
-  // When DPR < 1 the canvas bitmap has more pixels than the physical screen
-  // (we render at DPR=1 for clean text). Nearest-neighbor downsampling
-  // (crisp-edges / pixelated) would produce uneven line weights, so we fall
-  // back to the browser's default smooth (bilinear) interpolation.
-  const imageRenderingClass = dpr < 1 ? '' : antiAliasing ? 'crisp-edges' : 'pixelated';
+  // With DPR-folding, the canvas backing store matches physical pixels at any
+  // DPR, so the browser performs no scaling and image-rendering has no effect.
+  // We still set it for the DPR ≥ 1 case where the user's antiAliasing
+  // preference controls the sharpness/smoothness tradeoff.
+  const imageRenderingClass = antiAliasing ? 'crisp-edges' : 'pixelated';
 
   return (
     <canvas
