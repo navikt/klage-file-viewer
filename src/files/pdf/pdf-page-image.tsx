@@ -1,6 +1,7 @@
 import type { ImageDataLike, PdfDocumentObject, PdfEngine, PdfPageObject } from '@embedpdf/models';
 import { useCallback, useEffect, useRef } from 'react';
 import { ThemeMode, useFileViewerConfig } from '@/context';
+import { useDpr } from '@/hooks/use-dpr';
 
 interface PdfPageImageProps {
   engine: PdfEngine;
@@ -14,6 +15,7 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderedRef = useRef(false);
   const { theme, invertColors, antiAliasing } = useFileViewerConfig();
+  const dpr = useDpr();
 
   useEffect(() => {
     if (!visible) {
@@ -25,7 +27,6 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
 
     let cancelled = false;
 
-    const dpr = window.devicePixelRatio;
     const scaleFactor = scale / 100;
     const renderedWidth = Math.round(page.size.width * scaleFactor * dpr);
     const renderedHeight = Math.round(page.size.height * scaleFactor * dpr);
@@ -53,7 +54,7 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
     return () => {
       cancelled = true;
     };
-  }, [engine, doc, page, scale, visible]);
+  }, [engine, doc, page, scale, visible, dpr]);
 
   const filterStyle = invertColors && theme === ThemeMode.Dark ? 'hue-rotate(180deg) invert(1)' : 'none';
 
