@@ -1,6 +1,6 @@
 import { type PdfDocumentObject, type PdfEngine, type PdfEngineError, PdfErrorCode } from '@embedpdf/models';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getStoredPassword, removeStoredPassword, storePassword } from '@/files/pdf/pdf-password-storage';
+import { getStoredPassword, removeStoredPassword, storePassword } from '@/files/pdf/password/pdf-password-storage';
 
 export enum PasswordStatus {
   NONE = 'NONE',
