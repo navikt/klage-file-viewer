@@ -1,5 +1,5 @@
 import type { ImageDataLike, PdfDocumentObject, PdfEngine, PdfPageObject } from '@embedpdf/models';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { ThemeMode, useFileViewerConfig } from '@/context';
 import { useDpr } from '@/hooks/use-dpr';
 
@@ -11,23 +11,16 @@ interface PdfPageImageProps {
   visible: boolean;
 }
 
-interface RenderedSize {
-  width: number;
-  height: number;
-}
-
 export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImageProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderedRef = useRef(false);
   const { theme, invertColors, antiAliasing } = useFileViewerConfig();
   const dpr = useDpr();
-  const [renderedSize, setRenderedSize] = useState<RenderedSize | null>(null);
 
   useEffect(() => {
     if (!visible) {
       clearCanvas(canvasRef.current);
       renderedRef.current = false;
-      setRenderedSize(null);
 
       return;
     }
@@ -35,6 +28,11 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
     let cancelled = false;
 
     const scaleFactor = scale / 100;
+
+    // The engine clamps DPR to ≥1, so when the true DPR is below 1 the bitmap
+    // will have more pixels than the physical screen. That's fine — the browser
+    // downsamples uniformly as long as we avoid nearest-neighbor interpolation
+    // (see imageRenderingClass below).
     const task = engine.renderPageRaw(doc, page, { scaleFactor, rotation: 0, dpr });
 
     task.wait(
@@ -45,7 +43,6 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
 
         paintToCanvas(canvasRef.current, raw);
         renderedRef.current = true;
-        setRenderedSize({ width: raw.width, height: raw.height });
 
         console.debug(
           `[PdfPageImage] Rendering page ${page.index.toString(10)} at ${raw.width.toString(10)}x${raw.height.toString(10)}px (scale: ${scale.toString(10)}%, dpr: ${dpr.toString(10)})`,
@@ -72,22 +69,17 @@ export const PdfPageImage = ({ engine, doc, page, scale, visible }: PdfPageImage
     }
   }, []);
 
-  // Compute explicit CSS dimensions from the rendered bitmap size and current DPR.
-  // This ensures a 1:1 mapping between canvas pixels and physical device pixels,
-  // avoiding browser resampling that causes blurriness or uneven text at fractional DPRs.
-  const cssWidth = renderedSize !== null ? renderedSize.width / dpr : undefined;
-  const cssHeight = renderedSize !== null ? renderedSize.height / dpr : undefined;
+  // When DPR < 1 the canvas bitmap has more pixels than the physical screen
+  // (we render at DPR=1 for clean text). Nearest-neighbor downsampling
+  // (crisp-edges / pixelated) would produce uneven line weights, so we fall
+  // back to the browser's default smooth (bilinear) interpolation.
+  const imageRenderingClass = dpr < 1 ? '' : antiAliasing ? 'crisp-edges' : 'pixelated';
 
   return (
     <canvas
       ref={setCanvasRef}
-      className={antiAliasing ? 'crisp-edges' : 'pixelated'}
-      style={{
-        width: cssWidth !== undefined ? `${cssWidth.toString(10)}px` : '100%',
-        height: cssHeight !== undefined ? `${cssHeight.toString(10)}px` : '100%',
-        filter: filterStyle,
-        boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
-      }}
+      className={`h-full w-full ${imageRenderingClass}`}
+      style={{ filter: filterStyle, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
     />
   );
 };
