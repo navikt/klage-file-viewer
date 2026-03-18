@@ -168,13 +168,13 @@ const getImageRenderingClass = (dpr: number, antiAliasing: boolean): string => {
 };
 
 const getPhysicalSize = (entry: ResizeObserverEntry): PhysicalSize | null => {
-  const cssSize = entry.contentBoxSize[0];
+  const [cssSize] = entry.contentBoxSize;
 
   if (cssSize === undefined || cssSize.inlineSize === 0) {
     return null;
   }
 
-  const dpSize = entry.devicePixelContentBoxSize?.[0];
+  const [dpSize] = entry.devicePixelContentBoxSize ?? [];
 
   if (dpSize !== undefined) {
     return {
@@ -183,6 +183,8 @@ const getPhysicalSize = (entry: ResizeObserverEntry): PhysicalSize | null => {
       dpr: dpSize.inlineSize / cssSize.inlineSize,
     };
   }
+
+  console.warn('[PdfPageImage] devicePixelContentBoxSize not supported, falling back to CSS size and DPR');
 
   // Fallback: compute from CSS size and DPR.
   const dpr = window.devicePixelRatio;
