@@ -1,6 +1,6 @@
 import type { PdfDocumentObject, Rotation } from '@embedpdf/models';
 import { useEffect, useRef } from 'react';
-import { glyphAt, screenToGlyph } from '@/files/pdf/selection/hit-test';
+import { getVerticalTextBounds, glyphAt, screenToGlyph, snapToNearest } from '@/files/pdf/selection/hit-test';
 import type { ScreenPageGeometry } from '@/files/pdf/selection/types';
 
 interface PageInfo {
@@ -202,7 +202,32 @@ const hitTestPage = (
 
   const { x, y } = screenToGlyph(sx, sy, rotation, baseWidth, baseHeight);
 
+  // When the cursor Y is outside the vertical extent of all text on the
+  // page, skip `glyphAt` entirely and go straight to `snapToNearest`.
+  //
+  // Without this check, `glyphAt`'s tolerance pass (~12px expansion) catches
+  // glyphs on the nearest line even though the cursor is clearly above or
+  // below the text. That causes the selection to extend to a mid-line
+  // character (directly above the cursor) instead of snapping to the line
+  // boundary, which is the expected behaviour when dragging past text.
+  const textBounds = getVerticalTextBounds(geo);
+
+  if (textBounds !== null && (y < textBounds.top || y > textBounds.bottom)) {
+    const snapped = snapToNearest(geo, x, y);
+
+    return snapped >= 0 ? { pageIndex, charIndex: snapped } : null;
+  }
+
+  // Within the vertical text extent — use precise glyph-level hit testing.
   const charIndex = glyphAt(geo, x, y);
+
+  // Even within text bounds, glyphAt can miss (e.g. cursor is in a gap
+  // between columns or in whitespace between lines). Fall back to snap.
+  if (charIndex < 0) {
+    const snapped = snapToNearest(geo, x, y);
+
+    return snapped >= 0 ? { pageIndex, charIndex: snapped } : null;
+  }
 
   return { pageIndex, charIndex };
 };

@@ -39,36 +39,64 @@ export const useCopyHandler = (
       return;
     }
 
-    const slices = selection.ranges.map((range) => ({
-      pageIndex: range.pageIndex,
-      charIndex: range.startCharIndex,
-      charCount: range.endCharIndex - range.startCharIndex + 1,
-    }));
+    // When runs have been reordered visually, the geometry's pageText is
+    // already in visual order and we can extract selected text directly
+    // without calling the engine (which uses original char indices).
+    // For pages without reordering we fall back to engine.getTextSlices.
+    const canUseLocalText = selection.ranges.every((range) => {
+      const geo = geometryRegistry.current.get(range.pageIndex);
 
-    const task = engine.getTextSlices(doc, slices);
+      return geo?.visualToOriginal !== undefined && geo.pageText !== undefined;
+    });
 
-    task.wait(
-      (texts) => {
-        const pageTexts = texts.map((text, i) => {
-          const range = selection.ranges[i];
+    if (canUseLocalText) {
+      const pageTexts = selection.ranges.map((range) => {
+        const geo = geometryRegistry.current.get(range.pageIndex);
 
-          if (range === undefined) {
-            return text;
-          }
+        if (geo === undefined || geo.pageText === undefined) {
+          return '';
+        }
 
-          const geo = geometryRegistry.current.get(range.pageIndex);
+        const rawText = geo.pageText.slice(range.startCharIndex, range.endCharIndex + 1);
 
-          return geo === undefined ? text : reflowPageText(text, range, geo);
-        });
+        return reflowPageText(rawText, range, geo);
+      });
 
-        el.textContent = pageTexts.join('\n\n');
+      el.textContent = pageTexts.join('\n\n');
+      selectHiddenElement(el);
+    } else {
+      // Build slices — translate visual indices back to original when needed.
+      const slices = selection.ranges.map((range) => {
+        const geo = geometryRegistry.current.get(range.pageIndex);
 
-        selectHiddenElement(el);
-      },
-      () => {
-        el.textContent = '';
-      },
-    );
+        return buildOriginalSlice(range, geo);
+      });
+
+      const task = engine.getTextSlices(doc, slices);
+
+      task.wait(
+        (texts) => {
+          const pageTexts = texts.map((text, i) => {
+            const range = selection.ranges[i];
+
+            if (range === undefined) {
+              return text;
+            }
+
+            const geo = geometryRegistry.current.get(range.pageIndex);
+
+            return geo === undefined ? text : reflowPageText(text, range, geo);
+          });
+
+          el.textContent = pageTexts.join('\n\n');
+
+          selectHiddenElement(el);
+        },
+        () => {
+          el.textContent = '';
+        },
+      );
+    }
 
     const handleMouseDown = (e: MouseEvent): void => {
       if (el.textContent === null || el.textContent.length === 0) {
@@ -467,4 +495,58 @@ const median = (values: number[]): number => {
   }
 
   return sorted[mid] ?? 0;
+};
+
+// ---------------------------------------------------------------------------
+// Visual → original index translation for engine API calls
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a text slice in original (engine) char indices from a visual
+ * selection range.
+ *
+ * When the page geometry has been reordered (`visualToOriginal` is set),
+ * the visual start/end indices are translated back to the original char
+ * space.  Because the visual range may map to a non-contiguous original
+ * range, we use the minimum original index as the start and span up to
+ * the maximum — the extra characters in between are harmless for the
+ * reflow step which operates on geometry-based line boundaries anyway.
+ */
+const buildOriginalSlice = (
+  range: PageSelectionRange,
+  geo: ScreenPageGeometry | undefined,
+): { pageIndex: number; charIndex: number; charCount: number } => {
+  if (geo?.visualToOriginal === undefined) {
+    return {
+      pageIndex: range.pageIndex,
+      charIndex: range.startCharIndex,
+      charCount: range.endCharIndex - range.startCharIndex + 1,
+    };
+  }
+
+  const map = geo.visualToOriginal;
+
+  let minOriginal = Number.POSITIVE_INFINITY;
+  let maxOriginal = Number.NEGATIVE_INFINITY;
+
+  for (let i = range.startCharIndex; i <= range.endCharIndex; i++) {
+    const orig = map[i];
+
+    if (orig === undefined) {
+      continue;
+    }
+
+    minOriginal = Math.min(minOriginal, orig);
+    maxOriginal = Math.max(maxOriginal, orig);
+  }
+
+  if (minOriginal > maxOriginal) {
+    return { pageIndex: range.pageIndex, charIndex: 0, charCount: 0 };
+  }
+
+  return {
+    pageIndex: range.pageIndex,
+    charIndex: minOriginal,
+    charCount: maxOriginal - minOriginal + 1,
+  };
 };

@@ -86,6 +86,19 @@ export interface ScreenPageGeometry {
    *
    * Fetched via `engine.getTextSlices` alongside the page geometry.
    * May be `undefined` if text extraction failed or is still pending.
+   *
+   * When runs have been reordered visually, this string is remapped to
+   * match the visual character order.
    */
   pageText: string | undefined;
+  /**
+   * Maps visual (reordered) character indices back to original engine
+   * character indices.  `visualToOriginal[visualIdx] = originalIdx`.
+   *
+   * Present only when the page's runs were reordered from their
+   * content-stream order to visual reading order.  When `undefined`,
+   * the content-stream order already matches visual order and indices
+   * are identical.
+   */
+  visualToOriginal: number[] | undefined;
 }
