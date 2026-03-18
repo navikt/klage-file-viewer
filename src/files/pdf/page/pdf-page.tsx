@@ -25,8 +25,6 @@ interface PdfPageProps {
   isSelecting: boolean;
   clearSelection: () => void;
   onMouseDown: (pageIndex: number, charIndex: number, detail: number) => void;
-  onPointerMove: (pageIndex: number, charIndex: number) => void;
-  onPointerUp: () => void;
   geometryRegistry: React.RefObject<Map<number, ScreenPageGeometry>>;
   showPasswordOverlay?: boolean;
   onOcrDetected?: () => void;
@@ -47,8 +45,6 @@ export const PdfPage = ({
   isSelecting,
   clearSelection,
   onMouseDown,
-  onPointerMove,
-  onPointerUp,
   geometryRegistry,
   showPasswordOverlay,
   onOcrDetected,
@@ -125,8 +121,6 @@ export const PdfPage = ({
             selectionRange={selectionRange}
             isSelecting={isSelecting}
             onMouseDown={onMouseDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
             geometryRegistry={geometryRegistry}
           />
           <PageOcrLayer

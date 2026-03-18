@@ -14,6 +14,7 @@ import { usePdfEngine } from '@/files/pdf/pdf-engine-context';
 import { PlaceholderWrapper } from '@/files/pdf/pdf-section-placeholder';
 import type { HighlightRect } from '@/files/pdf/search/types';
 import { useCopyHandler } from '@/files/pdf/selection/use-copy-handler';
+import { useDocumentPointerTracking } from '@/files/pdf/selection/use-document-pointer-tracking';
 import { useTextSelection } from '@/files/pdf/selection/use-text-selection';
 import { PasswordStatus, usePdfDocument } from '@/files/pdf/use-pdf-document';
 import { useRegisterRefresh } from '@/hooks/use-refresh-registry';
@@ -95,6 +96,24 @@ export const LoadedPdfSection = ({
 
   const copyTargetRef = useCopyHandler(engine, doc, selection, geometryRegistry);
 
+  // Ref for registered page DOM elements — used by both document-level pointer
+  // tracking (cross-page selection) and page navigation (scroll-to-page).
+  const pageElementsRef = useRef<Map<number, HTMLElement>>(new Map());
+
+  // Document-level pointer tracking for cross-page selection.
+  // Uses pageElementsRef (populated by handleRegisterElement below) to
+  // determine which page the pointer is over during a drag.
+  useDocumentPointerTracking({
+    isSelecting,
+    doc,
+    scale,
+    rotations,
+    geometryRegistry,
+    pageElementsRef,
+    onPointerMove: handlePointerMove,
+    onPointerUp: handlePointerUp,
+  });
+
   // Expose search info to parent whenever engine/doc/rotations change
   useEffect(() => {
     if (engine !== null && doc !== null) {
@@ -125,7 +144,6 @@ export const LoadedPdfSection = ({
   const [currentPage, setCurrentPage] = useState<number | null>(null);
   const [hasOcr, setHasOcr] = useState(false);
   const rafRef = useRef<number | null>(null);
-  const pageElementsRef = useRef<Map<number, HTMLElement>>(new Map());
 
   // Stable target tracking — mirrors the pattern in usePageNavigation.
   // `targetPage` drives the disabled state so that intermediate scroll events
@@ -395,8 +413,6 @@ export const LoadedPdfSection = ({
             isSelecting={isSelecting}
             clearSelection={clearSelection}
             onMouseDown={handleMouseDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
             geometryRegistry={geometryRegistry}
             showPasswordOverlay={usedPassword !== null}
             onOcrDetected={handleOcrDetected}

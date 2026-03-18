@@ -22,8 +22,6 @@ interface PageSelectionLayerProps {
   selectionRange: PageSelectionRange | null;
   isSelecting: boolean;
   onMouseDown: (pageIndex: number, charIndex: number, detail: number) => void;
-  onPointerMove: (pageIndex: number, charIndex: number) => void;
-  onPointerUp: () => void;
   geometryRegistry: React.RefObject<Map<number, ScreenPageGeometry>>;
 }
 
@@ -40,8 +38,6 @@ export const PageSelectionLayer = ({
   selectionRange,
   isSelecting,
   onMouseDown,
-  onPointerMove,
-  onPointerUp,
   geometryRegistry,
 }: PageSelectionLayerProps) => {
   const { geometry } = usePageGeometry(engine, doc, page, scale, visible);
@@ -63,8 +59,6 @@ export const PageSelectionLayer = ({
       selectionRange={selectionRange}
       pageIndex={pageIndex}
       onMouseDown={onMouseDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
       isSelecting={isSelecting}
       rotation={rotation}
       baseWidth={baseWidth}
