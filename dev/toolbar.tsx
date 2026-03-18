@@ -12,7 +12,7 @@ import {
   ShrinkIcon,
   SunIcon,
 } from '@navikt/aksel-icons';
-import { BodyShort, Box, Button, HStack, Tag } from '@navikt/ds-react';
+import { BodyShort, Box, Button, HStack, Tag, ToggleGroup } from '@navikt/ds-react';
 
 // --- UI constants ---
 
@@ -113,25 +113,18 @@ const Toolbar = ({
 
         <div style={{ width: '1px', height: '24px', background: 'var(--a-border-divider)' }} />
 
-        <Button
-          variant="tertiary"
-          size="xsmall"
-          icon={standalone ? <ExpandIcon aria-hidden /> : <ShrinkIcon aria-hidden />}
-          onClick={toggleStandalone}
-        >
-          {standalone ? 'Standalone' : 'Innebygd'}
-        </Button>
+        <ToggleGroup onChange={toggleStandalone} value={standalone.toString()} size="small">
+          <ToggleGroup.Item label="Standalone" value="true" icon={<ExpandIcon aria-hidden />} />
+          <ToggleGroup.Item label="Innebygd" value="false" icon={<ShrinkIcon aria-hidden />} />
+        </ToggleGroup>
 
         <div style={{ width: '1px', height: '24px', background: 'var(--a-border-divider)' }} />
 
-        <Button
-          variant="tertiary"
-          size="xsmall"
-          icon={theme === ThemeMode.Light ? <SunIcon aria-hidden /> : <MoonIcon aria-hidden />}
-          onClick={toggleTheme}
-        >
-          {theme === ThemeMode.Light ? 'Lys' : 'Mørk'}
-        </Button>
+        <ToggleGroup onChange={toggleTheme} size="small" value={theme}>
+          <ToggleGroup.Item label="Lys" value={ThemeMode.Light} icon={<SunIcon aria-hidden />} />
+
+          <ToggleGroup.Item label="Mørk" value={ThemeMode.Dark} icon={<MoonIcon aria-hidden />} />
+        </ToggleGroup>
       </HStack>
     </HStack>
   </Box>

@@ -71,8 +71,9 @@ const App = () => {
               overflow: 'clip',
               display: 'flex',
               justifyContent: 'center',
-              width: standalone ? '100%' : '50em',
-              marginInline: standalone ? undefined : 'auto',
+              width: standalone ? '100%' : undefined,
+              minWidth: standalone ? undefined : '50em',
+              marginInlineEnd: standalone ? undefined : 'auto',
             }}
             data-dev-app-wrapper
           >
