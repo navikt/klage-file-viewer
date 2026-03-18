@@ -24,7 +24,7 @@ const createOcrWorker = async (): Promise<Worker> => {
 
   const baseUrl = TESSERACT_CDN ?? `${window.location.origin}/tesseract`;
 
-  return createWorker('nor+eng+pol', undefined, {
+  return createWorker('nor+eng', undefined, {
     workerPath: `${baseUrl}/worker.min.js`,
     corePath: `${baseUrl}/`,
     langPath: `${baseUrl}/lang/`,
