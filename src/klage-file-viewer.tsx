@@ -40,8 +40,6 @@ export interface KlageFileViewerProps
   pdfiumWasmUrl?: string;
 }
 
-const PADDING = 16;
-
 export const KlageFileViewer = ({
   files,
   onClose,
@@ -314,7 +312,8 @@ const KlageFileViewerInner = ({
               key={file.url}
               data-klage-file-viewer-section-index={index}
               ref={(el) => setSectionRef(index, el)}
-              padding={`space-${PADDING}`}
+              paddingBlock="space-4"
+              paddingInline="space-8"
               width="100%"
               align="center"
               data-klage-file-viewer-document={file.title}

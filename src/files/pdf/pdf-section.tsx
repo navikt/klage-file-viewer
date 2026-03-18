@@ -3,6 +3,7 @@ import type { ResolvedVariant } from '@/file-header/variant-types';
 import { LoadedPdfSection, type PdfSectionSearchInfo } from '@/files/pdf/loaded-pdf-section';
 import { PdfSectionPlaceholder } from '@/files/pdf/pdf-section-placeholder';
 import type { HighlightRect } from '@/files/pdf/search/types';
+import { FileSectionContainer } from '@/files/section-container';
 import type { FileEntry } from '@/types';
 
 interface PdfSectionProps {
@@ -35,7 +36,7 @@ export const PdfSection = ({
   currentMatchIndex,
   documentNavigation,
 }: PdfSectionProps) => (
-  <section className="flex w-full flex-col items-center gap-4">
+  <FileSectionContainer>
     {shouldLoad ? (
       <LoadedPdfSection
         file={file}
@@ -51,5 +52,5 @@ export const PdfSection = ({
     ) : (
       <PdfSectionPlaceholder title={file.title} scale={scale} />
     )}
-  </section>
+  </FileSectionContainer>
 );

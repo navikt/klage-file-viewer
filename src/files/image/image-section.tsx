@@ -2,6 +2,7 @@ import type { DocumentNavigation } from '@/file-header/file-header';
 import type { ResolvedVariant } from '@/file-header/variant-types';
 import { ImageSectionPlaceholder } from '@/files/image/image-section-placeholder';
 import { LoadedImageSection } from '@/files/image/loaded-image-section';
+import { FileSectionContainer } from '@/files/section-container';
 import type { FileEntry } from '@/types';
 
 interface ImageSectionProps {
@@ -24,7 +25,7 @@ export const ImageSection = ({
   onPageCountReady,
   documentNavigation,
 }: ImageSectionProps) => (
-  <section className="flex w-full flex-col items-center gap-4">
+  <FileSectionContainer>
     {shouldLoad ? (
       <LoadedImageSection
         file={file}
@@ -36,5 +37,5 @@ export const ImageSection = ({
     ) : (
       <ImageSectionPlaceholder title={file.title} scale={scale} />
     )}
-  </section>
+  </FileSectionContainer>
 );

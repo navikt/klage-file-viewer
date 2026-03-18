@@ -87,8 +87,8 @@ export const FileHeader = ({
   return (
     <Box
       background="neutral-moderate"
-      padding="space-8"
-      className="sticky top-14.75 z-20 flex w-full flex-row items-center justify-between gap-1"
+      padding="space-4"
+      className="sticky top-11.75 z-20 flex w-full flex-row items-center justify-between gap-1"
       shadow="dialog"
       borderRadius="8"
       data-klage-file-viewer-file-header

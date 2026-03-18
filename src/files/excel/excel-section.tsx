@@ -2,6 +2,7 @@ import type { DocumentNavigation } from '@/file-header/file-header';
 import type { ResolvedVariant } from '@/file-header/variant-types';
 import { ExcelSectionPlaceholder } from '@/files/excel/excel-section-placeholder';
 import { LoadedExcelSection } from '@/files/excel/loaded-excel-section';
+import { FileSectionContainer } from '@/files/section-container';
 import type { FileEntry } from '@/types';
 
 interface ExcelSectionProps {
@@ -24,7 +25,7 @@ export const ExcelSection = ({
   onPageCountReady,
   documentNavigation,
 }: ExcelSectionProps) => (
-  <section className="flex w-full flex-col items-center gap-4">
+  <FileSectionContainer>
     {shouldLoad ? (
       <LoadedExcelSection
         file={file}
@@ -36,5 +37,5 @@ export const ExcelSection = ({
     ) : (
       <ExcelSectionPlaceholder title={file.title} />
     )}
-  </section>
+  </FileSectionContainer>
 );

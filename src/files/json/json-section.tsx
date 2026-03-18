@@ -2,6 +2,7 @@ import type { DocumentNavigation } from '@/file-header/file-header';
 import type { ResolvedVariant } from '@/file-header/variant-types';
 import { JsonSectionPlaceholder } from '@/files/json/json-section-placeholder';
 import { LoadedJsonSection } from '@/files/json/loaded-json-section';
+import { FileSectionContainer } from '@/files/section-container';
 import type { FileEntry } from '@/types';
 
 interface JsonSectionProps {
@@ -22,7 +23,7 @@ export const JsonSection = ({
   onPageCountReady,
   documentNavigation,
 }: JsonSectionProps) => (
-  <section className="flex w-full flex-col items-center gap-4">
+  <FileSectionContainer>
     {shouldLoad ? (
       <LoadedJsonSection
         file={file}
@@ -33,5 +34,5 @@ export const JsonSection = ({
     ) : (
       <JsonSectionPlaceholder title={file.title} />
     )}
-  </section>
+  </FileSectionContainer>
 );
