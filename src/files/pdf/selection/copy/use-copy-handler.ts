@@ -2,7 +2,8 @@ import type { PdfDocumentObject, PdfEngine } from '@embedpdf/models';
 import { useEffect, useRef } from 'react';
 import {
   analyzePageReflow,
-  computeDocumentMaxFontSize,
+  computeDocumentStats,
+  type DocumentStats,
   EMPTY_REFLOW,
   type PageReflow,
 } from '@/files/pdf/selection/copy/analyze-reflow';
@@ -62,7 +63,7 @@ export const useCopyHandler = (
       const allGeos = selection.ranges
         .map((range) => geometryRegistry.current.get(range.pageIndex))
         .filter((geo): geo is ScreenPageGeometry => geo !== undefined);
-      const docMaxFontSize = computeDocumentMaxFontSize(allGeos);
+      const docStats = computeDocumentStats(allGeos);
 
       const pageResults = selection.ranges.map((range) => {
         const geo = geometryRegistry.current.get(range.pageIndex);
@@ -75,7 +76,7 @@ export const useCopyHandler = (
 
         const rawText = geo.pageText.slice(range.startCharIndex, range.endCharIndex + 1);
 
-        return reflowPage(rawText, range, geo, docMaxFontSize);
+        return reflowPage(rawText, range, geo, docStats);
       });
 
       el.textContent = pageResults.map((r) => r.plain).join('\n\n');
@@ -96,7 +97,7 @@ export const useCopyHandler = (
           const allGeos = selection.ranges
             .map((range) => geometryRegistry.current.get(range.pageIndex))
             .filter((geo): geo is ScreenPageGeometry => geo !== undefined);
-          const docMaxFontSize = computeDocumentMaxFontSize(allGeos);
+          const docStats = computeDocumentStats(allGeos);
 
           const pageResults = texts.map((text, i) => {
             const range = selection.ranges[i];
@@ -111,7 +112,7 @@ export const useCopyHandler = (
               return { plain: text, html: `<p>${escapeHtml(text)}</p>` };
             }
 
-            return reflowPage(text, range, geo, docMaxFontSize);
+            return reflowPage(text, range, geo, docStats);
           });
 
           el.textContent = pageResults.map((r) => r.plain).join('\n\n');
@@ -193,9 +194,9 @@ const reflowPage = (
   rawText: string,
   range: PageSelectionRange,
   geo: ScreenPageGeometry,
-  documentMaxFontSize?: number,
+  documentStats?: DocumentStats,
 ): PageReflow => {
-  const paragraphs = analyzePageReflow(rawText, range, geo, documentMaxFontSize);
+  const paragraphs = analyzePageReflow(rawText, range, geo, documentStats);
   const plain = paragraphsToPlain(paragraphs);
   const html = paragraphsToHtml(paragraphs);
 

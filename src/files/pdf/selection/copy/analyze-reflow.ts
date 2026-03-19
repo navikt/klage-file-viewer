@@ -55,6 +55,17 @@ export interface PageReflow {
 
 export const EMPTY_REFLOW: PageReflow = { plain: '', html: '' };
 
+/**
+ * Document-wide statistics used to produce consistent analysis across pages.
+ *
+ * Computed once from all selected page geometries and passed into each
+ * per-page {@link analyzePageReflow} call.
+ */
+export interface DocumentStats {
+  /** Maximum font size across all pages. */
+  maxFontSize: number | undefined;
+}
+
 /** Get the full text of a line by concatenating its span texts. */
 export const lineText = (line: ReflowSpan[]): string => line.map((s) => s.text).join('');
 
@@ -66,12 +77,13 @@ export const lineText = (line: ReflowSpan[]): string => line.map((s) => s.text).
 const MIN_LINES_FOR_STATS = 2;
 
 /**
- * Factor by which a gap must exceed the baseline line spacing to be considered
- * a paragraph break. Applied to the 25th-percentile gap, which better
- * represents body-text spacing than the median when headings inflate the
- * distribution.
+ * A gap between two lines that is at least this multiple of the average
+ * line height indicates an "empty line" — always a paragraph break.
+ *
+ * Typical within-paragraph line spacing is ~1.0–1.2× line height.
+ * Paragraph breaks are ≥1.8× (the gap is large enough to fit another line).
  */
-const PARAGRAPH_GAP_FACTOR = 1.5;
+const EMPTY_LINE_GAP_FACTOR = 1.5;
 
 /**
  * A line whose right edge reaches within this fraction of the maximum line
@@ -140,24 +152,23 @@ const stripInternalFields = (p: InternalParagraph): ReflowParagraph => ({
  * Build the intermediate {@link ReflowParagraph} model from raw text and
  * page geometry.
  *
- * @param documentMaxFontSize – Optional maximum font size found across all
- *   pages in the document. When provided, heading levels are computed
- *   relative to the range between the baseline body size and this maximum,
- *   giving consistent h1/h2 assignments across pages. When omitted the
- *   page-local maximum is used instead.
+ * @param documentStats – Optional document-wide statistics (max font size,
+ *   paragraph gap threshold) computed across all pages. When provided,
+ *   heading levels and paragraph detection are consistent across pages.
+ *   When omitted, page-local statistics are used as fallback.
  */
 export const analyzePageReflow = (
   rawText: string,
   range: PageSelectionRange,
   geo: ScreenPageGeometry,
-  documentMaxFontSize?: number,
+  documentStats?: DocumentStats,
 ): ReflowParagraph[] => {
   const lineInfos = collectLineInfo(range, geo);
   const baselineWeight = computePageBaselineFontWeight(geo);
   const baselineFontSize = computeBaselineFontSize(geo);
   const baselineLeftEdge = computeBaselineLeftEdge(geo);
   const maxRight = computePageMaxRight(geo);
-  const maxFontSize = documentMaxFontSize ?? computePageMaxFontSize(geo);
+  const maxFontSize = documentStats?.maxFontSize ?? computePageMaxFontSize(geo);
 
   let paragraphs: InternalParagraph[];
 
@@ -216,8 +227,6 @@ const buildMultiLineParagraphs = (
   baselineLeftEdge: number | undefined,
 ): InternalParagraph[] => {
   const gaps = computeLineGaps(lineInfos);
-  const baselineGap = percentile25(gaps);
-  const paragraphThreshold = baselineGap * PARAGRAPH_GAP_FACTOR;
   const textLines = splitTextByGeometry(rawText, range, lineInfos);
 
   const makeParagraph = (): InternalParagraph => ({
@@ -244,7 +253,7 @@ const buildMultiLineParagraphs = (
       const prevLineInfo = lineInfos[i - 1];
 
       if (prevLineInfo !== undefined) {
-        sep = lineSeparator(gaps[i - 1], prevLineInfo, paragraphThreshold, maxRight);
+        sep = lineSeparator(gaps[i - 1], prevLineInfo, lineInfo, maxRight);
       }
 
       sep = refineSeparator(sep, text, lineInfo, lineInfos[i - 1], baselineLeftEdge);
@@ -929,22 +938,31 @@ const computePageMaxFontSize = (geo: ScreenPageGeometry): number | undefined => 
 };
 
 /**
- * Compute the maximum font size across multiple pages. Call this before
- * per-page analysis and pass the result as `documentMaxFontSize` to
- * {@link analyzePageReflow} for consistent heading level assignment.
+ * Compute document-wide statistics from all selected page geometries.
+ *
+ * Call this once before per-page analysis and pass the result as
+ * `documentStats` to {@link analyzePageReflow} for consistent heading
+ * levels and paragraph gap detection across pages.
  */
-export const computeDocumentMaxFontSize = (pages: ScreenPageGeometry[]): number | undefined => {
-  let max: number | undefined;
+/**
+ * Compute document-wide statistics from all selected page geometries.
+ *
+ * Call this once before per-page analysis and pass the result as
+ * `documentStats` to {@link analyzePageReflow} for consistent heading
+ * levels across pages.
+ */
+export const computeDocumentStats = (pages: ScreenPageGeometry[]): DocumentStats => {
+  let maxFontSize: number | undefined;
 
   for (const geo of pages) {
     const pageMax = computePageMaxFontSize(geo);
 
-    if (pageMax !== undefined && (max === undefined || pageMax > max)) {
-      max = pageMax;
+    if (pageMax !== undefined && (maxFontSize === undefined || pageMax > maxFontSize)) {
+      maxFontSize = pageMax;
     }
   }
 
-  return max;
+  return { maxFontSize };
 };
 const computeParagraphAvgFontSize = (paragraph: InternalParagraph): number | undefined => {
   let sum = 0;
@@ -1201,21 +1219,25 @@ const computeLineGaps = (lines: LineInfo[]): number[] => {
 
 /**
  * Determine the separator to place after a line:
- *  - Paragraph break (large vertical gap) → `\n\n`
+ *  - Empty line (gap ≥ {@link EMPTY_LINE_GAP_FACTOR}× line height) → `\n\n`
  *  - Full-width wrapping line → ` ` (space)
  *  - Short line → `\n` (explicit line break)
  */
 const lineSeparator = (
   gap: number | undefined,
-  line: LineInfo,
-  paragraphThreshold: number,
+  prevLine: LineInfo,
+  nextLine: LineInfo,
   maxRight: number,
 ): '\n\n' | '\n' | ' ' => {
-  if (gap !== undefined && gap > paragraphThreshold) {
-    return '\n\n';
+  if (gap !== undefined) {
+    const avgHeight = (prevLine.height + nextLine.height) / 2;
+
+    if (avgHeight > 0 && gap >= avgHeight * EMPTY_LINE_GAP_FACTOR) {
+      return '\n\n';
+    }
   }
 
-  const isFullWidth = maxRight > 0 && line.rightEdge >= maxRight * FULL_WIDTH_THRESHOLD;
+  const isFullWidth = maxRight > 0 && prevLine.rightEdge >= maxRight * FULL_WIDTH_THRESHOLD;
 
   if (isFullWidth) {
     return ' ';
@@ -1268,18 +1290,4 @@ const splitTextByGeometry = (rawText: string, range: PageSelectionRange, lines: 
   }
 
   return textLines;
-};
-
-/**
- * Compute the 25th percentile of a non-empty array of numbers.
- *
- * Using the lower quartile instead of the median better represents
- * body-text line spacing in documents where headings or paragraph gaps
- * inflate the upper half of the distribution.
- */
-const percentile25 = (values: number[]): number => {
-  const sorted = [...values].sort((a, b) => a - b);
-  const idx = Math.floor(sorted.length * 0.25);
-
-  return sorted[idx] ?? 0;
 };
