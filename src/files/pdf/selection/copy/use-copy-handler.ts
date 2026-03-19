@@ -189,6 +189,22 @@ const reflowPage = (rawText: string, range: PageSelectionRange, geo: ScreenPageG
   console.log('plain:', plain);
   // biome-ignore lint/suspicious/noConsole: temporary debug logging
   console.log('html:', html);
+  // biome-ignore lint/suspicious/noConsole: temporary — dump test fixture data for analyzePageReflow
+  console.log(
+    'TEST_FIXTURE:',
+    JSON.stringify({
+      pageText: geo.pageText,
+      runs: geo.runs.map((r) => ({
+        rect: r.rect,
+        charStart: r.charStart,
+        fontSize: r.fontSize,
+        fontWeight: r.fontWeight,
+        italic: r.italic,
+        fontName: r.fontName,
+        glyphs: r.glyphs.map((g) => ({ x: g.x, y: g.y, width: g.width, height: g.height, flags: g.flags })),
+      })),
+    }),
+  );
   // biome-ignore lint/suspicious/noConsole: temporary debug logging
   console.groupEnd();
 

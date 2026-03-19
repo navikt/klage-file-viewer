@@ -1,4 +1,19 @@
-export const PAGES_RAW_DATA = [
+interface Run {
+  rect: { x: number; y: number; width: number; height: number };
+  charStart: number;
+  fontSize: number;
+  fontWeight: number;
+  italic: boolean;
+  fontName: string;
+  glyphs: { x: number; y: number; width: number; height: number; flags: number }[];
+}
+
+export interface RawData {
+  pageText: string;
+  runs: Run[];
+}
+
+export const PAGES_RAW_DATA: RawData[] = [
   {
     pageText:
       '\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\nDato: 19. mars 2026Saken gjelder: FATTET ØRN MUSKELFødselsnummer: 148288 97927Klager: FORDEKT MATVAREFullmektig: FORDEKT MATVARESaksnummer: 9570Under er to avsnitt, ett med soft-break (linjeskift uten nytt avsnitt) ogett som knekker over flere linjer naturligEn helt plain setning, men her er et soft-breakher fortsetter teksten på neste linje etter soft-break.Selv om denne teksten går over flere linjer,er ikke linjene lange nok til å knekke naturlig.Dette er ikke en overskrift, bare et avsnitt med bold tekstMen dette er et nytt avsnitt. Her er teksten så lang at den knekker over flere linjer naturlig, imotsetning til avsnittet over hvor linjene ble delt opp ved å trykke på Shift+Enter.Under er det tre avsnitt med forskjellig tekstformateringEn setning med bold tekst.Et nytt avsnitt med kursiv tekst.Enda et nytt avsnitt med understreket tekst.Under er det flere typer listerPunktliste, punkt 1.Punktliste, punkt 2.Punktliste, punkt 3.1.Nummert liste, punkt 1.2.Nummert liste, punkt 2.3.Nummert liste, punkt 3.',

@@ -156,7 +156,7 @@ export const PAGES_EXPECTED_OUTPUT: ReflowParagraph[][] = [
   [
     {
       role: 'list-item',
-      listKind: 'ordered',
+      listKind: 'unordered',
       alignment: 'left',
       lines: [
         [
@@ -171,7 +171,7 @@ export const PAGES_EXPECTED_OUTPUT: ReflowParagraph[][] = [
     },
     {
       role: 'list-item',
-      listKind: 'ordered',
+      listKind: 'unordered',
       alignment: 'left',
       lines: [
         [
@@ -190,7 +190,8 @@ export const PAGES_EXPECTED_OUTPUT: ReflowParagraph[][] = [
       lines: [[{ text: 'Avsnittet under er rykket inn', bold: true, italic: false }]],
     },
     {
-      role: 'paragraph',
+      role: 'list-item',
+      listKind: 'unordered',
       alignment: 'left',
       lines: [
         [
@@ -215,18 +216,25 @@ export const PAGES_EXPECTED_OUTPUT: ReflowParagraph[][] = [
     {
       role: 'paragraph',
       alignment: 'left',
-      lines: [
-        [{ text: 'Celle A1 Celle B1 Celle C1', bold: false, italic: false }],
-        [{ text: 'Celle A2 Celle B2 Celle C2', bold: false, italic: false }],
-      ],
+      lines: [[{ text: 'Celle A1 Celle B1 Celle C1', bold: false, italic: false }]],
+    },
+    {
+      role: 'paragraph',
+      alignment: 'left',
+      lines: [[{ text: 'Celle A2 Celle B2 Celle C2', bold: false, italic: false }]],
     },
     {
       role: 'paragraph',
       alignment: 'left',
       lines: [
-        [{ text: 'D. Nordmann C. S.', bold: false, italic: false }],
+        [{ text: 'K. D. Nordmann C. S.', bold: false, italic: false }],
         [{ text: 'rådgiver avdelingsdirektør/saksbehandler', bold: false, italic: false }],
       ],
+    },
+    {
+      role: 'paragraph',
+      alignment: 'right',
+      lines: [[{ text: 'Side 2 av 2', bold: false, italic: false }]],
     },
   ],
 ];

@@ -13,29 +13,33 @@ import { GLYPH_FLAG_EMPTY } from '@/files/pdf/selection/types';
  * be derived from the same analysis without re-reading the geometry.
  */
 export interface ReflowParagraph {
-  lines: ReflowLine[];
+  /** Lines of styled spans. Each inner array is one line. */
+  lines: ReflowSpan[][];
   role: ParagraphRole;
-  /** Heading level 1–6. Only set when `role === 'heading'`. */
-  headingLevel: number | undefined;
+  /** Heading level 1–3. Only set when `role === 'heading'`. */
+  headingLevel?: number | undefined;
   /** List flavour. Only set when `role === 'list-item'`. */
-  listKind: 'ordered' | 'unordered' | undefined;
+  listKind?: 'ordered' | 'unordered' | undefined;
+  /** Text alignment detected from line geometry. */
+  alignment: TextAlignment;
 }
 
 export type ParagraphRole = 'paragraph' | 'heading' | 'list-item';
 
-export interface ReflowLine {
-  /** Full text of the line (convenience — concatenation of all span texts). */
-  text: string;
-  /** Styled spans within the line. */
+export type TextAlignment = 'left' | 'center' | 'right';
+
+/** Internal line representation with geometry fields used only during analysis. */
+interface InternalLine {
   spans: ReflowSpan[];
-  /**
-   * `true` when this line is a soft-wrap continuation of the previous line.
-   */
-  softWrap: boolean;
-  /** Dominant font size of this line (from geometry). */
+  text: string;
   fontSize: number | undefined;
-  /** Left edge x-coordinate of this line (from geometry). */
   leftEdge: number | undefined;
+  rightEdge: number | undefined;
+}
+
+/** Internal paragraph with InternalLine — stripped before returning. */
+interface InternalParagraph extends Omit<ReflowParagraph, 'lines'> {
+  lines: InternalLine[];
 }
 
 export interface ReflowSpan {
@@ -50,6 +54,9 @@ export interface PageReflow {
 }
 
 export const EMPTY_REFLOW: PageReflow = { plain: '', html: '' };
+
+/** Get the full text of a line by concatenating its span texts. */
+export const lineText = (line: ReflowSpan[]): string => line.map((s) => s.text).join('');
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -110,6 +117,15 @@ const FONT_SIZE_BREAK_RATIO = 1.1;
 // Analysis entry point
 // ---------------------------------------------------------------------------
 
+/** Strip internal geometry fields from lines before returning. */
+const stripInternalFields = (p: InternalParagraph): ReflowParagraph => ({
+  lines: p.lines.map(({ spans }) => spans),
+  role: p.role,
+  headingLevel: p.headingLevel,
+  listKind: p.listKind,
+  alignment: p.alignment,
+});
+
 /**
  * Build the intermediate {@link ReflowParagraph} model from raw text and
  * page geometry.
@@ -125,7 +141,7 @@ export const analyzePageReflow = (
   const baselineLeftEdge = computeBaselineLeftEdge(geo);
   const maxRight = computePageMaxRight(geo);
 
-  let paragraphs: ReflowParagraph[];
+  let paragraphs: InternalParagraph[];
 
   if (lineInfos.length < MIN_LINES_FOR_STATS || computeLineGaps(lineInfos).length === 0) {
     paragraphs = buildSingleBlockParagraph(rawText, range, geo, baselineWeight, lineInfos);
@@ -134,10 +150,11 @@ export const analyzePageReflow = (
   }
 
   for (const paragraph of paragraphs) {
+    paragraph.alignment = detectAlignment(paragraph, maxRight);
     classifyParagraph(paragraph, baselineFontSize, baselineLeftEdge);
   }
 
-  return paragraphs;
+  return paragraphs.map(stripInternalFields);
 };
 
 /** Build a single paragraph when there aren't enough lines for gap analysis. */
@@ -147,7 +164,7 @@ const buildSingleBlockParagraph = (
   geo: ScreenPageGeometry,
   baselineWeight: number | undefined,
   lineInfos: LineInfo[],
-): ReflowParagraph[] => {
+): InternalParagraph[] => {
   const fontSize = lineInfos[0]?.dominantFontSize;
   const leftEdge = lineInfos[0]?.leftEdge;
   const spans = buildSpansForRange(
@@ -161,10 +178,11 @@ const buildSingleBlockParagraph = (
 
   return [
     {
-      lines: [{ text: rawText, spans, softWrap: false, fontSize, leftEdge }],
+      lines: [{ text: rawText, spans, fontSize, leftEdge, rightEdge: undefined }],
       role: 'paragraph',
       headingLevel: undefined,
       listKind: undefined,
+      alignment: 'left',
     },
   ];
 };
@@ -178,20 +196,21 @@ const buildMultiLineParagraphs = (
   lineInfos: LineInfo[],
   maxRight: number,
   baselineLeftEdge: number | undefined,
-): ReflowParagraph[] => {
+): InternalParagraph[] => {
   const gaps = computeLineGaps(lineInfos);
   const medianGap = median(gaps);
   const paragraphThreshold = medianGap * PARAGRAPH_GAP_FACTOR;
   const textLines = splitTextByGeometry(rawText, range, lineInfos);
 
-  const makeParagraph = (): ReflowParagraph => ({
+  const makeParagraph = (): InternalParagraph => ({
     lines: [],
     role: 'paragraph',
     headingLevel: undefined,
     listKind: undefined,
+    alignment: 'left',
   });
 
-  const paragraphs: ReflowParagraph[] = [makeParagraph()];
+  const paragraphs: InternalParagraph[] = [makeParagraph()];
 
   for (let i = 0; i < textLines.length; i++) {
     const text = textLines[i];
@@ -208,18 +227,9 @@ const buildMultiLineParagraphs = (
 
       if (prevLineInfo !== undefined) {
         sep = lineSeparator(gaps[i - 1], prevLineInfo, paragraphThreshold, maxRight, text);
-
-        if (sep !== '\n\n' && hasFontSizeChange(prevLineInfo, lineInfo)) {
-          sep = '\n\n';
-        }
       }
 
-      // Force a paragraph break when a line starts a new list item — list
-      // items typically have the same gap as normal line spacing so the
-      // gap-based splitter won't catch them.
-      if (sep !== '\n\n' && isListItemStart(text, lineInfo, baselineLeftEdge)) {
-        sep = '\n\n';
-      }
+      sep = refineSeparator(sep, text, lineInfo, lineInfos[i - 1], baselineLeftEdge);
     }
 
     if (sep === '\n\n') {
@@ -238,13 +248,22 @@ const buildMultiLineParagraphs = (
         baselineWeight,
       );
 
-      currentParagraph.lines.push({
-        text,
-        spans,
-        softWrap: sep === ' ',
-        fontSize: lineInfo.dominantFontSize,
-        leftEdge: lineInfo.leftEdge,
-      });
+      const lastLine = currentParagraph.lines[currentParagraph.lines.length - 1];
+
+      // Soft-wrap: merge into the previous line with a space.
+      if (sep === ' ' && lastLine !== undefined) {
+        lastLine.text += ` ${text}`;
+        lastLine.spans.push({ text: ' ', bold: false, italic: false }, ...spans);
+        lastLine.rightEdge = lineInfo.rightEdge;
+      } else {
+        currentParagraph.lines.push({
+          text,
+          spans,
+          fontSize: lineInfo.dominantFontSize,
+          leftEdge: lineInfo.leftEdge,
+          rightEdge: lineInfo.rightEdge,
+        });
+      }
     }
   }
 
@@ -252,20 +271,50 @@ const buildMultiLineParagraphs = (
 };
 
 /**
- * Check whether a line looks like the start of a new list item — either via
- * a text marker (bullet / number) or via indentation relative to the page
- * baseline left edge.
+ * Check whether a line is indented relative to the page baseline left edge,
+ * suggesting it belongs to a list whose bullet/marker is not in the text.
  */
-const isListItemStart = (text: string, lineInfo: LineInfo, baselineLeftEdge: number | undefined): boolean => {
+const isIndentedLine = (lineInfo: LineInfo, baselineLeftEdge: number | undefined): boolean => {
+  if (baselineLeftEdge === undefined) {
+    return false;
+  }
+
+  return lineInfo.leftEdge >= baselineLeftEdge + LIST_INDENT_THRESHOLD;
+};
+
+/**
+ * Refine a separator produced by {@link lineSeparator} with additional
+ * heuristics for font-size changes and list-item boundaries.
+ *
+ * Text-based list markers (e.g. "1.", "a)") override even soft-wrap because a
+ * marker at the start of a line is unambiguous. Geometry-only detection
+ * (indentation) only promotes hard-break lines — a soft-wrapped continuation
+ * shares the same indentation as the list item's first line.
+ */
+const refineSeparator = (
+  sep: '\n\n' | '\n' | ' ' | null,
+  text: string,
+  lineInfo: LineInfo,
+  prevLineInfo: LineInfo | undefined,
+  baselineLeftEdge: number | undefined,
+): '\n\n' | '\n' | ' ' | null => {
+  if (sep === '\n\n') {
+    return sep;
+  }
+
+  if (prevLineInfo !== undefined && hasFontSizeChange(prevLineInfo, lineInfo)) {
+    return '\n\n';
+  }
+
   if (detectListMarker(text) !== null) {
-    return true;
+    return '\n\n';
   }
 
-  if (baselineLeftEdge !== undefined && lineInfo.leftEdge >= baselineLeftEdge + LIST_INDENT_THRESHOLD) {
-    return true;
+  if (sep !== ' ' && isIndentedLine(lineInfo, baselineLeftEdge)) {
+    return '\n\n';
   }
 
-  return false;
+  return sep;
 };
 
 // ---------------------------------------------------------------------------
@@ -432,6 +481,65 @@ const computePageBaselineFontWeight = (geo: ScreenPageGeometry): number | undefi
 };
 
 // ---------------------------------------------------------------------------
+// Alignment detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Tolerance (in screen pixels) for edge consistency. Lines whose left (or
+ * right) edges are within this distance of each other are considered aligned.
+ */
+const ALIGNMENT_TOLERANCE = 4;
+
+/**
+ * Detect the text alignment of a paragraph by comparing the variance of left
+ * and right edges across its lines.
+ *
+ * - **Left-aligned**: left edges are consistent, right edges vary.
+ * - **Right-aligned**: right edges are consistent, left edges vary.
+ * - **Center-aligned**: both edges vary but the center is consistent.
+ *
+ * Single-line paragraphs default to `'left'` since there's nothing to compare.
+ */
+const detectAlignment = (paragraph: InternalParagraph, maxRight: number): TextAlignment => {
+  const lines = paragraph.lines.filter((l) => l.leftEdge !== undefined && l.rightEdge !== undefined);
+
+  if (lines.length < 2) {
+    return 'left';
+  }
+
+  const leftEdges = lines.map((l) => l.leftEdge ?? 0);
+  const rightEdges = lines.map((l) => l.rightEdge ?? maxRight);
+
+  const leftSpread = Math.max(...leftEdges) - Math.min(...leftEdges);
+  const rightSpread = Math.max(...rightEdges) - Math.min(...rightEdges);
+
+  const leftConsistent = leftSpread <= ALIGNMENT_TOLERANCE;
+  const rightConsistent = rightSpread <= ALIGNMENT_TOLERANCE;
+
+  if (leftConsistent && rightConsistent) {
+    return 'left';
+  }
+
+  if (rightConsistent && !leftConsistent) {
+    return 'right';
+  }
+
+  if (leftConsistent && !rightConsistent) {
+    return 'left';
+  }
+
+  // Both vary — check for center alignment via consistent midpoints.
+  const centers = lines.map((l) => ((l.leftEdge ?? 0) + (l.rightEdge ?? maxRight)) / 2);
+  const centerSpread = Math.max(...centers) - Math.min(...centers);
+
+  if (centerSpread <= ALIGNMENT_TOLERANCE) {
+    return 'center';
+  }
+
+  return 'left';
+};
+
+// ---------------------------------------------------------------------------
 // Paragraph classification — heading, list, or plain paragraph
 // ---------------------------------------------------------------------------
 
@@ -444,7 +552,7 @@ const LIST_INDENT_THRESHOLD = 8;
 
 /** Classify a paragraph's role based on font size, line count, and text patterns. */
 const classifyParagraph = (
-  paragraph: ReflowParagraph,
+  paragraph: InternalParagraph,
   baselineFontSize: number | undefined,
   baselineLeftEdge: number | undefined,
 ): void => {
@@ -471,8 +579,9 @@ const classifyParagraph = (
 
   // Geometry-based unordered list detection: the paragraph is indented
   // relative to the page baseline left edge, suggesting a bullet rendered
-  // outside the text stream.
-  if (isIndentedParagraph(paragraph, baselineLeftEdge)) {
+  // outside the text stream. Only applies to left-aligned text — right or
+  // center alignment naturally shifts the left edge.
+  if (paragraph.alignment === 'left' && isIndentedParagraph(paragraph, baselineLeftEdge)) {
     paragraph.role = 'list-item';
     paragraph.listKind = 'unordered';
 
@@ -496,10 +605,8 @@ const classifyParagraph = (
     return;
   }
 
-  // Headings are short — reject paragraphs with many hard-break lines.
-  const hardLines = paragraph.lines.filter((l) => !l.softWrap).length;
-
-  if (hardLines > HEADING_MAX_LINES) {
+  // Headings are short — reject paragraphs with many lines.
+  if (paragraph.lines.length > HEADING_MAX_LINES) {
     return;
   }
 
@@ -512,7 +619,7 @@ const classifyParagraph = (
  * edge. This detects list items whose bullet glyph is not part of the text
  * stream — the visible text starts further right than normal body text.
  */
-const isIndentedParagraph = (paragraph: ReflowParagraph, baselineLeftEdge: number | undefined): boolean => {
+const isIndentedParagraph = (paragraph: InternalParagraph, baselineLeftEdge: number | undefined): boolean => {
   if (baselineLeftEdge === undefined) {
     return false;
   }
@@ -572,7 +679,7 @@ const detectListMarker = (text: string): ListMarkerMatch | null => {
 };
 
 /** Remove the list marker from the first span of the paragraph. */
-const stripListMarker = (paragraph: ReflowParagraph, markerLength: number): void => {
+const stripListMarker = (paragraph: InternalParagraph, markerLength: number): void => {
   const firstLine = paragraph.lines[0];
 
   if (firstLine === undefined) {
@@ -650,7 +757,7 @@ const computeBaselineFontSize = (geo: ScreenPageGeometry): number | undefined =>
 };
 
 /** Compute the average font size from a paragraph's lines. */
-const computeParagraphAvgFontSize = (paragraph: ReflowParagraph): number | undefined => {
+const computeParagraphAvgFontSize = (paragraph: InternalParagraph): number | undefined => {
   let sum = 0;
   let count = 0;
 
