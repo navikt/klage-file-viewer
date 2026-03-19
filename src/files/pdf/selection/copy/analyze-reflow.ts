@@ -34,6 +34,8 @@ export interface ReflowLine {
   softWrap: boolean;
   /** Dominant font size of this line (from geometry). */
   fontSize: number | undefined;
+  /** Left edge x-coordinate of this line (from geometry). */
+  leftEdge: number | undefined;
 }
 
 export interface ReflowSpan {
@@ -120,6 +122,7 @@ export const analyzePageReflow = (
   const lineInfos = collectLineInfo(range, geo);
   const baselineWeight = computePageBaselineFontWeight(geo);
   const baselineFontSize = computeBaselineFontSize(geo);
+  const baselineLeftEdge = computeBaselineLeftEdge(geo);
   const maxRight = computePageMaxRight(geo);
 
   let paragraphs: ReflowParagraph[];
@@ -127,11 +130,11 @@ export const analyzePageReflow = (
   if (lineInfos.length < MIN_LINES_FOR_STATS || computeLineGaps(lineInfos).length === 0) {
     paragraphs = buildSingleBlockParagraph(rawText, range, geo, baselineWeight, lineInfos);
   } else {
-    paragraphs = buildMultiLineParagraphs(rawText, range, geo, baselineWeight, lineInfos, maxRight);
+    paragraphs = buildMultiLineParagraphs(rawText, range, geo, baselineWeight, lineInfos, maxRight, baselineLeftEdge);
   }
 
   for (const paragraph of paragraphs) {
-    classifyParagraph(paragraph, baselineFontSize);
+    classifyParagraph(paragraph, baselineFontSize, baselineLeftEdge);
   }
 
   return paragraphs;
@@ -146,6 +149,7 @@ const buildSingleBlockParagraph = (
   lineInfos: LineInfo[],
 ): ReflowParagraph[] => {
   const fontSize = lineInfos[0]?.dominantFontSize;
+  const leftEdge = lineInfos[0]?.leftEdge;
   const spans = buildSpansForRange(
     range.startCharIndex,
     range.endCharIndex,
@@ -157,7 +161,7 @@ const buildSingleBlockParagraph = (
 
   return [
     {
-      lines: [{ text: rawText, spans, softWrap: false, fontSize }],
+      lines: [{ text: rawText, spans, softWrap: false, fontSize, leftEdge }],
       role: 'paragraph',
       headingLevel: undefined,
       listKind: undefined,
@@ -173,6 +177,7 @@ const buildMultiLineParagraphs = (
   baselineWeight: number | undefined,
   lineInfos: LineInfo[],
   maxRight: number,
+  baselineLeftEdge: number | undefined,
 ): ReflowParagraph[] => {
   const gaps = computeLineGaps(lineInfos);
   const medianGap = median(gaps);
@@ -208,6 +213,13 @@ const buildMultiLineParagraphs = (
           sep = '\n\n';
         }
       }
+
+      // Force a paragraph break when a line starts a new list item — list
+      // items typically have the same gap as normal line spacing so the
+      // gap-based splitter won't catch them.
+      if (sep !== '\n\n' && isListItemStart(text, lineInfo, baselineLeftEdge)) {
+        sep = '\n\n';
+      }
     }
 
     if (sep === '\n\n') {
@@ -226,11 +238,34 @@ const buildMultiLineParagraphs = (
         baselineWeight,
       );
 
-      currentParagraph.lines.push({ text, spans, softWrap: sep === ' ', fontSize: lineInfo.dominantFontSize });
+      currentParagraph.lines.push({
+        text,
+        spans,
+        softWrap: sep === ' ',
+        fontSize: lineInfo.dominantFontSize,
+        leftEdge: lineInfo.leftEdge,
+      });
     }
   }
 
   return paragraphs;
+};
+
+/**
+ * Check whether a line looks like the start of a new list item — either via
+ * a text marker (bullet / number) or via indentation relative to the page
+ * baseline left edge.
+ */
+const isListItemStart = (text: string, lineInfo: LineInfo, baselineLeftEdge: number | undefined): boolean => {
+  if (detectListMarker(text) !== null) {
+    return true;
+  }
+
+  if (baselineLeftEdge !== undefined && lineInfo.leftEdge >= baselineLeftEdge + LIST_INDENT_THRESHOLD) {
+    return true;
+  }
+
+  return false;
 };
 
 // ---------------------------------------------------------------------------
@@ -400,8 +435,19 @@ const computePageBaselineFontWeight = (geo: ScreenPageGeometry): number | undefi
 // Paragraph classification — heading, list, or plain paragraph
 // ---------------------------------------------------------------------------
 
+/**
+ * Minimum indentation (in screen-coordinate pixels) relative to the page
+ * baseline left edge for a paragraph to be considered a list item when no
+ * text-based marker is found.
+ */
+const LIST_INDENT_THRESHOLD = 8;
+
 /** Classify a paragraph's role based on font size, line count, and text patterns. */
-const classifyParagraph = (paragraph: ReflowParagraph, baselineFontSize: number | undefined): void => {
+const classifyParagraph = (
+  paragraph: ReflowParagraph,
+  baselineFontSize: number | undefined,
+  baselineLeftEdge: number | undefined,
+): void => {
   if (paragraph.lines.length === 0) {
     return;
   }
@@ -419,6 +465,16 @@ const classifyParagraph = (paragraph: ReflowParagraph, baselineFontSize: number 
     paragraph.role = 'list-item';
     paragraph.listKind = listMatch.kind;
     stripListMarker(paragraph, listMatch.markerLength);
+
+    return;
+  }
+
+  // Geometry-based unordered list detection: the paragraph is indented
+  // relative to the page baseline left edge, suggesting a bullet rendered
+  // outside the text stream.
+  if (isIndentedParagraph(paragraph, baselineLeftEdge)) {
+    paragraph.role = 'list-item';
+    paragraph.listKind = 'unordered';
 
     return;
   }
@@ -451,6 +507,25 @@ const classifyParagraph = (paragraph: ReflowParagraph, baselineFontSize: number 
   paragraph.headingLevel = headingLevelFromRatio(ratio);
 };
 
+/**
+ * Check whether a paragraph is indented relative to the page baseline left
+ * edge. This detects list items whose bullet glyph is not part of the text
+ * stream — the visible text starts further right than normal body text.
+ */
+const isIndentedParagraph = (paragraph: ReflowParagraph, baselineLeftEdge: number | undefined): boolean => {
+  if (baselineLeftEdge === undefined) {
+    return false;
+  }
+
+  const firstLine = paragraph.lines[0];
+
+  if (firstLine?.leftEdge === undefined) {
+    return false;
+  }
+
+  return firstLine.leftEdge >= baselineLeftEdge + LIST_INDENT_THRESHOLD;
+};
+
 /** Map a font-size ratio to a heading level (1–3). */
 const headingLevelFromRatio = (ratio: number): number => {
   if (ratio >= 1.8) {
@@ -477,8 +552,8 @@ interface ListMarkerMatch {
 const UNORDERED_MARKER =
   /^[\s]*([\u2022\u2023\u2043\u25AA\u25AB\u25B8\u25BA\u25CB\u25CF\u25E6\u2013\u2014\u2015\u2219\u27A2\u2010\-*\u00B7])\s+/;
 
-/** Ordered list: digits, letters, or roman numerals followed by `.` or `)`. */
-const ORDERED_MARKER = /^[\s]*(\d{1,4}[.)]|[a-zA-Z][.)]|[ivxlIVXL]{1,6}[.)])\s+/;
+/** Ordered list: digits, letters, or roman numerals followed by `.` or `)`, with optional trailing space. */
+const ORDERED_MARKER = /^[\s]*(\d{1,4}[.)]|[a-zA-Z][.)]|[ivxlIVXL]{1,6}[.)])\s*/;
 
 const detectListMarker = (text: string): ListMarkerMatch | null => {
   const unordered = text.match(UNORDERED_MARKER);
@@ -587,6 +662,45 @@ const computeParagraphAvgFontSize = (paragraph: ReflowParagraph): number | undef
   }
 
   return count > 0 ? sum / count : undefined;
+};
+
+/**
+ * Compute the baseline (body) left edge from ALL visible runs on the page.
+ *
+ * Uses a character-count-weighted mode bucketed to the nearest pixel. This
+ * represents the most common left alignment on the page — list items whose
+ * text starts further right than this are considered indented.
+ */
+const computeBaselineLeftEdge = (geo: ScreenPageGeometry): number | undefined => {
+  const edgeCounts = new Map<number, number>();
+
+  for (const run of geo.runs) {
+    const hasVisible = run.glyphs.some((g) => g.flags !== GLYPH_FLAG_EMPTY);
+
+    if (!hasVisible) {
+      continue;
+    }
+
+    const rounded = Math.round(run.rect.x);
+    const charCount = run.glyphs.length;
+    edgeCounts.set(rounded, (edgeCounts.get(rounded) ?? 0) + charCount);
+  }
+
+  if (edgeCounts.size === 0) {
+    return undefined;
+  }
+
+  let maxCount = 0;
+  let mode: number | undefined;
+
+  for (const [edge, count] of edgeCounts) {
+    if (count > maxCount) {
+      maxCount = count;
+      mode = edge;
+    }
+  }
+
+  return mode;
 };
 
 // ---------------------------------------------------------------------------
