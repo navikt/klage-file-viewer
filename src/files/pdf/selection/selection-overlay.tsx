@@ -1,6 +1,6 @@
 import type { Rotation } from '@embedpdf/models';
 import { useCallback, useRef, useState } from 'react';
-import { glyphAt, screenToGlyph } from '@/files/pdf/selection/hit-test';
+import { glyphAt, screenToGlyph, snapToNearest } from '@/files/pdf/selection/hit-test';
 import type { PageSelectionRange, ScreenPageGeometry, ScreenRun } from '@/files/pdf/selection/types';
 import { GLYPH_FLAG_EMPTY } from '@/files/pdf/selection/types';
 
@@ -28,27 +28,61 @@ export const SelectionOverlay = ({
   const overlayRef = useRef<HTMLDivElement>(null);
   const [isOverText, setIsOverText] = useState(false);
 
-  const hitTest = useCallback(
-    (clientX: number, clientY: number): number => {
+  /** Transform client coordinates to glyph space. */
+  const toGlyphCoords = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
       if (geometry === null || geometry.runs.length === 0 || overlayRef.current === null) {
-        return -1;
+        return null;
       }
 
       const rect = overlayRef.current.getBoundingClientRect();
-
-      // When the page is rotated via CSS transform, getBoundingClientRect()
-      // returns the axis-aligned bounding box in screen space. The coordinates
-      // (clientX - rect.left, clientY - rect.top) are therefore in the
-      // *rotated* screen space. We need to map them back into the
-      // untransformed coordinate space where glyph positions live.
       const sx = clientX - rect.left;
       const sy = clientY - rect.top;
 
-      const { x, y } = screenToGlyph(sx, sy, rotation, baseWidth, baseHeight);
-
-      return glyphAt(geometry, x, y);
+      return screenToGlyph(sx, sy, rotation, baseWidth, baseHeight);
     },
     [geometry, rotation, baseWidth, baseHeight],
+  );
+
+  /** Precise glyph hit-test for hover cursor feedback. */
+  const glyphHitTest = useCallback(
+    (clientX: number, clientY: number): number => {
+      if (geometry === null) {
+        return -1;
+      }
+
+      const coords = toGlyphCoords(clientX, clientY);
+
+      return coords !== null ? glyphAt(geometry, coords.x, coords.y) : -1;
+    },
+    [geometry, toGlyphCoords],
+  );
+
+  /**
+   * Hit-test with snap fallback — clicking in whitespace near text starts a
+   * selection at the nearest line boundary, matching the drag behaviour.
+   */
+  const selectionHitTest = useCallback(
+    (clientX: number, clientY: number): number => {
+      if (geometry === null) {
+        return -1;
+      }
+
+      const coords = toGlyphCoords(clientX, clientY);
+
+      if (coords === null) {
+        return -1;
+      }
+
+      const charIndex = glyphAt(geometry, coords.x, coords.y);
+
+      if (charIndex >= 0) {
+        return charIndex;
+      }
+
+      return snapToNearest(geometry, coords.x, coords.y);
+    },
+    [geometry, toGlyphCoords],
   );
 
   /**
@@ -63,11 +97,11 @@ export const SelectionOverlay = ({
         return;
       }
 
-      const charIndex = hitTest(e.clientX, e.clientY);
+      const charIndex = selectionHitTest(e.clientX, e.clientY);
 
       onMouseDown(pageIndex, charIndex, e.detail);
     },
-    [hitTest, pageIndex, onMouseDown],
+    [selectionHitTest, pageIndex, onMouseDown],
   );
 
   /**
@@ -82,10 +116,10 @@ export const SelectionOverlay = ({
         return;
       }
 
-      const charIndex = hitTest(e.clientX, e.clientY);
+      const charIndex = glyphHitTest(e.clientX, e.clientY);
       setIsOverText(charIndex >= 0);
     },
-    [isSelecting, hitTest],
+    [isSelecting, glyphHitTest],
   );
 
   // Build selection rectangles from runs
