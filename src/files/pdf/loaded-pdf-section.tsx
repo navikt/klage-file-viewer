@@ -13,7 +13,7 @@ import { PasswordProtectedInfoCard } from '@/files/pdf/password/password-protect
 import { usePdfEngine } from '@/files/pdf/pdf-engine-context';
 import { PlaceholderWrapper } from '@/files/pdf/pdf-section-placeholder';
 import type { HighlightRect } from '@/files/pdf/search/types';
-import { useCopyHandler } from '@/files/pdf/selection/use-copy-handler';
+import { useCopyHandler } from '@/files/pdf/selection/copy/use-copy-handler';
 import { useDocumentPointerTracking } from '@/files/pdf/selection/use-document-pointer-tracking';
 import { useTextSelection } from '@/files/pdf/selection/use-text-selection';
 import { PasswordStatus, usePdfDocument } from '@/files/pdf/use-pdf-document';
