@@ -28,6 +28,7 @@ const buildGeo = (raw: RawData): ScreenPageGeometry => ({
   })),
   pageText: raw.pageText,
   visualToOriginal: undefined,
+  pageWidth: raw.pageWidth,
 });
 
 /** Build a full-page selection range from raw data. */

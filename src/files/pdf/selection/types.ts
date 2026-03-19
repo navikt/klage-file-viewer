@@ -107,4 +107,13 @@ export interface ScreenPageGeometry {
    * are identical.
    */
   visualToOriginal: number[] | undefined;
+  /**
+   * The page width in screen coordinates (page.size.width × scale).
+   *
+   * Used by the reflow analysis to determine whether a line reaches the
+   * right edge of the page (i.e. is word-wrapped vs explicitly short).
+   * Without this, a page whose longest line is short (e.g. an address
+   * block) would treat all lines as "full width" and merge them.
+   */
+  pageWidth: number | undefined;
 }

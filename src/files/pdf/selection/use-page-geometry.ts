@@ -11,6 +11,8 @@ interface RawPageData {
   geometry: PageGeometry;
   pageText: string | undefined;
   textRuns: PdfTextRun[];
+  /** Page width in engine units (before scaling). */
+  pageWidth: number;
 }
 
 /**
@@ -89,7 +91,7 @@ export const usePageGeometry = (
 
         if (!cancelled) {
           fetchedPageRef.current = page.index;
-          setRawData({ geometry, pageText, textRuns: textRunsResult.runs });
+          setRawData({ geometry, pageText, textRuns: textRunsResult.runs, pageWidth: page.size.width });
         }
       } catch {
         // Geometry extraction is best-effort — selection simply won't work
@@ -112,7 +114,7 @@ export const usePageGeometry = (
       return null;
     }
 
-    return transformGeometry(rawData.geometry, scale, rawData.pageText, rawData.textRuns);
+    return transformGeometry(rawData.geometry, scale, rawData.pageText, rawData.textRuns, rawData.pageWidth);
   }, [rawData, scale]);
 
   return { geometry };
@@ -156,6 +158,7 @@ const transformGeometry = (
   scale: number,
   pageText: string | undefined,
   textRuns: PdfTextRun[],
+  pageWidth: number,
 ): ScreenPageGeometry => {
   const factor = scale / 100;
   const fontLookup = buildFontLookup(textRuns);
@@ -179,7 +182,7 @@ const transformGeometry = (
     };
   });
 
-  return reorderRunsVisually(runs, pageText);
+  return reorderRunsVisually(runs, pageText, pageWidth * factor);
 };
 
 /**
@@ -248,9 +251,13 @@ const SAME_LINE_OVERLAP = 0.5;
  * When the content-stream order already matches visual order the function
  * returns early without allocating a mapping array.
  */
-const reorderRunsVisually = (runs: ScreenRun[], pageText: string | undefined): ScreenPageGeometry => {
+const reorderRunsVisually = (
+  runs: ScreenRun[],
+  pageText: string | undefined,
+  pageWidth: number,
+): ScreenPageGeometry => {
   if (runs.length <= 1) {
-    return { runs, pageText, visualToOriginal: undefined };
+    return { runs, pageText, visualToOriginal: undefined, pageWidth };
   }
 
   // Pair each run with its original array index so we can detect reordering.
@@ -284,7 +291,7 @@ const reorderRunsVisually = (runs: ScreenRun[], pageText: string | undefined): S
   const orderChanged = sorted.some((entry, i) => entry.originalIdx !== i);
 
   if (!orderChanged) {
-    return { runs, pageText, visualToOriginal: undefined };
+    return { runs, pageText, visualToOriginal: undefined, pageWidth };
   }
 
   // Build the visual-to-original char index mapping and reassign charStart.
@@ -318,7 +325,7 @@ const reorderRunsVisually = (runs: ScreenRun[], pageText: string | undefined): S
     remappedPageText = chars.join('');
   }
 
-  return { runs: reorderedRuns, pageText: remappedPageText, visualToOriginal };
+  return { runs: reorderedRuns, pageText: remappedPageText, visualToOriginal, pageWidth };
 };
 
 /**

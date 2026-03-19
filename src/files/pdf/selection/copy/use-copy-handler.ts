@@ -214,6 +214,7 @@ const reflowPage = (
     'TEST_FIXTURE:',
     JSON.stringify({
       pageText: geo.pageText,
+      pageWidth: geo.pageWidth,
       runs: geo.runs.map((r) => ({
         rect: r.rect,
         charStart: r.charStart,

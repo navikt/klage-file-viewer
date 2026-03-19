@@ -11,10 +11,13 @@ interface Run {
 export interface RawData {
   pageText: string;
   runs: Run[];
+  /** Page width in screen coordinates. Used for full-width line detection. */
+  pageWidth?: number;
 }
 
 export const PAGES_RAW_DATA: RawData[] = [
   {
+    pageWidth: 672.67,
     pageText:
       '\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\nDato: 19. mars 2026Saken gjelder: FATTET ØRN MUSKELFødselsnummer: 148288 97927Klager: FORDEKT MATVAREFullmektig: FORDEKT MATVARESaksnummer: 9570Under er to avsnitt, ett med soft-break (linjeskift uten nytt avsnitt) ogett som knekker over flere linjer naturligEn helt plain setning, men her er et soft-breakher fortsetter teksten på neste linje etter soft-break.Selv om denne teksten går over flere linjer,er ikke linjene lange nok til å knekke naturlig.Dette er ikke en overskrift, bare et avsnitt med bold tekstMen dette er et nytt avsnitt. Her er teksten så lang at den knekker over flere linjer naturlig, imotsetning til avsnittet over hvor linjene ble delt opp ved å trykke på Shift+Enter.Under er det tre avsnitt med forskjellig tekstformateringEn setning med bold tekst.Et nytt avsnitt med kursiv tekst.Enda et nytt avsnitt med understreket tekst.Under er det flere typer listerPunktliste, punkt 1.Punktliste, punkt 2.Punktliste, punkt 3.1.Nummert liste, punkt 1.2.Nummert liste, punkt 2.3.Nummert liste, punkt 3.',
     runs: [
@@ -1810,6 +1813,7 @@ export const PAGES_RAW_DATA: RawData[] = [
     ],
   },
   {
+    pageWidth: 672.67,
     pageText:
       "\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n  \r\n  \r\n\r\n\r\n\r\nLorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum hasbeen the industry's standard dummy text ever since the 1500s, when an unknown printertook a galley of type and scrambled it to make a type specimen book.It has survived not only five centuries, but also the leap into electronic typesetting, remainingessentially unchanged.Avsnittet under er rykket innDette avsnittet er rykket inn ett hakk. Dette avsnittet er rykket inn ett hakk. Dette avsnitteter rykket inn ett hakk. Dette avsnittet er rykket inn ett hakk. Dette avsnittet er rykket inn etthakk. Dette avsnittet er rykket inn ett hakk.Dette avsnittet er midtstilt.Dette avsnittet er høyrestilt.Celle A1Celle B1Celle C1Celle A2Celle B2Celle C2K. D. NordmannC. S.rådgiveravdelingsdirektør/saksbehandlerSide 2 av 2",
     runs: [

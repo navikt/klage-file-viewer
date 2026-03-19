@@ -1134,9 +1134,18 @@ const collectLineInfo = (range: PageSelectionRange, geo: ScreenPageGeometry): Li
 // ---------------------------------------------------------------------------
 
 /**
- * Compute the maximum right edge across all visible runs on the page.
+ * Compute the maximum right edge for full-width detection.
+ *
+ * When the geometry includes a `pageWidth` (from the PDF page dimensions),
+ * we use that so a page with only short lines doesn't falsely treat them
+ * as "full width." Falls back to the rightmost text edge when `pageWidth`
+ * is not available (e.g. in test fixtures without it).
  */
 const computePageMaxRight = (geo: ScreenPageGeometry): number => {
+  if (geo.pageWidth !== undefined && geo.pageWidth > 0) {
+    return geo.pageWidth;
+  }
+
   let maxRight = 0;
 
   for (const run of geo.runs) {
