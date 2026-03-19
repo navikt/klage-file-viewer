@@ -1,4 +1,4 @@
-import type { PdfDocumentObject, PdfEngine, PdfPageObject } from '@embedpdf/models';
+import type { PdfDocumentObject, PdfEngine, PdfPageObject, PdfTextRun } from '@embedpdf/models';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PageGeometry, ScreenPageGeometry, ScreenRun, ScreenRunGlyph } from '@/files/pdf/selection/types';
 
@@ -6,10 +6,11 @@ interface UsePageGeometryResult {
   geometry: ScreenPageGeometry | null;
 }
 
-/** Raw data fetched from the engine for a single page — geometry + text. */
+/** Raw data fetched from the engine for a single page — geometry + text + font info. */
 interface RawPageData {
   geometry: PageGeometry;
   pageText: string | undefined;
+  textRuns: PdfTextRun[];
 }
 
 /**
@@ -55,7 +56,13 @@ export const usePageGeometry = (
 
     const fetchData = async () => {
       try {
-        const geometry = await engine.getPageGeometry(doc, page).toPromise();
+        const [geometry, textRunsResult] = await Promise.all([
+          engine.getPageGeometry(doc, page).toPromise(),
+          engine
+            .getPageTextRuns(doc, page)
+            .toPromise()
+            .catch(() => ({ runs: [] as PdfTextRun[] })),
+        ]);
 
         if (cancelled) {
           return;
@@ -82,7 +89,7 @@ export const usePageGeometry = (
 
         if (!cancelled) {
           fetchedPageRef.current = page.index;
-          setRawData({ geometry, pageText });
+          setRawData({ geometry, pageText, textRuns: textRunsResult.runs });
         }
       } catch {
         // Geometry extraction is best-effort — selection simply won't work
@@ -105,7 +112,7 @@ export const usePageGeometry = (
       return null;
     }
 
-    return transformGeometry(rawData.geometry, scale, rawData.pageText);
+    return transformGeometry(rawData.geometry, scale, rawData.pageText, rawData.textRuns);
   }, [rawData, scale]);
 
   return { geometry };
@@ -144,22 +151,58 @@ const getTotalCharCountFromGeometry = (geo: PageGeometry): number => {
  * forward/backward selection, contiguous range highlighting, and copy all
  * work correctly without special-casing non-visual ordering.
  */
-const transformGeometry = (raw: PageGeometry, scale: number, pageText: string | undefined): ScreenPageGeometry => {
+const transformGeometry = (
+  raw: PageGeometry,
+  scale: number,
+  pageText: string | undefined,
+  textRuns: PdfTextRun[],
+): ScreenPageGeometry => {
   const factor = scale / 100;
+  const fontLookup = buildFontLookup(textRuns);
 
-  const runs: ScreenRun[] = raw.runs.map((run) => ({
-    rect: {
-      x: run.rect.x * factor,
-      y: run.rect.y * factor,
-      width: run.rect.width * factor,
-      height: run.rect.height * factor,
-    },
-    charStart: run.charStart,
-    glyphs: run.glyphs.map((g) => transformGlyph(g, factor)),
-    fontSize: run.fontSize,
-  }));
+  const runs: ScreenRun[] = raw.runs.map((run) => {
+    const fontInfo = fontLookup(run.charStart);
+
+    return {
+      rect: {
+        x: run.rect.x * factor,
+        y: run.rect.y * factor,
+        width: run.rect.width * factor,
+        height: run.rect.height * factor,
+      },
+      charStart: run.charStart,
+      glyphs: run.glyphs.map((g) => transformGlyph(g, factor)),
+      fontSize: run.fontSize,
+      fontWeight: fontInfo?.weight,
+      italic: fontInfo?.italic,
+      fontName: fontInfo?.name,
+    };
+  });
 
   return reorderRunsVisually(runs, pageText);
+};
+
+/**
+ * Build a lookup function that maps a character index to its font info from
+ * the text-run data. Text runs are sorted by `charIndex`, so we can scan
+ * linearly (with a cursor) for efficient sequential lookups.
+ */
+const buildFontLookup = (
+  textRuns: PdfTextRun[],
+): ((charStart: number) => { weight: number; italic: boolean; name: string } | undefined) => {
+  if (textRuns.length === 0) {
+    return () => undefined;
+  }
+
+  return (charStart: number) => {
+    for (const tr of textRuns) {
+      if (charStart >= tr.charIndex && charStart < tr.charIndex + tr.charCount) {
+        return { weight: tr.font.weight, italic: tr.font.italic, name: tr.font.name };
+      }
+    }
+
+    return undefined;
+  };
 };
 
 const transformGlyph = (

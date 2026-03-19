@@ -57,6 +57,8 @@ export const useCopyHandler = (
       const pageResults = selection.ranges.map((range) => {
         const geo = geometryRegistry.current.get(range.pageIndex);
 
+        console.debug('Selection range', range, geo);
+
         if (geo === undefined || geo.pageText === undefined) {
           return EMPTY_REFLOW;
         }

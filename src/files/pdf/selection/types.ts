@@ -42,6 +42,12 @@ export interface ScreenRun {
   glyphs: ScreenRunGlyph[];
   /** Font size shared by all glyphs in this run. */
   fontSize: number | undefined;
+  /** Font weight 100–900 (400 = normal, 700 = bold). */
+  fontWeight: number | undefined;
+  /** Whether the font is italic. */
+  italic: boolean | undefined;
+  /** PostScript font name (e.g. "HOEPNL+Arial,Bold"). */
+  fontName: string | undefined;
 }
 
 /**
