@@ -1,5 +1,5 @@
 import type { LineInfo } from './line-info';
-import type { InternalParagraph, TextAlignment } from './reflow-types';
+import type { InternalBlock, TextAlignment } from './reflow-types';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -17,12 +17,12 @@ const ALIGNMENT_TOLERANCE = 4;
  */
 const HEADING_FONT_SIZE_FACTOR = 1.15;
 
-/** Maximum number of non-soft-wrapped lines for a paragraph to be a heading. */
+/** Maximum number of non-soft-wrapped lines for a block to be a heading. */
 const HEADING_MAX_LINES = 3;
 
 /**
  * Minimum indentation (in screen-coordinate pixels) relative to the page
- * baseline left edge for a paragraph to be considered a list item when no
+ * baseline left edge for a block to be considered a list item when no
  * text-based marker is found.
  */
 const LIST_INDENT_THRESHOLD = 8;
@@ -38,24 +38,24 @@ const LIST_INDENT_MAX = 60;
 // ---------------------------------------------------------------------------
 
 /**
- * Detect the text alignment of a paragraph by comparing the variance of left
+ * Detect the text alignment of a block by comparing the variance of left
  * and right edges across its lines.
  *
  * - **Left-aligned**: left edges are consistent, right edges vary.
  * - **Right-aligned**: right edges are consistent, left edges vary.
  * - **Center-aligned**: both edges vary but the center is consistent.
  *
- * Single-line paragraphs default to `'left'` since there's nothing to compare.
+ * Single-line blocks default to `'left'` since there's nothing to compare.
  */
 export const detectAlignment = (
-  paragraph: InternalParagraph,
+  block: InternalBlock,
   maxRight: number,
   baselineLeftEdge: number | undefined,
 ): TextAlignment => {
-  const lines = paragraph.lines.filter((l) => l.leftEdge !== undefined && l.rightEdge !== undefined);
+  const lines = block.lines.filter((l) => l.leftEdge !== undefined && l.rightEdge !== undefined);
 
   if (lines.length < 2) {
-    // For single-line paragraphs, compare against page-level baselines.
+    // For single-line blocks, compare against page-level baselines.
     const line = lines[0];
 
     if (line !== undefined && baselineLeftEdge !== undefined && maxRight > 0) {
@@ -110,21 +110,21 @@ export const detectAlignment = (
 };
 
 // ---------------------------------------------------------------------------
-// Paragraph classification — heading, list, or plain paragraph
+// Block classification — heading, list, or plain paragraph
 // ---------------------------------------------------------------------------
 
-/** Classify a paragraph's role based on font size, line count, and text patterns. */
-export const classifyParagraph = (
-  paragraph: InternalParagraph,
+/** Classify a block's role based on font size, line count, and text patterns. */
+export const classifyBlock = (
+  block: InternalBlock,
   baselineFontSize: number | undefined,
   maxFontSize: number | undefined,
   baselineLeftEdge: number | undefined,
 ): void => {
-  if (paragraph.lines.length === 0) {
+  if (block.lines.length === 0) {
     return;
   }
 
-  const firstLine = paragraph.lines[0];
+  const firstLine = block.lines[0];
 
   if (firstLine === undefined) {
     return;
@@ -134,20 +134,20 @@ export const classifyParagraph = (
   const listMatch = detectListMarker(firstLine.text);
 
   if (listMatch !== null) {
-    paragraph.role = 'list-item';
-    paragraph.listKind = listMatch.kind;
-    stripListMarker(paragraph, listMatch.markerLength);
+    block.role = 'list-item';
+    block.listKind = listMatch.kind;
+    stripListMarker(block, listMatch.markerLength);
 
     return;
   }
 
-  // Geometry-based unordered list detection: the paragraph is indented
+  // Geometry-based unordered list detection: the block is indented
   // relative to the page baseline left edge, suggesting a bullet rendered
   // outside the text stream. Only applies to left-aligned text — right or
   // center alignment naturally shifts the left edge.
-  if (paragraph.alignment === 'left' && isIndentedParagraph(paragraph, baselineLeftEdge)) {
-    paragraph.role = 'list-item';
-    paragraph.listKind = 'unordered';
+  if (block.alignment === 'left' && isIndentedBlock(block, baselineLeftEdge)) {
+    block.role = 'list-item';
+    block.listKind = 'unordered';
 
     return;
   }
@@ -157,7 +157,7 @@ export const classifyParagraph = (
     return;
   }
 
-  const avgFontSize = computeParagraphAvgFontSize(paragraph);
+  const avgFontSize = computeBlockAvgFontSize(block);
 
   if (avgFontSize === undefined) {
     return;
@@ -169,26 +169,26 @@ export const classifyParagraph = (
     return;
   }
 
-  // Headings are short — reject paragraphs with many lines.
-  if (paragraph.lines.length > HEADING_MAX_LINES) {
+  // Headings are short — reject blocks with many lines.
+  if (block.lines.length > HEADING_MAX_LINES) {
     return;
   }
 
-  paragraph.role = 'heading';
-  paragraph.headingLevel = headingLevelFromRatio(ratio, baselineFontSize, maxFontSize);
+  block.role = 'heading';
+  block.headingLevel = headingLevelFromRatio(ratio, baselineFontSize, maxFontSize);
 };
 
 /**
- * Check whether a paragraph is indented relative to the page baseline left
+ * Check whether a block is indented relative to the page baseline left
  * edge. This detects list items whose bullet glyph is not part of the text
  * stream — the visible text starts further right than normal body text.
  */
-const isIndentedParagraph = (paragraph: InternalParagraph, baselineLeftEdge: number | undefined): boolean => {
+const isIndentedBlock = (block: InternalBlock, baselineLeftEdge: number | undefined): boolean => {
   if (baselineLeftEdge === undefined) {
     return false;
   }
 
-  const firstLine = paragraph.lines[0];
+  const firstLine = block.lines[0];
 
   if (firstLine?.leftEdge === undefined) {
     return false;
@@ -282,9 +282,9 @@ export const detectListMarker = (text: string): ListMarkerMatch | null => {
   return null;
 };
 
-/** Remove the list marker from the first span of the paragraph. */
-const stripListMarker = (paragraph: InternalParagraph, markerLength: number): void => {
-  const firstLine = paragraph.lines[0];
+/** Remove the list marker from the first span of the block. */
+const stripListMarker = (block: InternalBlock, markerLength: number): void => {
+  const firstLine = block.lines[0];
 
   if (firstLine === undefined) {
     return;
@@ -313,11 +313,11 @@ const stripListMarker = (paragraph: InternalParagraph, markerLength: number): vo
   }
 };
 
-const computeParagraphAvgFontSize = (paragraph: InternalParagraph): number | undefined => {
+const computeBlockAvgFontSize = (block: InternalBlock): number | undefined => {
   let sum = 0;
   let count = 0;
 
-  for (const line of paragraph.lines) {
+  for (const line of block.lines) {
     if (line.fontSize !== undefined) {
       sum += line.fontSize;
       count += 1;

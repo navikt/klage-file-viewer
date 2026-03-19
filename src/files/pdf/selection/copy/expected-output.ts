@@ -1,6 +1,6 @@
-import type { ReflowParagraph } from '@/files/pdf/selection/copy/analyze-reflow';
+import type { ReflowBlock } from '@/files/pdf/selection/copy/analyze-reflow';
 
-export const PAGES_EXPECTED_OUTPUT: ReflowParagraph[][] = [
+export const PAGES_EXPECTED_OUTPUT: ReflowBlock[][] = [
   // Page 1
   [
     {

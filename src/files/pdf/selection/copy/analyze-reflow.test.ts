@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { analyzePageReflow, computeDocumentStats } from '@/files/pdf/selection/copy/analyze-reflow';
 import { PAGES_EXPECTED_OUTPUT } from '@/files/pdf/selection/copy/expected-output';
-import { paragraphsToHtml, paragraphsToPlain } from '@/files/pdf/selection/copy/formatters';
+import { blocksToHtml, blocksToPlain } from '@/files/pdf/selection/copy/formatters';
 import { PAGES_RAW_DATA, type RawData } from '@/files/pdf/selection/copy/raw-data';
 import type { PageSelectionRange, ScreenPageGeometry } from '@/files/pdf/selection/types';
 
@@ -54,46 +54,46 @@ describe('analyzePageReflow', () => {
       const geo = buildGeo(raw);
       const range = fullPageRange(raw, pageIndex);
       const rawText = raw.pageText.slice(range.startCharIndex, range.endCharIndex + 1);
-      const paragraphs = analyzePageReflow(rawText, range, geo, docStats);
+      const blocks = analyzePageReflow(rawText, range, geo, docStats);
 
-      it('produces the expected number of paragraphs', () => {
-        expect(paragraphs.length).toBe(expected.length);
+      it('produces the expected number of blocks', () => {
+        expect(blocks.length).toBe(expected.length);
       });
 
       for (let i = 0; i < expected.length; i++) {
-        const expectedParagraph = expected[i];
+        const expectedBlock = expected[i];
 
-        if (expectedParagraph === undefined) {
+        if (expectedBlock === undefined) {
           continue;
         }
 
-        describe(`paragraph ${i + 1}: ${expectedParagraph.role}`, () => {
+        describe(`block ${i + 1}: ${expectedBlock.role}`, () => {
           it('has the correct role', () => {
-            expect(paragraphs[i]?.role).toBe(expectedParagraph.role);
+            expect(blocks[i]?.role).toBe(expectedBlock.role);
           });
 
           it('has the correct alignment', () => {
-            expect(paragraphs[i]?.alignment).toBe(expectedParagraph.alignment);
+            expect(blocks[i]?.alignment).toBe(expectedBlock.alignment);
           });
 
-          if (expectedParagraph.headingLevel !== undefined) {
+          if (expectedBlock.headingLevel !== undefined) {
             it('has the correct heading level', () => {
-              expect(paragraphs[i]?.headingLevel).toBe(expectedParagraph.headingLevel);
+              expect(blocks[i]?.headingLevel).toBe(expectedBlock.headingLevel);
             });
           }
 
-          if (expectedParagraph.listKind !== undefined) {
+          if (expectedBlock.listKind !== undefined) {
             it('has the correct list kind', () => {
-              expect(paragraphs[i]?.listKind).toBe(expectedParagraph.listKind);
+              expect(blocks[i]?.listKind).toBe(expectedBlock.listKind);
             });
           }
 
           it('has the expected number of lines', () => {
-            expect(paragraphs[i]?.lines.length).toBe(expectedParagraph.lines.length);
+            expect(blocks[i]?.lines.length).toBe(expectedBlock.lines.length);
           });
 
           it('has matching line content', () => {
-            expect(paragraphs[i]?.lines).toEqual(expectedParagraph.lines);
+            expect(blocks[i]?.lines).toEqual(expectedBlock.lines);
           });
         });
       }
@@ -111,15 +111,15 @@ describe('analyzePageReflow', () => {
       const geo = buildGeo(raw);
       const range = fullPageRange(raw, pageIndex);
       const rawText = raw.pageText.slice(range.startCharIndex, range.endCharIndex + 1);
-      const paragraphs = analyzePageReflow(rawText, range, geo, docStats);
+      const blocks = analyzePageReflow(rawText, range, geo, docStats);
 
-      it(`page ${pageIndex + 1}: paragraphsToPlain produces non-empty output`, () => {
-        const plain = paragraphsToPlain(paragraphs);
+      it(`page ${pageIndex + 1}: blocksToPlain produces non-empty output`, () => {
+        const plain = blocksToPlain(blocks);
         expect(plain.length).toBeGreaterThan(0);
       });
 
-      it(`page ${pageIndex + 1}: paragraphsToHtml produces valid-looking HTML`, () => {
-        const html = paragraphsToHtml(paragraphs);
+      it(`page ${pageIndex + 1}: blocksToHtml produces valid-looking HTML`, () => {
+        const html = blocksToHtml(blocks);
         expect(html.length).toBeGreaterThan(0);
         expect(html).toContain('<');
         expect(html).not.toContain('undefined');

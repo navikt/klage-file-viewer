@@ -8,7 +8,7 @@ import {
   type PageReflow,
 } from '@/files/pdf/selection/copy/analyze-reflow';
 import { buildOriginalSlice } from '@/files/pdf/selection/copy/build-original-slice';
-import { escapeHtml, paragraphsToHtml, paragraphsToPlain } from '@/files/pdf/selection/copy/formatters';
+import { blocksToHtml, blocksToPlain, escapeHtml } from '@/files/pdf/selection/copy/formatters';
 import type { PageSelectionRange, ScreenPageGeometry, TextSelection } from '@/files/pdf/selection/types';
 
 /**
@@ -19,10 +19,10 @@ import type { PageSelectionRange, ScreenPageGeometry, TextSelection } from '@/fi
  * Also intercepts the `copy` event as a fallback for when the browser
  * selection gets lost.
  *
- * Uses page geometry to detect paragraph boundaries and line structure:
+ * Uses page geometry to detect block boundaries and line structure:
  *  - Lines separated by a gap significantly larger than the typical line
- *    spacing are joined with a double newline (paragraph break).
- *  - Short lines (headings, list items, last line of a paragraph) keep a
+ *    spacing are joined with a double newline (block break).
+ *  - Short lines (headings, list items, last line of a block) keep a
  *    single newline.
  *  - Full-width lines that wrap to the next line are joined with a space.
  */
@@ -196,16 +196,16 @@ const reflowPage = (
   geo: ScreenPageGeometry,
   documentStats?: DocumentStats,
 ): PageReflow => {
-  const paragraphs = analyzePageReflow(rawText, range, geo, documentStats);
-  const plain = paragraphsToPlain(paragraphs);
-  const html = paragraphsToHtml(paragraphs);
+  const blocks = analyzePageReflow(rawText, range, geo, documentStats);
+  const plain = blocksToPlain(blocks);
+  const html = blocksToHtml(blocks);
 
   // biome-ignore lint/suspicious/noConsole: temporary debug logging for verifying copy output
   console.groupCollapsed(
     `[copy] reflowPage (page ${String(range.pageIndex)}, chars ${String(range.startCharIndex)}–${String(range.endCharIndex)})`,
   );
   // biome-ignore lint/suspicious/noConsole: temporary debug logging
-  console.log('paragraphs:', paragraphs);
+  console.log('blocks:', blocks);
   // biome-ignore lint/suspicious/noConsole: temporary debug logging
   console.log('plain:', plain);
   // biome-ignore lint/suspicious/noConsole: temporary debug logging

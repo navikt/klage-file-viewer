@@ -1,5 +1,5 @@
 import type { PageSelectionRange, ScreenPageGeometry } from '@/files/pdf/selection/types';
-import { classifyParagraph, detectAlignment, detectListMarker, isIndentedLine } from './classify';
+import { classifyBlock, detectAlignment, detectListMarker, isIndentedLine } from './classify';
 import {
   computeBaselineFontSize,
   computeBaselineLeftEdge,
@@ -8,16 +8,16 @@ import {
 } from './font-detection';
 import type { LineInfo } from './line-info';
 import { collectLineInfo, computeLineGaps, computePageMaxRight, MIN_LINES_FOR_STATS } from './line-info';
-import type { InternalParagraph, ReflowParagraph } from './reflow-types';
+import type { InternalBlock, ReflowBlock } from './reflow-types';
 import { buildSpansForRange, mergeSpansWithSpace } from './spans';
 
 // biome-ignore lint/performance/noBarrelFile: Re-export public API so external consumers don't need to change imports.
 export { computeDocumentStats } from './font-detection';
 export type {
+  BlockRole,
   DocumentStats,
   PageReflow,
-  ParagraphRole,
-  ReflowParagraph,
+  ReflowBlock,
   ReflowSpan,
 } from './reflow-types';
 export { EMPTY_REFLOW, lineText } from './reflow-types';
@@ -28,10 +28,10 @@ export { EMPTY_REFLOW, lineText } from './reflow-types';
 
 /**
  * A gap between two lines that is at least this multiple of the average
- * line height indicates an "empty line" — always a paragraph break.
+ * line height indicates an "empty line" — always a block break.
  *
- * Typical within-paragraph line spacing is ~1.0–1.2× line height.
- * Paragraph breaks are ≥1.8× (the gap is large enough to fit another line).
+ * Typical within-block line spacing is ~1.0–1.2× line height.
+ * Block breaks are ≥1.8× (the gap is large enough to fit another line).
  */
 const EMPTY_LINE_GAP_FACTOR = 1.5;
 
@@ -42,7 +42,7 @@ const EMPTY_LINE_GAP_FACTOR = 1.5;
 const FULL_WIDTH_THRESHOLD = 0.9;
 
 /**
- * Minimum font-size ratio between adjacent lines to force a paragraph break.
+ * Minimum font-size ratio between adjacent lines to force a block break.
  * This ensures headings are split from body text even when the vertical gap
  * is the same as normal line spacing.
  */
@@ -53,7 +53,7 @@ const FONT_SIZE_BREAK_RATIO = 1.1;
 // ---------------------------------------------------------------------------
 
 /** Strip internal geometry fields from lines before returning. */
-const stripInternalFields = (p: InternalParagraph): ReflowParagraph => ({
+const stripInternalFields = (p: InternalBlock): ReflowBlock => ({
   lines: p.lines.map(({ spans }) => spans),
   role: p.role,
   headingLevel: p.headingLevel,
@@ -62,12 +62,12 @@ const stripInternalFields = (p: InternalParagraph): ReflowParagraph => ({
 });
 
 /**
- * Build the intermediate {@link ReflowParagraph} model from raw text and
+ * Build the intermediate {@link ReflowBlock} model from raw text and
  * page geometry.
  *
  * @param documentStats – Optional document-wide statistics (max font size,
- *   paragraph gap threshold) computed across all pages. When provided,
- *   heading levels and paragraph detection are consistent across pages.
+ *   block gap threshold) computed across all pages. When provided,
+ *   heading levels and block detection are consistent across pages.
  *   When omitted, page-local statistics are used as fallback.
  */
 export const analyzePageReflow = (
@@ -75,7 +75,7 @@ export const analyzePageReflow = (
   range: PageSelectionRange,
   geo: ScreenPageGeometry,
   documentStats?: import('./reflow-types').DocumentStats,
-): ReflowParagraph[] => {
+): ReflowBlock[] => {
   const lineInfos = collectLineInfo(range, geo);
   const baselineWeight = computePageBaselineFontWeight(geo);
   const baselineFontSize = computeBaselineFontSize(geo);
@@ -83,30 +83,30 @@ export const analyzePageReflow = (
   const maxRight = computePageMaxRight(geo);
   const maxFontSize = documentStats?.maxFontSize ?? computePageMaxFontSize(geo);
 
-  let paragraphs: InternalParagraph[];
+  let blocks: InternalBlock[];
 
   if (lineInfos.length < MIN_LINES_FOR_STATS || computeLineGaps(lineInfos).length === 0) {
-    paragraphs = buildSingleBlockParagraph(rawText, range, geo, baselineWeight, lineInfos);
+    blocks = buildSingleBlock(rawText, range, geo, baselineWeight, lineInfos);
   } else {
-    paragraphs = buildMultiLineParagraphs(rawText, range, geo, baselineWeight, lineInfos, maxRight, baselineLeftEdge);
+    blocks = buildMultiLineBlocks(rawText, range, geo, baselineWeight, lineInfos, maxRight, baselineLeftEdge);
   }
 
-  for (const paragraph of paragraphs) {
-    paragraph.alignment = detectAlignment(paragraph, maxRight, baselineLeftEdge);
-    classifyParagraph(paragraph, baselineFontSize, maxFontSize, baselineLeftEdge);
+  for (const block of blocks) {
+    block.alignment = detectAlignment(block, maxRight, baselineLeftEdge);
+    classifyBlock(block, baselineFontSize, maxFontSize, baselineLeftEdge);
   }
 
-  return paragraphs.map(stripInternalFields);
+  return blocks.map(stripInternalFields);
 };
 
-/** Build a single paragraph when there aren't enough lines for gap analysis. */
-const buildSingleBlockParagraph = (
+/** Build a single block when there aren't enough lines for gap analysis. */
+const buildSingleBlock = (
   rawText: string,
   range: PageSelectionRange,
   geo: ScreenPageGeometry,
   baselineWeight: number | undefined,
   lineInfos: LineInfo[],
-): InternalParagraph[] => {
+): InternalBlock[] => {
   const fontSize = lineInfos[0]?.dominantFontSize;
   const leftEdge = lineInfos[0]?.leftEdge;
   const spans = buildSpansForRange(
@@ -129,8 +129,8 @@ const buildSingleBlockParagraph = (
   ];
 };
 
-/** Build paragraphs from multi-line selections with gap and font-size analysis. */
-const buildMultiLineParagraphs = (
+/** Build blocks from multi-line selections with gap and font-size analysis. */
+const buildMultiLineBlocks = (
   rawText: string,
   range: PageSelectionRange,
   geo: ScreenPageGeometry,
@@ -138,11 +138,11 @@ const buildMultiLineParagraphs = (
   lineInfos: LineInfo[],
   maxRight: number,
   baselineLeftEdge: number | undefined,
-): InternalParagraph[] => {
+): InternalBlock[] => {
   const gaps = computeLineGaps(lineInfos);
   const textLines = splitTextByGeometry(rawText, range, lineInfos);
 
-  const makeParagraph = (): InternalParagraph => ({
+  const makeBlock = (): InternalBlock => ({
     lines: [],
     role: 'paragraph',
     headingLevel: undefined,
@@ -150,7 +150,7 @@ const buildMultiLineParagraphs = (
     alignment: 'left',
   });
 
-  const paragraphs: InternalParagraph[] = [makeParagraph()];
+  const blocks: InternalBlock[] = [makeBlock()];
 
   for (let i = 0; i < textLines.length; i++) {
     const text = textLines[i];
@@ -173,12 +173,12 @@ const buildMultiLineParagraphs = (
     }
 
     if (sep === '\n\n') {
-      paragraphs.push(makeParagraph());
+      blocks.push(makeBlock());
     }
 
-    const currentParagraph = paragraphs[paragraphs.length - 1];
+    const currentBlock = blocks[blocks.length - 1];
 
-    if (currentParagraph !== undefined) {
+    if (currentBlock !== undefined) {
       const spans = buildSpansForRange(
         lineInfo.charStart,
         lineInfo.charEnd,
@@ -188,7 +188,7 @@ const buildMultiLineParagraphs = (
         baselineWeight,
       );
 
-      const lastLine = currentParagraph.lines[currentParagraph.lines.length - 1];
+      const lastLine = currentBlock.lines[currentBlock.lines.length - 1];
 
       // Soft-wrap: merge into the previous line with a space.
       if (sep === ' ' && lastLine !== undefined) {
@@ -196,7 +196,7 @@ const buildMultiLineParagraphs = (
         mergeSpansWithSpace(lastLine.spans, spans);
         lastLine.rightEdge = lineInfo.rightEdge;
       } else {
-        currentParagraph.lines.push({
+        currentBlock.lines.push({
           text,
           spans,
           fontSize: lineInfo.dominantFontSize,
@@ -207,7 +207,7 @@ const buildMultiLineParagraphs = (
     }
   }
 
-  return paragraphs;
+  return blocks;
 };
 
 // ---------------------------------------------------------------------------

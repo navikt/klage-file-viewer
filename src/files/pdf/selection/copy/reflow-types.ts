@@ -9,10 +9,10 @@
  * multiple output formats (plain text, HTML, and future richer formats) can
  * be derived from the same analysis without re-reading the geometry.
  */
-export interface ReflowParagraph {
+export interface ReflowBlock {
   /** Lines of styled spans. Each inner array is one line. */
   lines: ReflowSpan[][];
-  role: ParagraphRole;
+  role: BlockRole;
   /** Heading level 1–3. Only set when `role === 'heading'`. */
   headingLevel?: number | undefined;
   /** List flavour. Only set when `role === 'list-item'`. */
@@ -21,7 +21,7 @@ export interface ReflowParagraph {
   alignment: TextAlignment;
 }
 
-export type ParagraphRole = 'paragraph' | 'heading' | 'list-item';
+export type BlockRole = 'paragraph' | 'heading' | 'list-item';
 
 export type TextAlignment = 'left' | 'center' | 'right';
 
@@ -34,8 +34,8 @@ export interface InternalLine {
   rightEdge: number | undefined;
 }
 
-/** Internal paragraph with InternalLine — stripped before returning. */
-export interface InternalParagraph extends Omit<ReflowParagraph, 'lines'> {
+/** Internal block with InternalLine — stripped before returning. */
+export interface InternalBlock extends Omit<ReflowBlock, 'lines'> {
   lines: InternalLine[];
 }
 

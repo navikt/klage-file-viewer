@@ -1,13 +1,13 @@
-import type { ParagraphRole, ReflowParagraph, ReflowSpan } from '@/files/pdf/selection/copy/analyze-reflow';
+import type { BlockRole, ReflowBlock, ReflowSpan } from '@/files/pdf/selection/copy/analyze-reflow';
 import { lineText } from '@/files/pdf/selection/copy/analyze-reflow';
 
 // ---------------------------------------------------------------------------
 // Plain text
 // ---------------------------------------------------------------------------
 
-/** Render paragraphs as plain text: lines joined within, `\n\n` between paragraphs. */
-export const paragraphsToPlain = (paragraphs: ReflowParagraph[]): string =>
-  paragraphs
+/** Render blocks as plain text: lines joined within, `\n\n` between blocks. */
+export const blocksToPlain = (blocks: ReflowBlock[]): string =>
+  blocks
     .map((p) => {
       const prefix = p.role === 'list-item' ? (p.listKind === 'ordered' ? '  1. ' : '  - ') : '';
 
@@ -19,12 +19,12 @@ export const paragraphsToPlain = (paragraphs: ReflowParagraph[]): string =>
 // HTML
 // ---------------------------------------------------------------------------
 
-/** Render paragraphs as HTML with semantic elements. */
-export const paragraphsToHtml = (paragraphs: ReflowParagraph[]): string => {
+/** Render blocks as HTML with semantic elements. */
+export const blocksToHtml = (blocks: ReflowBlock[]): string => {
   const parts: string[] = [];
   let currentListKind: 'ordered' | 'unordered' | null = null;
 
-  for (const p of paragraphs) {
+  for (const p of blocks) {
     if (p.role === 'list-item') {
       currentListKind = openListIfNeeded(parts, currentListKind, p.listKind ?? 'unordered');
       parts.push(`<li>${formatLineContents(p)}</li>`);
@@ -70,7 +70,7 @@ const closeListIfOpen = (parts: string[], currentKind: 'ordered' | 'unordered' |
 const listCloseTag = (kind: 'ordered' | 'unordered'): string => (kind === 'ordered' ? '</ol>' : '</ul>');
 
 /** Wrap line contents in the appropriate block-level element. */
-const formatBlock = (p: ReflowParagraph): string => {
+const formatBlock = (p: ReflowBlock): string => {
   const inner = formatLineContents(p);
   const style = p.alignment !== 'left' ? ` style="text-align: ${p.alignment}"` : '';
 
@@ -84,22 +84,22 @@ const formatBlock = (p: ReflowParagraph): string => {
 };
 
 /** Format the inner content of a block element (lines + spans with inline styling). */
-const formatLineContents = (paragraph: ReflowParagraph): string => {
+const formatLineContents = (block: ReflowBlock): string => {
   const parts: string[] = [];
 
-  for (const line of paragraph.lines) {
+  for (const line of block.lines) {
     if (parts.length > 0) {
       parts.push('<br>');
     }
 
-    parts.push(formatSpans(line, paragraph.role));
+    parts.push(formatSpans(line, block.role));
   }
 
   return parts.join('');
 };
 
 /** Render a line's spans with `<strong>` and `<em>` wrappers. */
-const formatSpans = (spans: ReflowSpan[], role: ParagraphRole): string =>
+const formatSpans = (spans: ReflowSpan[], role: BlockRole): string =>
   spans
     .map((span) => {
       let html = escapeHtml(span.text);
