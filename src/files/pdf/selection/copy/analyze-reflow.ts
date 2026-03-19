@@ -29,13 +29,11 @@ export interface ReflowLine {
   /** Styled spans within the line. */
   spans: ReflowSpan[];
   /**
-   * `true` when this line is a soft-wrap continuation of the previous line
-   * (the previous line filled the column width). The formatter should join
-   * with a space rather than a line break.
-   *
-   * Always `false` for the first line in a paragraph.
+   * `true` when this line is a soft-wrap continuation of the previous line.
    */
   softWrap: boolean;
+  /** Dominant font size of this line (from geometry). */
+  fontSize: number | undefined;
 }
 
 export interface ReflowSpan {
@@ -99,6 +97,13 @@ const HEADING_FONT_SIZE_FACTOR = 1.15;
 /** Maximum number of non-soft-wrapped lines for a paragraph to be a heading. */
 const HEADING_MAX_LINES = 3;
 
+/**
+ * Minimum font-size ratio between adjacent lines to force a paragraph break.
+ * This ensures headings are split from body text even when the vertical gap
+ * is the same as normal line spacing.
+ */
+const FONT_SIZE_BREAK_RATIO = 1.1;
+
 // ---------------------------------------------------------------------------
 // Analysis entry point
 // ---------------------------------------------------------------------------
@@ -114,60 +119,74 @@ export const analyzePageReflow = (
 ): ReflowParagraph[] => {
   const lineInfos = collectLineInfo(range, geo);
   const baselineWeight = computePageBaselineFontWeight(geo);
+  const baselineFontSize = computeBaselineFontSize(geo);
+  const maxRight = computePageMaxRight(geo);
 
-  if (lineInfos.length < MIN_LINES_FOR_STATS) {
-    const spans = buildSpansForRange(
-      range.startCharIndex,
-      range.endCharIndex,
-      rawText,
-      range.startCharIndex,
-      geo,
-      baselineWeight,
-    );
+  let paragraphs: ReflowParagraph[];
 
-    return [
-      {
-        lines: [{ text: rawText, spans, softWrap: false }],
-        role: 'paragraph',
-        headingLevel: undefined,
-        listKind: undefined,
-      },
-    ];
+  if (lineInfos.length < MIN_LINES_FOR_STATS || computeLineGaps(lineInfos).length === 0) {
+    paragraphs = buildSingleBlockParagraph(rawText, range, geo, baselineWeight, lineInfos);
+  } else {
+    paragraphs = buildMultiLineParagraphs(rawText, range, geo, baselineWeight, lineInfos, maxRight);
   }
 
+  for (const paragraph of paragraphs) {
+    classifyParagraph(paragraph, baselineFontSize);
+  }
+
+  return paragraphs;
+};
+
+/** Build a single paragraph when there aren't enough lines for gap analysis. */
+const buildSingleBlockParagraph = (
+  rawText: string,
+  range: PageSelectionRange,
+  geo: ScreenPageGeometry,
+  baselineWeight: number | undefined,
+  lineInfos: LineInfo[],
+): ReflowParagraph[] => {
+  const fontSize = lineInfos[0]?.dominantFontSize;
+  const spans = buildSpansForRange(
+    range.startCharIndex,
+    range.endCharIndex,
+    rawText,
+    range.startCharIndex,
+    geo,
+    baselineWeight,
+  );
+
+  return [
+    {
+      lines: [{ text: rawText, spans, softWrap: false, fontSize }],
+      role: 'paragraph',
+      headingLevel: undefined,
+      listKind: undefined,
+    },
+  ];
+};
+
+/** Build paragraphs from multi-line selections with gap and font-size analysis. */
+const buildMultiLineParagraphs = (
+  rawText: string,
+  range: PageSelectionRange,
+  geo: ScreenPageGeometry,
+  baselineWeight: number | undefined,
+  lineInfos: LineInfo[],
+  maxRight: number,
+): ReflowParagraph[] => {
   const gaps = computeLineGaps(lineInfos);
-
-  if (gaps.length === 0) {
-    const spans = buildSpansForRange(
-      range.startCharIndex,
-      range.endCharIndex,
-      rawText,
-      range.startCharIndex,
-      geo,
-      baselineWeight,
-    );
-
-    return [
-      {
-        lines: [{ text: rawText, spans, softWrap: false }],
-        role: 'paragraph',
-        headingLevel: undefined,
-        listKind: undefined,
-      },
-    ];
-  }
-
   const medianGap = median(gaps);
   const paragraphThreshold = medianGap * PARAGRAPH_GAP_FACTOR;
-  const maxRight = computePageMaxRight(geo);
   const textLines = splitTextByGeometry(rawText, range, lineInfos);
 
-  // Compute baseline (body) font size — the mode across all selected lines.
-  const baselineFontSize = computeBaselineFontSize(lineInfos);
+  const makeParagraph = (): ReflowParagraph => ({
+    lines: [],
+    role: 'paragraph',
+    headingLevel: undefined,
+    listKind: undefined,
+  });
 
-  const paragraphs: ReflowParagraph[] = [
-    { lines: [], role: 'paragraph', headingLevel: undefined, listKind: undefined },
-  ];
+  const paragraphs: ReflowParagraph[] = [makeParagraph()];
 
   for (let i = 0; i < textLines.length; i++) {
     const text = textLines[i];
@@ -177,7 +196,6 @@ export const analyzePageReflow = (
       continue;
     }
 
-    // Determine separator relative to the previous line.
     let sep: '\n\n' | '\n' | ' ' | null = null;
 
     if (i > 0) {
@@ -185,11 +203,15 @@ export const analyzePageReflow = (
 
       if (prevLineInfo !== undefined) {
         sep = lineSeparator(gaps[i - 1], prevLineInfo, paragraphThreshold, maxRight, text);
+
+        if (sep !== '\n\n' && hasFontSizeChange(prevLineInfo, lineInfo)) {
+          sep = '\n\n';
+        }
       }
     }
 
     if (sep === '\n\n') {
-      paragraphs.push({ lines: [], role: 'paragraph', headingLevel: undefined, listKind: undefined });
+      paragraphs.push(makeParagraph());
     }
 
     const currentParagraph = paragraphs[paragraphs.length - 1];
@@ -204,13 +226,8 @@ export const analyzePageReflow = (
         baselineWeight,
       );
 
-      currentParagraph.lines.push({ text, spans, softWrap: sep === ' ' });
+      currentParagraph.lines.push({ text, spans, softWrap: sep === ' ', fontSize: lineInfo.dominantFontSize });
     }
-  }
-
-  // Classify each paragraph as heading, list-item, or plain paragraph.
-  for (const paragraph of paragraphs) {
-    classifyParagraph(paragraph, baselineFontSize, lineInfos, range, maxRight);
   }
 
   return paragraphs;
@@ -384,13 +401,7 @@ const computePageBaselineFontWeight = (geo: ScreenPageGeometry): number | undefi
 // ---------------------------------------------------------------------------
 
 /** Classify a paragraph's role based on font size, line count, and text patterns. */
-const classifyParagraph = (
-  paragraph: ReflowParagraph,
-  baselineFontSize: number | undefined,
-  allLineInfos: LineInfo[],
-  range: PageSelectionRange,
-  maxRight: number,
-): void => {
+const classifyParagraph = (paragraph: ReflowParagraph, baselineFontSize: number | undefined): void => {
   if (paragraph.lines.length === 0) {
     return;
   }
@@ -417,9 +428,7 @@ const classifyParagraph = (
     return;
   }
 
-  // Find the LineInfo entries that belong to this paragraph.
-  const paragraphLineInfos = findParagraphLineInfos(paragraph, allLineInfos, range);
-  const avgFontSize = computeAvgFontSize(paragraphLineInfos);
+  const avgFontSize = computeParagraphAvgFontSize(paragraph);
 
   if (avgFontSize === undefined) {
     return;
@@ -438,40 +447,21 @@ const classifyParagraph = (
     return;
   }
 
-  // Headings don't fill the column width across many wrapped lines.
-  const isFullWidth = paragraphLineInfos.some((li) => maxRight > 0 && li.rightEdge >= maxRight * FULL_WIDTH_THRESHOLD);
-
-  if (isFullWidth && paragraph.lines.length > HEADING_MAX_LINES) {
-    return;
-  }
-
   paragraph.role = 'heading';
   paragraph.headingLevel = headingLevelFromRatio(ratio);
 };
 
-/** Map a font-size ratio to a heading level (1–6). */
+/** Map a font-size ratio to a heading level (1–3). */
 const headingLevelFromRatio = (ratio: number): number => {
-  if (ratio >= 2.0) {
+  if (ratio >= 1.8) {
     return 1;
   }
 
-  if (ratio >= 1.6) {
+  if (ratio >= 1.4) {
     return 2;
   }
 
-  if (ratio >= 1.35) {
-    return 3;
-  }
-
-  if (ratio >= 1.25) {
-    return 4;
-  }
-
-  if (ratio >= 1.15) {
-    return 5;
-  }
-
-  return 6;
+  return 3;
 };
 
 // ---------------------------------------------------------------------------
@@ -542,84 +532,61 @@ const stripListMarker = (paragraph: ReflowParagraph, markerLength: number): void
 // ---------------------------------------------------------------------------
 
 /**
- * Compute the baseline (body) font size as the mode of all line font sizes.
- * This is the most common font size, which represents body text.
+ * Compute the baseline (body) font size from ALL visible runs on the page.
+ *
+ * Uses a character-count-weighted mode rounded to 1 decimal. Looking at the
+ * entire page (not just the selection) ensures that selecting only a heading
+ * still produces the correct body-text baseline for ratio comparison.
  */
-const computeBaselineFontSize = (lineInfos: LineInfo[]): number | undefined => {
-  const sizes: number[] = [];
+const computeBaselineFontSize = (geo: ScreenPageGeometry): number | undefined => {
+  const sizeCounts = new Map<number, number>();
 
-  for (const line of lineInfos) {
-    if (line.dominantFontSize !== undefined) {
-      // Round to 1 decimal to group similar sizes.
-      sizes.push(Math.round(line.dominantFontSize * 10) / 10);
+  for (const run of geo.runs) {
+    if (run.fontSize === undefined) {
+      continue;
     }
+
+    const hasVisible = run.glyphs.some((g) => g.flags !== GLYPH_FLAG_EMPTY);
+
+    if (!hasVisible) {
+      continue;
+    }
+
+    const rounded = Math.round(run.fontSize * 10) / 10;
+    const charCount = run.glyphs.length;
+    sizeCounts.set(rounded, (sizeCounts.get(rounded) ?? 0) + charCount);
   }
 
-  if (sizes.length === 0) {
+  if (sizeCounts.size === 0) {
     return undefined;
   }
 
-  // Mode — the most frequent font size.
-  const counts = new Map<number, number>();
   let maxCount = 0;
-  let modeSize = sizes[0];
+  let mode: number | undefined;
 
-  for (const s of sizes) {
-    const c = (counts.get(s) ?? 0) + 1;
-    counts.set(s, c);
-
-    if (c > maxCount) {
-      maxCount = c;
-      modeSize = s;
+  for (const [size, count] of sizeCounts) {
+    if (count > maxCount) {
+      maxCount = count;
+      mode = size;
     }
   }
 
-  return modeSize;
+  return mode;
 };
 
-/** Compute the average font size across a set of LineInfos. */
-const computeAvgFontSize = (lineInfos: LineInfo[]): number | undefined => {
+/** Compute the average font size from a paragraph's lines. */
+const computeParagraphAvgFontSize = (paragraph: ReflowParagraph): number | undefined => {
   let sum = 0;
   let count = 0;
 
-  for (const li of lineInfos) {
-    if (li.dominantFontSize !== undefined) {
-      sum += li.dominantFontSize;
+  for (const line of paragraph.lines) {
+    if (line.fontSize !== undefined) {
+      sum += line.fontSize;
       count += 1;
     }
   }
 
   return count > 0 ? sum / count : undefined;
-};
-
-/** Find the LineInfo entries whose char ranges overlap a paragraph's lines. */
-const findParagraphLineInfos = (
-  paragraph: ReflowParagraph,
-  allLineInfos: LineInfo[],
-  range: PageSelectionRange,
-): LineInfo[] => {
-  const result: LineInfo[] = [];
-  let lineIdx = 0;
-
-  for (const li of allLineInfos) {
-    if (lineIdx >= paragraph.lines.length) {
-      break;
-    }
-
-    // Skip lines outside the selection range.
-    if (li.charEnd < range.startCharIndex || li.charStart > range.endCharIndex) {
-      continue;
-    }
-
-    const pLine = paragraph.lines[lineIdx];
-
-    if (pLine !== undefined && pLine.text.length > 0) {
-      result.push(li);
-      lineIdx += 1;
-    }
-  }
-
-  return result;
 };
 
 // ---------------------------------------------------------------------------
@@ -854,6 +821,25 @@ const startsWithLowercase = (text: string): boolean => {
 };
 
 const FIRST_LETTER_PATTERN = /[^\s]/;
+
+/**
+ * Check whether two adjacent lines have a significant font-size difference,
+ * indicating a structural boundary (e.g. heading → body or body → heading).
+ */
+const hasFontSizeChange = (a: LineInfo, b: LineInfo): boolean => {
+  if (a.dominantFontSize === undefined || b.dominantFontSize === undefined) {
+    return false;
+  }
+
+  const larger = Math.max(a.dominantFontSize, b.dominantFontSize);
+  const smaller = Math.min(a.dominantFontSize, b.dominantFontSize);
+
+  if (smaller === 0) {
+    return false;
+  }
+
+  return larger / smaller >= FONT_SIZE_BREAK_RATIO;
+};
 
 // ---------------------------------------------------------------------------
 // Text splitting
