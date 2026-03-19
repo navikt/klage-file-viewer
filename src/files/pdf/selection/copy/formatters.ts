@@ -1,4 +1,4 @@
-import type { ReflowParagraph, ReflowSpan } from '@/files/pdf/selection/copy/analyze-reflow';
+import type { ParagraphRole, ReflowParagraph, ReflowSpan } from '@/files/pdf/selection/copy/analyze-reflow';
 
 // ---------------------------------------------------------------------------
 // Plain text
@@ -99,14 +99,14 @@ const formatLineContents = (paragraph: ReflowParagraph): string => {
       parts.push(line.softWrap ? ' ' : '<br>');
     }
 
-    parts.push(formatSpans(line.spans));
+    parts.push(formatSpans(line.spans, paragraph.role));
   }
 
   return parts.join('');
 };
 
 /** Render a line's spans with `<strong>` and `<em>` wrappers. */
-const formatSpans = (spans: ReflowSpan[]): string =>
+const formatSpans = (spans: ReflowSpan[], role: ParagraphRole): string =>
   spans
     .map((span) => {
       let html = escapeHtml(span.text);
@@ -115,7 +115,7 @@ const formatSpans = (spans: ReflowSpan[]): string =>
         html = `<em>${html}</em>`;
       }
 
-      if (span.bold) {
+      if (span.bold && role !== 'heading') {
         html = `<strong>${html}</strong>`;
       }
 
