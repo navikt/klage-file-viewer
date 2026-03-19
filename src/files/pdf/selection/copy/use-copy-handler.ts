@@ -149,9 +149,13 @@ export const useCopyHandler = (
       e.clipboardData?.setData('text/plain', text);
       e.clipboardData?.setData('text/html', htmlRef.current);
 
+      // biome-ignore lint/suspicious/noConsole: temporary debug logging for verifying copy output
       console.groupCollapsed('[copy] clipboard data set');
+      // biome-ignore lint/suspicious/noConsole: temporary debug logging
       console.log('text/plain:', text);
+      // biome-ignore lint/suspicious/noConsole: temporary debug logging
       console.log('text/html:', htmlRef.current);
+      // biome-ignore lint/suspicious/noConsole: temporary debug logging
       console.groupEnd();
     };
 
@@ -173,12 +177,17 @@ const reflowPage = (rawText: string, range: PageSelectionRange, geo: ScreenPageG
   const plain = paragraphsToPlain(paragraphs);
   const html = paragraphsToHtml(paragraphs);
 
+  // biome-ignore lint/suspicious/noConsole: temporary debug logging for verifying copy output
   console.groupCollapsed(
     `[copy] reflowPage (page ${String(range.pageIndex)}, chars ${String(range.startCharIndex)}–${String(range.endCharIndex)})`,
   );
+  // biome-ignore lint/suspicious/noConsole: temporary debug logging
   console.log('paragraphs:', paragraphs);
+  // biome-ignore lint/suspicious/noConsole: temporary debug logging
   console.log('plain:', plain);
+  // biome-ignore lint/suspicious/noConsole: temporary debug logging
   console.log('html:', html);
+  // biome-ignore lint/suspicious/noConsole: temporary debug logging
   console.groupEnd();
 
   return { plain, html };
