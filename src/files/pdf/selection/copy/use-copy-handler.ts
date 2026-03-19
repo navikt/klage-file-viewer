@@ -1,6 +1,11 @@
 import type { PdfDocumentObject, PdfEngine } from '@embedpdf/models';
 import { useEffect, useRef } from 'react';
-import { analyzePageReflow, EMPTY_REFLOW, type PageReflow } from '@/files/pdf/selection/copy/analyze-reflow';
+import {
+  analyzePageReflow,
+  computeDocumentMaxFontSize,
+  EMPTY_REFLOW,
+  type PageReflow,
+} from '@/files/pdf/selection/copy/analyze-reflow';
 import { buildOriginalSlice } from '@/files/pdf/selection/copy/build-original-slice';
 import { escapeHtml, paragraphsToHtml, paragraphsToPlain } from '@/files/pdf/selection/copy/formatters';
 import type { PageSelectionRange, ScreenPageGeometry, TextSelection } from '@/files/pdf/selection/types';
@@ -54,6 +59,11 @@ export const useCopyHandler = (
     });
 
     if (canUseLocalText) {
+      const allGeos = selection.ranges
+        .map((range) => geometryRegistry.current.get(range.pageIndex))
+        .filter((geo): geo is ScreenPageGeometry => geo !== undefined);
+      const docMaxFontSize = computeDocumentMaxFontSize(allGeos);
+
       const pageResults = selection.ranges.map((range) => {
         const geo = geometryRegistry.current.get(range.pageIndex);
 
@@ -65,7 +75,7 @@ export const useCopyHandler = (
 
         const rawText = geo.pageText.slice(range.startCharIndex, range.endCharIndex + 1);
 
-        return reflowPage(rawText, range, geo);
+        return reflowPage(rawText, range, geo, docMaxFontSize);
       });
 
       el.textContent = pageResults.map((r) => r.plain).join('\n\n');
@@ -83,6 +93,11 @@ export const useCopyHandler = (
 
       task.wait(
         (texts) => {
+          const allGeos = selection.ranges
+            .map((range) => geometryRegistry.current.get(range.pageIndex))
+            .filter((geo): geo is ScreenPageGeometry => geo !== undefined);
+          const docMaxFontSize = computeDocumentMaxFontSize(allGeos);
+
           const pageResults = texts.map((text, i) => {
             const range = selection.ranges[i];
 
@@ -96,7 +111,7 @@ export const useCopyHandler = (
               return { plain: text, html: `<p>${escapeHtml(text)}</p>` };
             }
 
-            return reflowPage(text, range, geo);
+            return reflowPage(text, range, geo, docMaxFontSize);
           });
 
           el.textContent = pageResults.map((r) => r.plain).join('\n\n');
@@ -174,8 +189,13 @@ export const useCopyHandler = (
 };
 
 /** Analyse text and produce both plain and HTML representations. */
-const reflowPage = (rawText: string, range: PageSelectionRange, geo: ScreenPageGeometry): PageReflow => {
-  const paragraphs = analyzePageReflow(rawText, range, geo);
+const reflowPage = (
+  rawText: string,
+  range: PageSelectionRange,
+  geo: ScreenPageGeometry,
+  documentMaxFontSize?: number,
+): PageReflow => {
+  const paragraphs = analyzePageReflow(rawText, range, geo, documentMaxFontSize);
   const plain = paragraphsToPlain(paragraphs);
   const html = paragraphsToHtml(paragraphs);
 

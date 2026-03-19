@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { analyzePageReflow } from '@/files/pdf/selection/copy/analyze-reflow';
+import { analyzePageReflow, computeDocumentMaxFontSize } from '@/files/pdf/selection/copy/analyze-reflow';
 import { PAGES_EXPECTED_OUTPUT } from '@/files/pdf/selection/copy/expected-output';
 import { paragraphsToHtml, paragraphsToPlain } from '@/files/pdf/selection/copy/formatters';
 import { PAGES_RAW_DATA, type RawData } from '@/files/pdf/selection/copy/raw-data';
@@ -38,6 +38,9 @@ const fullPageRange = (raw: (typeof PAGES_RAW_DATA)[number], pageIndex: number):
 });
 
 describe('analyzePageReflow', () => {
+  const allGeos = PAGES_RAW_DATA.map(buildGeo);
+  const docMaxFontSize = computeDocumentMaxFontSize(allGeos);
+
   for (let pageIndex = 0; pageIndex < PAGES_RAW_DATA.length; pageIndex++) {
     const raw = PAGES_RAW_DATA[pageIndex];
     const expected = PAGES_EXPECTED_OUTPUT[pageIndex];
@@ -50,7 +53,7 @@ describe('analyzePageReflow', () => {
       const geo = buildGeo(raw);
       const range = fullPageRange(raw, pageIndex);
       const rawText = raw.pageText.slice(range.startCharIndex, range.endCharIndex + 1);
-      const paragraphs = analyzePageReflow(rawText, range, geo);
+      const paragraphs = analyzePageReflow(rawText, range, geo, docMaxFontSize);
 
       it('produces the expected number of paragraphs', () => {
         expect(paragraphs.length).toBe(expected.length);
@@ -63,7 +66,7 @@ describe('analyzePageReflow', () => {
           continue;
         }
 
-        describe(`paragraph ${String(i + 1)}: ${expectedParagraph.role}`, () => {
+        describe(`paragraph ${i + 1}: ${expectedParagraph.role}`, () => {
           it('has the correct role', () => {
             expect(paragraphs[i]?.role).toBe(expectedParagraph.role);
           });
@@ -107,7 +110,7 @@ describe('analyzePageReflow', () => {
       const geo = buildGeo(raw);
       const range = fullPageRange(raw, pageIndex);
       const rawText = raw.pageText.slice(range.startCharIndex, range.endCharIndex + 1);
-      const paragraphs = analyzePageReflow(rawText, range, geo);
+      const paragraphs = analyzePageReflow(rawText, range, geo, docMaxFontSize);
 
       it(`page ${pageIndex + 1}: paragraphsToPlain produces non-empty output`, () => {
         const plain = paragraphsToPlain(paragraphs);

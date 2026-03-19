@@ -66,8 +66,10 @@ export const lineText = (line: ReflowSpan[]): string => line.map((s) => s.text).
 const MIN_LINES_FOR_STATS = 2;
 
 /**
- * Factor by which a gap must exceed the median line spacing to be considered a
- * paragraph break.
+ * Factor by which a gap must exceed the baseline line spacing to be considered
+ * a paragraph break. Applied to the 25th-percentile gap, which better
+ * represents body-text spacing than the median when headings inflate the
+ * distribution.
  */
 const PARAGRAPH_GAP_FACTOR = 1.5;
 
@@ -113,6 +115,14 @@ const HEADING_MAX_LINES = 3;
  */
 const FONT_SIZE_BREAK_RATIO = 1.1;
 
+/**
+ * When the horizontal gap between two consecutive runs on the same line
+ * exceeds this multiple of the average glyph width, insert a space.
+ * Typical character gaps are 0–1× glyph width; table columns or signature
+ * blocks have gaps of 3× or more.
+ */
+const HORIZONTAL_GAP_FACTOR = 2;
+
 // ---------------------------------------------------------------------------
 // Analysis entry point
 // ---------------------------------------------------------------------------
@@ -129,17 +139,25 @@ const stripInternalFields = (p: InternalParagraph): ReflowParagraph => ({
 /**
  * Build the intermediate {@link ReflowParagraph} model from raw text and
  * page geometry.
+ *
+ * @param documentMaxFontSize – Optional maximum font size found across all
+ *   pages in the document. When provided, heading levels are computed
+ *   relative to the range between the baseline body size and this maximum,
+ *   giving consistent h1/h2 assignments across pages. When omitted the
+ *   page-local maximum is used instead.
  */
 export const analyzePageReflow = (
   rawText: string,
   range: PageSelectionRange,
   geo: ScreenPageGeometry,
+  documentMaxFontSize?: number,
 ): ReflowParagraph[] => {
   const lineInfos = collectLineInfo(range, geo);
   const baselineWeight = computePageBaselineFontWeight(geo);
   const baselineFontSize = computeBaselineFontSize(geo);
   const baselineLeftEdge = computeBaselineLeftEdge(geo);
   const maxRight = computePageMaxRight(geo);
+  const maxFontSize = documentMaxFontSize ?? computePageMaxFontSize(geo);
 
   let paragraphs: InternalParagraph[];
 
@@ -150,8 +168,8 @@ export const analyzePageReflow = (
   }
 
   for (const paragraph of paragraphs) {
-    paragraph.alignment = detectAlignment(paragraph, maxRight);
-    classifyParagraph(paragraph, baselineFontSize, baselineLeftEdge);
+    paragraph.alignment = detectAlignment(paragraph, maxRight, baselineLeftEdge);
+    classifyParagraph(paragraph, baselineFontSize, maxFontSize, baselineLeftEdge);
   }
 
   return paragraphs.map(stripInternalFields);
@@ -198,8 +216,8 @@ const buildMultiLineParagraphs = (
   baselineLeftEdge: number | undefined,
 ): InternalParagraph[] => {
   const gaps = computeLineGaps(lineInfos);
-  const medianGap = median(gaps);
-  const paragraphThreshold = medianGap * PARAGRAPH_GAP_FACTOR;
+  const baselineGap = percentile25(gaps);
+  const paragraphThreshold = baselineGap * PARAGRAPH_GAP_FACTOR;
   const textLines = splitTextByGeometry(rawText, range, lineInfos);
 
   const makeParagraph = (): InternalParagraph => ({
@@ -226,7 +244,7 @@ const buildMultiLineParagraphs = (
       const prevLineInfo = lineInfos[i - 1];
 
       if (prevLineInfo !== undefined) {
-        sep = lineSeparator(gaps[i - 1], prevLineInfo, paragraphThreshold, maxRight, text);
+        sep = lineSeparator(gaps[i - 1], prevLineInfo, paragraphThreshold, maxRight);
       }
 
       sep = refineSeparator(sep, text, lineInfo, lineInfos[i - 1], baselineLeftEdge);
@@ -253,7 +271,7 @@ const buildMultiLineParagraphs = (
       // Soft-wrap: merge into the previous line with a space.
       if (sep === ' ' && lastLine !== undefined) {
         lastLine.text += ` ${text}`;
-        lastLine.spans.push({ text: ' ', bold: false, italic: false }, ...spans);
+        mergeSpansWithSpace(lastLine.spans, spans);
         lastLine.rightEdge = lineInfo.rightEdge;
       } else {
         currentParagraph.lines.push({
@@ -279,7 +297,9 @@ const isIndentedLine = (lineInfo: LineInfo, baselineLeftEdge: number | undefined
     return false;
   }
 
-  return lineInfo.leftEdge >= baselineLeftEdge + LIST_INDENT_THRESHOLD;
+  const indent = lineInfo.leftEdge - baselineLeftEdge;
+
+  return indent >= LIST_INDENT_THRESHOLD && indent <= LIST_INDENT_MAX;
 };
 
 /**
@@ -317,6 +337,30 @@ const refineSeparator = (
   return sep;
 };
 
+/**
+ * Append `newSpans` to `existing`, inserting a space separator while merging
+ * adjacent spans that share the same bold/italic style.
+ */
+const mergeSpansWithSpace = (existing: ReflowSpan[], newSpans: ReflowSpan[]): void => {
+  const lastSpan = existing[existing.length - 1];
+  const firstNew = newSpans[0];
+
+  if (
+    lastSpan !== undefined &&
+    firstNew !== undefined &&
+    lastSpan.bold === firstNew.bold &&
+    lastSpan.italic === firstNew.italic
+  ) {
+    lastSpan.text += ` ${firstNew.text}`;
+    existing.push(...newSpans.slice(1));
+  } else if (lastSpan !== undefined) {
+    lastSpan.text += ' ';
+    existing.push(...newSpans);
+  } else {
+    existing.push({ text: ' ', bold: false, italic: false }, ...newSpans);
+  }
+};
+
 // ---------------------------------------------------------------------------
 // Span extraction — build styled spans from run boundaries within a line
 // ---------------------------------------------------------------------------
@@ -335,6 +379,11 @@ const buildSpansForRange = (
 ): ReflowSpan[] => {
   const spans: ReflowSpan[] = [];
 
+  /** The right edge (x + width) of the last visible run added. */
+  let prevRunRight = Number.NEGATIVE_INFINITY;
+  /** The average glyph width of the last visible run. */
+  let prevAvgGlyphWidth = 0;
+
   for (const run of geo.runs) {
     const runEnd = run.charStart + run.glyphs.length - 1;
 
@@ -350,20 +399,11 @@ const buildSpansForRange = (
       continue;
     }
 
-    // Clamp to the overlap between the run and the requested range.
-    const overlapStart = Math.max(run.charStart, charStart);
-    const overlapEnd = Math.min(runEnd, charEnd);
+    insertHorizontalGapSpace(spans, run, prevRunRight, prevAvgGlyphWidth);
 
-    const textStart = Math.max(overlapStart - selectionStart, 0);
-    const textEnd = Math.min(overlapEnd - selectionStart + 1, rawText.length);
+    const text = extractRunText(run, charStart, charEnd, rawText, selectionStart);
 
-    if (textStart >= rawText.length || textEnd <= textStart) {
-      continue;
-    }
-
-    const text = rawText.slice(textStart, textEnd).replace(/^[\r\n]+|[\r\n]+$/g, '');
-
-    if (text.length === 0) {
+    if (text === null) {
       continue;
     }
 
@@ -378,6 +418,10 @@ const buildSpansForRange = (
     } else {
       spans.push({ text, bold, italic });
     }
+
+    // Track run position for gap detection.
+    prevRunRight = run.rect.x + run.rect.width;
+    prevAvgGlyphWidth = run.glyphs.length > 0 ? run.rect.width / run.glyphs.length : 0;
   }
 
   // Fallback: if no spans were produced (e.g. no overlapping runs), create
@@ -393,6 +437,55 @@ const buildSpansForRange = (
   }
 
   return spans;
+};
+
+/**
+ * If a run starts far to the right of the previous run (indicating a table
+ * cell or column gap), append a space to the last span in the list.
+ */
+const insertHorizontalGapSpace = (
+  spans: ReflowSpan[],
+  run: ScreenRun,
+  prevRunRight: number,
+  prevAvgGlyphWidth: number,
+): void => {
+  if (spans.length === 0 || run.rect.width <= 0 || prevAvgGlyphWidth <= 0) {
+    return;
+  }
+
+  const gap = run.rect.x - prevRunRight;
+
+  if (gap > prevAvgGlyphWidth * HORIZONTAL_GAP_FACTOR) {
+    const prev = spans[spans.length - 1];
+
+    if (prev !== undefined) {
+      prev.text += ' ';
+    }
+  }
+};
+
+/** Extract and trim text for a run's overlap with a character range. */
+const extractRunText = (
+  run: ScreenRun,
+  charStart: number,
+  charEnd: number,
+  rawText: string,
+  selectionStart: number,
+): string | null => {
+  const runEnd = run.charStart + run.glyphs.length - 1;
+  const overlapStart = Math.max(run.charStart, charStart);
+  const overlapEnd = Math.min(runEnd, charEnd);
+
+  const textStart = Math.max(overlapStart - selectionStart, 0);
+  const textEnd = Math.min(overlapEnd - selectionStart + 1, rawText.length);
+
+  if (textStart >= rawText.length || textEnd <= textStart) {
+    return null;
+  }
+
+  const text = rawText.slice(textStart, textEnd).replace(/^[\r\n]+|[\r\n]+$/g, '');
+
+  return text.length > 0 ? text : null;
 };
 
 // ---------------------------------------------------------------------------
@@ -500,10 +593,33 @@ const ALIGNMENT_TOLERANCE = 4;
  *
  * Single-line paragraphs default to `'left'` since there's nothing to compare.
  */
-const detectAlignment = (paragraph: InternalParagraph, maxRight: number): TextAlignment => {
+const detectAlignment = (
+  paragraph: InternalParagraph,
+  maxRight: number,
+  baselineLeftEdge: number | undefined,
+): TextAlignment => {
   const lines = paragraph.lines.filter((l) => l.leftEdge !== undefined && l.rightEdge !== undefined);
 
   if (lines.length < 2) {
+    // For single-line paragraphs, compare against page-level baselines.
+    const line = lines[0];
+
+    if (line !== undefined && baselineLeftEdge !== undefined && maxRight > 0) {
+      const leftOffset = (line.leftEdge ?? 0) - baselineLeftEdge;
+      const rightOffset = maxRight - (line.rightEdge ?? maxRight);
+      const pageWidth = maxRight - baselineLeftEdge;
+
+      // Right-aligned: far from left baseline, close to right edge.
+      if (leftOffset > pageWidth * 0.4 && rightOffset <= ALIGNMENT_TOLERANCE) {
+        return 'right';
+      }
+
+      // Center-aligned: similar offsets on both sides.
+      if (leftOffset > ALIGNMENT_TOLERANCE && Math.abs(leftOffset - rightOffset) <= ALIGNMENT_TOLERANCE * 2) {
+        return 'center';
+      }
+    }
+
     return 'left';
   }
 
@@ -550,10 +666,17 @@ const detectAlignment = (paragraph: InternalParagraph, maxRight: number): TextAl
  */
 const LIST_INDENT_THRESHOLD = 8;
 
+/**
+ * Maximum indentation for list detection. Indents beyond this are more likely
+ * caused by right/center alignment than by a list bullet.
+ */
+const LIST_INDENT_MAX = 60;
+
 /** Classify a paragraph's role based on font size, line count, and text patterns. */
 const classifyParagraph = (
   paragraph: InternalParagraph,
   baselineFontSize: number | undefined,
+  maxFontSize: number | undefined,
   baselineLeftEdge: number | undefined,
 ): void => {
   if (paragraph.lines.length === 0) {
@@ -611,7 +734,7 @@ const classifyParagraph = (
   }
 
   paragraph.role = 'heading';
-  paragraph.headingLevel = headingLevelFromRatio(ratio);
+  paragraph.headingLevel = headingLevelFromRatio(ratio, baselineFontSize, maxFontSize);
 };
 
 /**
@@ -630,20 +753,46 @@ const isIndentedParagraph = (paragraph: InternalParagraph, baselineLeftEdge: num
     return false;
   }
 
-  return firstLine.leftEdge >= baselineLeftEdge + LIST_INDENT_THRESHOLD;
+  const indent = firstLine.leftEdge - baselineLeftEdge;
+
+  return indent >= LIST_INDENT_THRESHOLD && indent <= LIST_INDENT_MAX;
 };
 
-/** Map a font-size ratio to a heading level (1–3). */
-const headingLevelFromRatio = (ratio: number): number => {
-  if (ratio >= 1.8) {
+/**
+ * Map a font-size ratio to a heading level (1–3) using adaptive thresholds.
+ *
+ * When the document's maximum font size is known, heading levels are
+ * distributed across the range between the baseline body size and the
+ * maximum. This produces consistent h1/h2/h3 assignment regardless of
+ * absolute font sizes.
+ */
+const headingLevelFromRatio = (
+  ratio: number,
+  baselineFontSize: number | undefined,
+  maxFontSize: number | undefined,
+): number => {
+  if (baselineFontSize !== undefined && maxFontSize !== undefined && maxFontSize > baselineFontSize) {
+    const maxRatio = maxFontSize / baselineFontSize;
+    const range = maxRatio - 1;
+
+    // Upper third → h1, middle third → h2, lower third → h3.
+    if (ratio >= 1 + range * (2 / 3)) {
+      return 1;
+    }
+
+    if (ratio >= 1 + range * (1 / 3)) {
+      return 2;
+    }
+
+    return 3;
+  }
+
+  // Fallback when no max font size is available.
+  if (ratio >= 1.4) {
     return 1;
   }
 
-  if (ratio >= 1.4) {
-    return 2;
-  }
-
-  return 3;
+  return 2;
 };
 
 // ---------------------------------------------------------------------------
@@ -659,8 +808,8 @@ interface ListMarkerMatch {
 const UNORDERED_MARKER =
   /^[\s]*([\u2022\u2023\u2043\u25AA\u25AB\u25B8\u25BA\u25CB\u25CF\u25E6\u2013\u2014\u2015\u2219\u27A2\u2010\-*\u00B7])\s+/;
 
-/** Ordered list: digits, letters, or roman numerals followed by `.` or `)`, with optional trailing space. */
-const ORDERED_MARKER = /^[\s]*(\d{1,4}[.)]|[a-zA-Z][.)]|[ivxlIVXL]{1,6}[.)])\s*/;
+/** Ordered list: digits followed by `.` or `)` with optional space, or single letter followed by `)` (not `.` to avoid matching initials like "D. Smith"). */
+const ORDERED_MARKER = /^[\s]*(\d{1,4}[.)]\s*|[a-zA-Z][)]\s*|[ivxlIVXL]{1,6}[.)]\s*)/;
 
 const detectListMarker = (text: string): ListMarkerMatch | null => {
   const unordered = text.match(UNORDERED_MARKER);
@@ -756,7 +905,47 @@ const computeBaselineFontSize = (geo: ScreenPageGeometry): number | undefined =>
   return mode;
 };
 
-/** Compute the average font size from a paragraph's lines. */
+/** Find the maximum font size among visible runs on a single page. */
+const computePageMaxFontSize = (geo: ScreenPageGeometry): number | undefined => {
+  let max: number | undefined;
+
+  for (const run of geo.runs) {
+    if (run.fontSize === undefined || run.fontSize <= 1) {
+      continue;
+    }
+
+    const hasVisible = run.glyphs.some((g) => g.flags !== GLYPH_FLAG_EMPTY);
+
+    if (!hasVisible) {
+      continue;
+    }
+
+    if (max === undefined || run.fontSize > max) {
+      max = run.fontSize;
+    }
+  }
+
+  return max;
+};
+
+/**
+ * Compute the maximum font size across multiple pages. Call this before
+ * per-page analysis and pass the result as `documentMaxFontSize` to
+ * {@link analyzePageReflow} for consistent heading level assignment.
+ */
+export const computeDocumentMaxFontSize = (pages: ScreenPageGeometry[]): number | undefined => {
+  let max: number | undefined;
+
+  for (const geo of pages) {
+    const pageMax = computePageMaxFontSize(geo);
+
+    if (pageMax !== undefined && (max === undefined || pageMax > max)) {
+      max = pageMax;
+    }
+  }
+
+  return max;
+};
 const computeParagraphAvgFontSize = (paragraph: InternalParagraph): number | undefined => {
   let sum = 0;
   let count = 0;
@@ -774,12 +963,14 @@ const computeParagraphAvgFontSize = (paragraph: InternalParagraph): number | und
 /**
  * Compute the baseline (body) left edge from ALL visible runs on the page.
  *
- * Uses a character-count-weighted mode bucketed to the nearest pixel. This
- * represents the most common left alignment on the page — list items whose
- * text starts further right than this are considered indented.
+ * Buckets left edges by pixel position, weighted by character count. The
+ * baseline is the leftmost edge that appears with significant frequency
+ * (≥5% of total characters). This avoids picking an indented block that
+ * happens to have the most text while still filtering out rare outliers.
  */
 const computeBaselineLeftEdge = (geo: ScreenPageGeometry): number | undefined => {
   const edgeCounts = new Map<number, number>();
+  let totalChars = 0;
 
   for (const run of geo.runs) {
     const hasVisible = run.glyphs.some((g) => g.flags !== GLYPH_FLAG_EMPTY);
@@ -791,23 +982,25 @@ const computeBaselineLeftEdge = (geo: ScreenPageGeometry): number | undefined =>
     const rounded = Math.round(run.rect.x);
     const charCount = run.glyphs.length;
     edgeCounts.set(rounded, (edgeCounts.get(rounded) ?? 0) + charCount);
+    totalChars += charCount;
   }
 
-  if (edgeCounts.size === 0) {
+  if (edgeCounts.size === 0 || totalChars === 0) {
     return undefined;
   }
 
-  let maxCount = 0;
-  let mode: number | undefined;
+  const significanceThreshold = totalChars * 0.05;
+  let minSignificantEdge: number | undefined;
 
   for (const [edge, count] of edgeCounts) {
-    if (count > maxCount) {
-      maxCount = count;
-      mode = edge;
+    if (count >= significanceThreshold) {
+      if (minSignificantEdge === undefined || edge < minSignificantEdge) {
+        minSignificantEdge = edge;
+      }
     }
   }
 
-  return mode;
+  return minSignificantEdge;
 };
 
 // ---------------------------------------------------------------------------
@@ -1001,15 +1194,13 @@ const computeLineGaps = (lines: LineInfo[]): number[] => {
  * Determine the separator to place after a line:
  *  - Paragraph break (large vertical gap) → `\n\n`
  *  - Full-width wrapping line → ` ` (space)
- *  - Short line followed by a lowercase start → ` ` (space)
- *  - Short line followed by uppercase / bullet / number → `\n`
+ *  - Short line → `\n` (explicit line break)
  */
 const lineSeparator = (
   gap: number | undefined,
   line: LineInfo,
   paragraphThreshold: number,
   maxRight: number,
-  nextLineText: string | undefined,
 ): '\n\n' | '\n' | ' ' => {
   if (gap !== undefined && gap > paragraphThreshold) {
     return '\n\n';
@@ -1021,27 +1212,8 @@ const lineSeparator = (
     return ' ';
   }
 
-  if (nextLineText !== undefined && startsWithLowercase(nextLineText)) {
-    return ' ';
-  }
-
   return '\n';
 };
-
-/** Check whether a text line starts with a lowercase Unicode letter. */
-const startsWithLowercase = (text: string): boolean => {
-  const firstLetter = text.match(FIRST_LETTER_PATTERN);
-
-  if (firstLetter === null) {
-    return false;
-  }
-
-  const ch = firstLetter[0];
-
-  return ch === ch.toLowerCase() && ch !== ch.toUpperCase();
-};
-
-const FIRST_LETTER_PATTERN = /[^\s]/;
 
 /**
  * Check whether two adjacent lines have a significant font-size difference,
@@ -1089,17 +1261,16 @@ const splitTextByGeometry = (rawText: string, range: PageSelectionRange, lines: 
   return textLines;
 };
 
-/** Compute the median of a non-empty array of numbers. */
-const median = (values: number[]): number => {
+/**
+ * Compute the 25th percentile of a non-empty array of numbers.
+ *
+ * Using the lower quartile instead of the median better represents
+ * body-text line spacing in documents where headings or paragraph gaps
+ * inflate the upper half of the distribution.
+ */
+const percentile25 = (values: number[]): number => {
   const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
+  const idx = Math.floor(sorted.length * 0.25);
 
-  if (sorted.length % 2 === 0) {
-    const a = sorted[mid - 1];
-    const b = sorted[mid];
-
-    return a !== undefined && b !== undefined ? (a + b) / 2 : 0;
-  }
-
-  return sorted[mid] ?? 0;
+  return sorted[idx] ?? 0;
 };
