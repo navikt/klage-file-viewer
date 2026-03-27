@@ -31,7 +31,7 @@ jobs:
       contents: read
     container:
       # Faster than installing browser and OS dependencies every time. Even with caching of the browser binaries.
-      image: mcr.microsoft.com/playwright:v1.56.1-noble
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
     outputs:
       pdfium-hash: ${{ steps.pdfium-hash.outputs.hash }}
       tesseract-version: ${{ steps.tesseract-version.outputs.version }}

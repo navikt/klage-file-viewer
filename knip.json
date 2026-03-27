@@ -1,5 +1,5 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "project": ["src/**/*.{ts,tsx}", "dev/**/*.{ts,tsx}", ".github/scripts/**/*.ts"],
-  "ignoreDependencies": ["@navikt/ds-css", "@tailwindcss/postcss", "@opentelemetry/api", "@embedpdf/pdfium"]
+  "ignoreDependencies": ["@navikt/ds-css", "@tailwindcss/postcss", "@embedpdf/pdfium"]
 }
