@@ -119,6 +119,7 @@ export const PdfPageImage = ({ engine, doc, page, visible }: PdfPageImageProps) 
   return (
     <canvas
       ref={setCanvasRef}
+      aria-hidden
       className={`h-full w-full ${imageRenderingClass}`}
       style={{ filter: filterStyle, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
     />

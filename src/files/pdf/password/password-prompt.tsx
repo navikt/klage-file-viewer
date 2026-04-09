@@ -39,6 +39,11 @@ export const PasswordPrompt = ({ passwordState, onSubmitPassword, scale }: Passw
   return (
     <PlaceholderWrapper scale={scale}>
       <VStack
+        as="form"
+        onSubmit={(e: React.FormEvent) => {
+          e.preventDefault();
+          handleUnlock();
+        }}
         align="center"
         gap="space-24"
         className="rounded-lg border border-ax-border-neutral bg-ax-bg-default p-10 shadow-md"
@@ -62,12 +67,6 @@ export const PasswordPrompt = ({ passwordState, onSubmitPassword, scale }: Passw
             setInputValue(e.target.value);
           }}
           error={errorMessage}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              handleUnlock();
-            }
-          }}
         />
 
         <Button

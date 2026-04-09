@@ -23,7 +23,7 @@ export const JsonSection = ({
   onPageCountReady,
   documentNavigation,
 }: JsonSectionProps) => (
-  <FileSectionContainer>
+  <FileSectionContainer title={file.title}>
     {shouldLoad ? (
       <LoadedJsonSection
         file={file}

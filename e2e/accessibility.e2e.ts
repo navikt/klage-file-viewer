@@ -1,5 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
-import { FILE_HEADER_SELECTOR, THEME_BUTTON_REGEX, VIEWER_SELECTOR, waitForContent } from '@e2e/helpers';
+import {
+  FILE_HEADER_SELECTOR,
+  getFileToolbars,
+  THEME_BUTTON_REGEX,
+  VIEWER_SELECTOR,
+  waitForContent,
+} from '@e2e/helpers';
 import { expect, test } from '@playwright/test';
 
 test.describe('KlageFileViewer', () => {
@@ -20,7 +26,7 @@ test.describe('KlageFileViewer', () => {
     });
 
     test('should not have a11y violations in file headers', async ({ page }) => {
-      await page.locator(FILE_HEADER_SELECTOR).first().waitFor({ state: 'visible' });
+      await getFileToolbars(page).first().waitFor({ state: 'visible' });
 
       const results = await new AxeBuilder({ page }).include(FILE_HEADER_SELECTOR).analyze();
 

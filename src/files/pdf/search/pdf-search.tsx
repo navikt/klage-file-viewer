@@ -171,6 +171,8 @@ export const PdfSearch = ({
           data-color={isSearchOpen ? 'accent' : 'neutral'}
           icon={<MagnifyingGlassIcon aria-hidden />}
           onClick={() => (isSearchOpen ? closeSearch() : setIsSearchOpen(true))}
+          aria-label="Søk i PDF"
+          aria-expanded={isSearchOpen}
         />
       </Tooltip>
       {isSearchOpen ? (
@@ -247,6 +249,7 @@ const PdfSearchUI = ({
           onChange={({ target }) => void handleSearchChange(target.value)}
           onKeyDown={handleInputKeyDown}
           placeholder={`Søk (${MOD_KEY_TEXT}+F)`}
+          aria-label="Søk i dokumenter"
           className="h-full w-40 px-2 focus:outline-none"
         />
 
@@ -260,12 +263,13 @@ const PdfSearchUI = ({
         />
       </HStack>
 
-      <Tooltip content="Krev nøyaktig samsvar med store og små bokstaver">
+      <Tooltip content="Krev nøyaktig samsvar med store og små bokstaver" describesChild>
         <Button
           icon={<CaseSensitiveIcon aria-hidden width={20} />}
           size="xsmall"
           role="switch"
           aria-checked={caseSensitive}
+          aria-label="Skill mellom store og små bokstaver"
           onClick={() => setCaseSensitive((s) => !s)}
           variant={caseSensitive ? 'primary' : 'tertiary'}
           data-color={caseSensitive ? 'accent' : 'neutral'}
@@ -279,6 +283,7 @@ const PdfSearchUI = ({
           variant="tertiary-neutral"
           icon={<ChevronLeftIcon aria-hidden />}
           onClick={goToPreviousMatch}
+          aria-label="Forrige treff"
         />
       </Tooltip>
 
@@ -289,18 +294,31 @@ const PdfSearchUI = ({
           variant="tertiary-neutral"
           icon={<ChevronRightIcon aria-hidden />}
           onClick={goToNextMatch}
+          aria-label="Neste treff"
         />
       </Tooltip>
 
-      {matches.length > 0 ? (
-        <BodyShort size="small" className="whitespace-nowrap">
-          {currentMatchIndex + 1} / {matches.length}
-        </BodyShort>
-      ) : searchQuery.length > 0 ? (
-        <BodyShort size="small" textColor="subtle" className="whitespace-nowrap">
-          Ingen treff
-        </BodyShort>
-      ) : null}
+      <BodyShort
+        size="small"
+        textColor={matches.length > 0 ? undefined : 'subtle'}
+        className="whitespace-nowrap"
+        role="status"
+        aria-live="polite"
+      >
+        {getSearchStatus(matches, currentMatchIndex, searchQuery)}
+      </BodyShort>
     </HStack>
   );
+};
+
+const getSearchStatus = (matches: SearchMatch[], currentMatchIndex: number, searchQuery: string): string | null => {
+  if (matches.length > 0) {
+    return `${(currentMatchIndex + 1).toString(10)} / ${matches.length.toString(10)}`;
+  }
+
+  if (searchQuery.length > 0) {
+    return 'Ingen treff';
+  }
+
+  return null;
 };

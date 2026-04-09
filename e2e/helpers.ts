@@ -1,7 +1,12 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 export const VIEWER_SELECTOR = '[data-klage-file-viewer]';
 export const FILE_HEADER_SELECTOR = '[data-klage-file-viewer-file-header]';
+const FILE_TOOLBAR_NAME = /verktøylinje for/i;
+
+/** Locates all file toolbars (`<nav aria-label="Verktøylinje for …">`) within the viewer. */
+export const getFileToolbars = (page: Page): Locator =>
+  page.locator(VIEWER_SELECTOR).getByRole('navigation', { name: FILE_TOOLBAR_NAME });
 export const PAGE_SELECTOR = '[data-klage-file-viewer-page-number]';
 export const SECTION_SELECTOR = '[data-klage-file-viewer-section-index]';
 
@@ -14,7 +19,7 @@ export const THEME_BUTTON_REGEX = /lys|mørk/i;
 export const DOCUMENT_COUNT_REGEX = /Dokument \d+ av \d+/;
 export const DOCUMENT_COUNT_CAPTURE_REGEX = /Dokument (\d+) av (\d+)/;
 export const INITIAL_SCALE = '125';
-export const MATCH_COUNTER_REGEX = /^\d+ \/ \d+$/;
+const MATCH_COUNTER_REGEX = /^\d+ \/ \d+$/;
 export const DOCUMENT_WITH_VARIANTS_URL = '/?files=doc%3AVedtak%20om%20tilbakekreving';
 export const SINGLE_PDF_URL = '/?files=file%3AKlagevedtak.pdf';
 
@@ -46,7 +51,7 @@ export const focusViewer = async (page: Page) => {
  * Use {@link waitForPdfRendered} when a test depends on actual PDF rendering.
  */
 export const waitForContent = async (page: Page) => {
-  await page.locator(FILE_HEADER_SELECTOR).first().getByText(PAGE_COUNT_REGEX).waitFor({ state: 'visible' });
+  await getFileToolbars(page).first().getByText(PAGE_COUNT_REGEX).waitFor({ state: 'visible' });
 };
 
 /**
@@ -61,15 +66,6 @@ export const waitForContent = async (page: Page) => {
  */
 export const waitForPdfRendered = async (page: Page) => {
   await page.locator('[data-klage-file-viewer-page-number] canvas').first().waitFor({ state: 'visible' });
-};
-
-/**
- * @deprecated Use {@link waitForPdfRendered} instead. There is no longer a
- * text layer in the DOM, so this function now waits for the page image to
- * render rather than checking for specific text content.
- */
-export const waitForPdfText = async (page: Page, _text: string) => {
-  await waitForPdfRendered(page);
 };
 
 /**

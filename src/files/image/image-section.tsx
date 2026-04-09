@@ -25,7 +25,7 @@ export const ImageSection = ({
   onPageCountReady,
   documentNavigation,
 }: ImageSectionProps) => (
-  <FileSectionContainer>
+  <FileSectionContainer title={file.title}>
     {shouldLoad ? (
       <LoadedImageSection
         file={file}

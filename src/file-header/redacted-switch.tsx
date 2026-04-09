@@ -27,11 +27,10 @@ export const RedactedSwitch = (props: RedactedSwitchProps) => {
 
   return (
     <Button
-      role="checkbox"
       size="xsmall"
       variant={showRedacted ? 'primary' : 'secondary'}
       data-color="neutral"
-      aria-checked={showRedacted}
+      aria-pressed={showRedacted}
       type="button"
       onClick={() => setShowRedacted(!showRedacted)}
       icon={showRedacted ? <EyeObfuscatedIcon aria-hidden /> : <EyeIcon aria-hidden />}

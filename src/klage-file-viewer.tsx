@@ -298,16 +298,7 @@ const KlageFileViewerInner = ({
         />
 
         {/* Scrollable container with all file sections */}
-        <VStack
-          align="center"
-          overflow="clip"
-          position="relative"
-          flexGrow="1"
-          gap="space-16"
-          width="100%"
-          tabIndex={0}
-          className="focus:outline-none"
-        >
+        <VStack align="center" overflow="clip" position="relative" flexGrow="1" gap="space-16" width="100%">
           {files.map((file, index) => (
             <VStack
               key={file.url}

@@ -25,7 +25,7 @@ export const ExcelSection = ({
   onPageCountReady,
   documentNavigation,
 }: ExcelSectionProps) => (
-  <FileSectionContainer>
+  <FileSectionContainer title={file.title}>
     {shouldLoad ? (
       <LoadedExcelSection
         file={file}

@@ -97,6 +97,7 @@ export const Scale = ({ scale, setScale }: Props) => {
           onClick={() => handleZoomOut(SCALE_STEP)}
           data-color="neutral"
           icon={<ZoomMinusIcon aria-hidden />}
+          aria-label="Zoom ut"
         />
       </Tooltip>
 
@@ -108,6 +109,7 @@ export const Scale = ({ scale, setScale }: Props) => {
           onChange={({ target }) => setInput(target.value)}
           onBlur={submit}
           onKeyDown={onKeyDown}
+          aria-label="Skalering i prosent"
         />
         <span className="ml-2">%</span>
       </label>
@@ -127,6 +129,7 @@ export const Scale = ({ scale, setScale }: Props) => {
           onClick={() => handleZoomIn(SCALE_STEP)}
           data-color="neutral"
           icon={<ZoomPlusIcon aria-hidden />}
+          aria-label="Zoom inn"
         />
       </Tooltip>
     </HStack>

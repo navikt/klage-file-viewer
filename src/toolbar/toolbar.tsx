@@ -62,6 +62,8 @@ export const Toolbar = ({
 
   return (
     <HStack
+      as="nav"
+      aria-label="Verktøylinje"
       flexShrink="0"
       align="center"
       justify="space-between"
@@ -110,6 +112,7 @@ export const Toolbar = ({
             size="xsmall"
             variant="tertiary"
             data-color="neutral"
+            aria-label="Innstillinger"
           />
         </Tooltip>
 
@@ -131,6 +134,7 @@ export const Toolbar = ({
               icon={<ChevronUpIcon aria-hidden />}
               onClick={onPreviousDocument}
               disabled={previousDocumentDisabled === true}
+              aria-label="Forrige dokument"
             />
           </Tooltip>
         ) : null}
@@ -144,11 +148,12 @@ export const Toolbar = ({
               icon={<ChevronDownIcon aria-hidden />}
               onClick={onNextDocument}
               disabled={nextDocumentDisabled === true}
+              aria-label="Neste dokument"
             />
           </Tooltip>
         ) : null}
 
-        <Tag data-color="neutral" variant="outline" size="xsmall">
+        <Tag data-color="neutral" variant="outline" size="xsmall" role="status" aria-live="polite">
           {`Dokument ${(currentDocumentIndex + 1).toString(10)} av ${totalDocuments.toString(10)}`}
         </Tag>
 
@@ -160,6 +165,7 @@ export const Toolbar = ({
               size="xsmall"
               variant="tertiary"
               data-color="neutral"
+              aria-label="Lukk dokumentet"
             />
           </Tooltip>
         ) : null}

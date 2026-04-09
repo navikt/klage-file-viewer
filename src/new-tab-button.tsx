@@ -79,6 +79,7 @@ export const NewTabButton = ({ url, tooltip }: NewTabButtonProps) => {
         href={url}
         target={target}
         icon={<ExternalLinkIcon aria-hidden />}
+        aria-label={tooltip}
         onClick={handleClick}
         onAuxClick={handleClick}
         size="xsmall"

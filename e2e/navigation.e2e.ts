@@ -1,15 +1,16 @@
 import {
+  assertPdfContainsText,
   DOCUMENT_COUNT_CAPTURE_REGEX,
   DOCUMENT_COUNT_REGEX,
-  FILE_HEADER_SELECTOR,
   focusViewer,
+  getFileToolbars,
   NEXT_PAGE_REGEX,
   PAGE_COUNT_CAPTURE_REGEX,
   PAGE_COUNT_REGEX,
   SINGLE_PDF_URL,
   VIEWER_SELECTOR,
   waitForContent,
-  waitForPdfText,
+  waitForPdfRendered,
 } from '@e2e/helpers';
 import { expect, test } from '@playwright/test';
 
@@ -23,10 +24,10 @@ test.describe('KlageFileViewer', () => {
     });
 
     test('can navigate to next page within a document', async ({ page }) => {
-      const header = page.locator(FILE_HEADER_SELECTOR).first();
-      await expect(header.getByText(PAGE_COUNT_REGEX)).toBeVisible();
+      const toolbar = getFileToolbars(page).first();
+      await expect(toolbar.getByText(PAGE_COUNT_REGEX)).toBeVisible();
 
-      const pageTag = header.getByText(PAGE_COUNT_REGEX);
+      const pageTag = toolbar.getByText(PAGE_COUNT_REGEX);
       const initialText = await pageTag.textContent();
 
       // Only test navigation if the document has more than one page
@@ -36,7 +37,7 @@ test.describe('KlageFileViewer', () => {
         const totalPages = Number.parseInt(match[2] ?? '1', 10);
 
         if (totalPages > 1) {
-          const nextButton = header.getByRole('button', { name: NEXT_PAGE_REGEX });
+          const nextButton = toolbar.getByRole('button', { name: NEXT_PAGE_REGEX });
           await expect(nextButton).toBeVisible();
           await nextButton.click();
 
@@ -50,7 +51,8 @@ test.describe('KlageFileViewer', () => {
     test('opens search with Control+F on a single PDF', async ({ page }) => {
       // Search is only available when a single PDF is displayed
       await page.goto(SINGLE_PDF_URL);
-      await waitForPdfText(page, EXPECTED_PDF_TEXT);
+      await waitForPdfRendered(page);
+      await assertPdfContainsText(page, EXPECTED_PDF_TEXT);
 
       await focusViewer(page);
       await page.keyboard.press('Control+f');
@@ -63,11 +65,12 @@ test.describe('KlageFileViewer', () => {
     test('navigates to next page with Control+ArrowDown', async ({ page }) => {
       // Use a single multi-page PDF — full-height pages make scroll-based visibility detection reliable
       await page.goto(SINGLE_PDF_URL);
-      await waitForPdfText(page, EXPECTED_PDF_TEXT);
+      await waitForPdfRendered(page);
+      await assertPdfContainsText(page, EXPECTED_PDF_TEXT);
 
-      const header = page.locator(FILE_HEADER_SELECTOR).first();
+      const toolbar = getFileToolbars(page).first();
 
-      const pageTag = header.getByText(PAGE_COUNT_REGEX);
+      const pageTag = toolbar.getByText(PAGE_COUNT_REGEX);
       const initialText = await pageTag.textContent();
       const match = initialText?.match(PAGE_COUNT_CAPTURE_REGEX);
 
@@ -91,11 +94,12 @@ test.describe('KlageFileViewer', () => {
     test('navigates to previous page with Control+ArrowUp', async ({ page }) => {
       // Use a single multi-page PDF — full-height pages make scroll-based visibility detection reliable
       await page.goto(SINGLE_PDF_URL);
-      await waitForPdfText(page, EXPECTED_PDF_TEXT);
+      await waitForPdfRendered(page);
+      await assertPdfContainsText(page, EXPECTED_PDF_TEXT);
 
-      const header = page.locator(FILE_HEADER_SELECTOR).first();
+      const toolbar = getFileToolbars(page).first();
 
-      const pageTag = header.getByText(PAGE_COUNT_REGEX);
+      const pageTag = toolbar.getByText(PAGE_COUNT_REGEX);
       const initialText = await pageTag.textContent();
       const match = initialText?.match(PAGE_COUNT_CAPTURE_REGEX);
 

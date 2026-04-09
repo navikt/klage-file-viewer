@@ -86,6 +86,8 @@ export const FileHeader = ({
 
   return (
     <Box
+      as="nav"
+      aria-label={`Verktøylinje for ${title}`}
       background="neutral-moderate"
       padding="space-4"
       className="sticky top-11.75 z-20 flex w-full flex-row items-center justify-between gap-1"
@@ -109,7 +111,7 @@ export const FileHeader = ({
         ) : null}
 
         <Tooltip content={title}>
-          <h2 className="truncate font-ax-bold text-base">{title}</h2>
+          <span className="truncate font-ax-bold text-base">{title}</span>
         </Tooltip>
 
         {showPasswordIndicator === true ? (
@@ -151,9 +153,16 @@ export const FileHeader = ({
           />
         ) : null}
 
-        <Tag data-color="brand-blue" variant="strong" size="xsmall" className="whitespace-nowrap">
+        <Tag
+          data-color="brand-blue"
+          variant="strong"
+          size="xsmall"
+          className="whitespace-nowrap"
+          role="status"
+          aria-live="polite"
+        >
           {currentPage === null || numPages === null
-            ? '…'
+            ? 'Laster sider …'
             : `Side ${currentPage.toString(10)} av ${numPages.toString(10)}`}
         </Tag>
 

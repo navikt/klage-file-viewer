@@ -18,7 +18,7 @@ interface Props {
 }
 
 export const PdfScaleModeToggle = ({ value, onChange, options }: Props) => (
-  <HStack role="radiogroup" wrap justify="start" gap="space-4">
+  <HStack role="radiogroup" aria-label="Skaleringsmodus" wrap justify="start" gap="space-4">
     {options.map((o) => (
       <ToggleButton key={o.scaleMode} {...o} selected={value === o.scaleMode} onClick={() => onChange(o.scaleMode)} />
     ))}

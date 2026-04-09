@@ -1,5 +1,5 @@
 import {
-  FILE_HEADER_SELECTOR,
+  getFileToolbars,
   PAGE_COUNT_REGEX,
   PAGE_SELECTOR,
   SECTION_SELECTOR,
@@ -23,8 +23,8 @@ test.describe('KlageFileViewer', () => {
     });
 
     test('renders file headers for selected files', async ({ page }) => {
-      const headers = page.locator(FILE_HEADER_SELECTOR);
-      await expect(headers.first()).toBeVisible();
+      const toolbars = getFileToolbars(page);
+      await expect(toolbars.first()).toBeVisible();
     });
 
     test('renders at least one page', async ({ page }) => {
@@ -41,21 +41,19 @@ test.describe('KlageFileViewer', () => {
 
   test.describe('file header', () => {
     test('displays document title in the file header', async ({ page }) => {
-      const header = page.locator(FILE_HEADER_SELECTOR).first();
-      await expect(header).toBeVisible();
+      const toolbar = getFileToolbars(page).first();
+      await expect(toolbar).toBeVisible();
 
-      const heading = header.locator('h2');
-      await expect(heading).toBeVisible();
-      const text = await heading.textContent();
+      const text = await toolbar.textContent();
       expect(text?.length).toBeGreaterThan(0);
     });
 
     test('displays page count in the file header', async ({ page }) => {
-      const header = page.locator(FILE_HEADER_SELECTOR).first();
-      await expect(header).toBeVisible();
+      const toolbar = getFileToolbars(page).first();
+      await expect(toolbar).toBeVisible();
 
-      // Wait for the page count to load — it starts as "…" and becomes "Side X av Y"
-      await expect(header.getByText(PAGE_COUNT_REGEX)).toBeVisible();
+      // Wait for the page count to load — it starts as "Laster sider …" and becomes "Side X av Y"
+      await expect(toolbar.getByText(PAGE_COUNT_REGEX)).toBeVisible();
     });
   });
 
@@ -67,8 +65,8 @@ test.describe('KlageFileViewer', () => {
       const viewer = page.locator(VIEWER_SELECTOR);
       await expect(viewer).toBeVisible();
 
-      const headers = page.locator(FILE_HEADER_SELECTOR);
-      await expect(headers).toHaveCount(1);
+      const toolbars = getFileToolbars(page);
+      await expect(toolbars).toHaveCount(1);
     });
   });
 });

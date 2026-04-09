@@ -36,7 +36,7 @@ export const PdfSection = ({
   currentMatchIndex,
   documentNavigation,
 }: PdfSectionProps) => (
-  <FileSectionContainer>
+  <FileSectionContainer title={file.title}>
     {shouldLoad ? (
       <LoadedPdfSection
         file={file}

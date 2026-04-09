@@ -66,7 +66,11 @@ const PreviousPageButton = ({
   const fallsBackToDocument = isPageDisabled && goToPreviousDocument !== undefined;
 
   return (
-    <Tooltip content="Forrige side" keys={[MOD_KEY_TEXT, '↑']} describesChild>
+    <Tooltip
+      content={fallsBackToDocument ? 'Forrige dokument' : 'Forrige side'}
+      keys={[MOD_KEY_TEXT, '↑']}
+      describesChild
+    >
       <Button
         size="xsmall"
         variant="tertiary"
@@ -74,6 +78,7 @@ const PreviousPageButton = ({
         icon={<ChevronUpIcon aria-hidden />}
         onClick={fallsBackToDocument ? goToPreviousDocument : onPreviousPage}
         disabled={isPageDisabled && !fallsBackToDocument}
+        aria-label={fallsBackToDocument ? 'Forrige dokument' : 'Forrige side'}
       />
     </Tooltip>
   );
@@ -104,7 +109,7 @@ const NextPageButton = ({
   const fallsBackToDocument = isPageDisabled && goToNextDocument !== undefined;
 
   return (
-    <Tooltip content="Neste side" keys={[MOD_KEY_TEXT, '↓']} describesChild>
+    <Tooltip content={fallsBackToDocument ? 'Neste dokument' : 'Neste side'} keys={[MOD_KEY_TEXT, '↓']} describesChild>
       <Button
         size="xsmall"
         variant="tertiary"
@@ -112,6 +117,7 @@ const NextPageButton = ({
         icon={<ChevronDownIcon aria-hidden />}
         onClick={fallsBackToDocument ? goToNextDocument : onNextPage}
         disabled={isPageDisabled && !fallsBackToDocument}
+        aria-label={fallsBackToDocument ? 'Neste dokument' : 'Neste side'}
       />
     </Tooltip>
   );

@@ -30,6 +30,7 @@ export const CustomScale = ({ scale, onChange }: Props) => {
     >
       <HStack align="center">
         <Button
+          aria-label="Reduser skalering"
           data-color="neutral"
           icon={<MinusIcon aria-hidden />}
           size="xsmall"
@@ -37,6 +38,7 @@ export const CustomScale = ({ scale, onChange }: Props) => {
           onClick={scaleDown}
         />
         <input
+          aria-label="Skalering"
           type="range"
           min={MIN_SCALE}
           max={MAX_SCALE}
@@ -45,6 +47,7 @@ export const CustomScale = ({ scale, onChange }: Props) => {
           onChange={(e) => onChange(Number.parseInt(e.target.value, 10))}
         />
         <Button
+          aria-label="Øk skalering"
           data-color="neutral"
           icon={<PlusIcon aria-hidden />}
           size="xsmall"
@@ -55,6 +58,8 @@ export const CustomScale = ({ scale, onChange }: Props) => {
 
       <div ref={ref} className="relative">
         <Button
+          aria-expanded={isOpen}
+          aria-label="Velg skalering"
           data-color="neutral"
           onClick={() => setIsOpen((o) => !o)}
           size="xsmall"
