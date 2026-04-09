@@ -47,10 +47,10 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.1",
-    "@biomejs/biome": "2.4.9",
-    "@embedpdf/engines": "2.10.1",
-    "@embedpdf/models": "2.10.1",
-    "@embedpdf/pdfium": "2.10.1",
+    "@biomejs/biome": "2.4.10",
+    "@embedpdf/engines": "2.14.0",
+    "@embedpdf/models": "2.14.0",
+    "@embedpdf/pdfium": "2.14.0",
     "@navikt/aksel-icons": "8.9.0",
     "@navikt/ds-css": "8.9.0",
     "@navikt/ds-react": "8.9.0",
@@ -65,12 +65,12 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.1",
     "jsdom": "29.0.1",
-    "knip": "6.1.0",
+    "knip": "6.3.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwindcss": "4.2.2",
     "tsdown": "0.21.7",
     "typescript": "6.0.2",
-    "vite": "8.0.3"
+    "vite": "8.0.5"
   }
 }
