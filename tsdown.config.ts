@@ -17,5 +17,6 @@ export default defineConfig({
     neverBundle: ['react', 'react-dom', /^@navikt\//, /^@opentelemetry\//],
     alwaysBundle: [/^@embedpdf/],
   },
+  platform: 'neutral',
   target: false,
 });
