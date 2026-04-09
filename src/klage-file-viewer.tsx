@@ -271,6 +271,7 @@ const KlageFileViewerInner = ({
       onKeyDown={handleKeyDown}
       className={className}
       ref={scrollContainerRef}
+      aria-label={`Filviser - ${files.map((f) => f.title).join(', ')}`}
       data-klage-file-viewer
     >
       <VStack width="100%" overflow="clip" className="outline-ax-accent-500 focus-within:outline">
