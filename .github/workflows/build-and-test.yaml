@@ -57,7 +57,7 @@ jobs:
         if: success() || failure()
         env:
           TOKEN: ${{ secrets.READER_TOKEN }}
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Compute PDFium WASM hash
         if: success() || failure()

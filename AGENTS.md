@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Commands
-- Install dependencies: `bun i`
+- Install dependencies: `bun i --ignore-scripts`
 - Build the library: `bun run build`
 - Run unit tests: `bun test`
 - Check types: `bun typecheck`

@@ -1,5 +1,7 @@
 [install]
 exact = true
+minimumReleaseAge = 259200
+ignoreScripts = true
 
 [test]
 preload = ["./src/test-preload.ts"]

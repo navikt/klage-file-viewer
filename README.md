@@ -221,7 +221,7 @@ The selected mode and custom scale value are persisted to `localStorage` and app
 ## Development
 
 ```sh
-bun i
+bun i --ignore-scripts
 bun run build
 bun test
 bun typecheck
