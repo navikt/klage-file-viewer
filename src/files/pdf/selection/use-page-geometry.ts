@@ -1,6 +1,7 @@
 import type { PdfDocumentObject, PdfEngine, PdfPageObject, PdfTextRun, Rotation } from '@embedpdf/models';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PageGeometry, ScreenPageGeometry, ScreenRun, ScreenRunGlyph } from '@/files/pdf/selection/types';
+import { PX_PER_PT } from '@/scale/constants';
 
 interface UsePageGeometryResult {
   geometry: ScreenPageGeometry | null;
@@ -181,7 +182,7 @@ const transformGeometry = (
   pageHeight: number,
   pageRotation: Rotation,
 ): ScreenPageGeometry => {
-  const factor = scale / 100;
+  const factor = (scale / 100) * PX_PER_PT;
   const fontLookup = buildFontLookup(textRuns);
 
   const runs: ScreenRun[] = raw.runs.map((run) => {

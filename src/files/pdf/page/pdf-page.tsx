@@ -1,14 +1,15 @@
 import type { PdfDocumentObject, PdfEngine, Rotation } from '@embedpdf/models';
 import { useCallback, useEffect, useRef } from 'react';
+import { PageElement } from '@/files/page-element';
 import { PageOcrLayer } from '@/files/pdf/ocr/page-ocr-layer';
 import { getRotationMatrix } from '@/files/pdf/page/get-rotation-matrix';
 import { PdfPageImage } from '@/files/pdf/page/pdf-page-image';
-import { RotateButton } from '@/files/pdf/page/rotate-button';
 import { PasswordUnlockedOverlay } from '@/files/pdf/password/password-unlocked-overlay';
 import { HighlightLayer } from '@/files/pdf/search/highlight-layer';
 import type { HighlightRect } from '@/files/pdf/search/types';
 import { PageSelectionLayer } from '@/files/pdf/selection/page-selection-layer';
 import type { PageSelectionRange, ScreenPageGeometry } from '@/files/pdf/selection/types';
+import { PX_PER_PT } from '@/scale/constants';
 
 interface PdfPageProps {
   engine: PdfEngine;
@@ -81,7 +82,7 @@ export const PdfPage = ({
     return null;
   }
 
-  const scaleFactor = scale / 100;
+  const scaleFactor = (scale / 100) * PX_PER_PT;
   const baseWidth = page.size.width * scaleFactor;
   const baseHeight = page.size.height * scaleFactor;
   const swapped = rotation === 1 || rotation === 3;
@@ -91,58 +92,50 @@ export const PdfPage = ({
   const rotationMatrix = getRotationMatrix(rotation, baseWidth, baseHeight);
 
   return (
-    <div
-      ref={handleRef}
-      data-klage-file-viewer-page-number={pageNumber}
-      data-klage-file-viewer-scalable
-      className="relative w-full"
-    >
-      <RotateButton pageNumber={pageNumber} onRotate={() => onRotate(pageIndex)} />
-      <div className="w-full overflow-x-auto">
-        <div ref={contentRef} className="relative mx-auto" style={{ width, height }}>
-          <div
-            data-klage-file-viewer-page-content
-            className="relative select-none"
-            style={{
-              width: baseWidth,
-              height: baseHeight,
-              transformOrigin: '0 0',
-              transform: rotationMatrix,
-            }}
-          >
-            <PdfPageImage engine={engine} doc={doc} page={page} visible={visible} />
-            <PageSelectionLayer
-              engine={engine}
-              doc={doc}
-              pageIndex={pageIndex}
-              page={page}
-              scale={scale}
-              rotation={rotation}
-              baseWidth={baseWidth}
-              baseHeight={baseHeight}
-              visible={visible}
-              selectionRange={selectionRange}
-              isSelecting={isSelecting}
-              onMouseDown={onMouseDown}
-              geometryRegistry={geometryRegistry}
-            />
-            <PageOcrLayer
-              engine={engine}
-              doc={doc}
-              page={page}
-              pageIndex={pageIndex}
-              visible={visible}
-              baseWidth={baseWidth}
-              baseHeight={baseHeight}
-              onOcrDetected={onOcrDetected}
-            />
-            {highlights !== undefined && highlights.length > 0 ? (
-              <HighlightLayer highlights={highlights} currentMatchIndex={currentMatchIndex ?? 0} />
-            ) : null}
-          </div>
-          {showPasswordOverlay === true ? <PasswordUnlockedOverlay /> : null}
+    <PageElement ref={handleRef} pageNumber={pageNumber} onRotate={() => onRotate(pageIndex)}>
+      <div ref={contentRef} className="relative" style={{ width, height }}>
+        <div
+          data-klage-file-viewer-page-content
+          className="relative select-none"
+          style={{
+            width: baseWidth,
+            height: baseHeight,
+            transformOrigin: '0 0',
+            transform: rotationMatrix,
+          }}
+        >
+          <PdfPageImage engine={engine} doc={doc} page={page} visible={visible} />
+          <PageSelectionLayer
+            engine={engine}
+            doc={doc}
+            pageIndex={pageIndex}
+            page={page}
+            scale={scale}
+            rotation={rotation}
+            baseWidth={baseWidth}
+            baseHeight={baseHeight}
+            visible={visible}
+            selectionRange={selectionRange}
+            isSelecting={isSelecting}
+            onMouseDown={onMouseDown}
+            geometryRegistry={geometryRegistry}
+          />
+          <PageOcrLayer
+            engine={engine}
+            doc={doc}
+            page={page}
+            pageIndex={pageIndex}
+            visible={visible}
+            baseWidth={baseWidth}
+            baseHeight={baseHeight}
+            onOcrDetected={onOcrDetected}
+          />
+          {highlights !== undefined && highlights.length > 0 ? (
+            <HighlightLayer highlights={highlights} currentMatchIndex={currentMatchIndex ?? 0} />
+          ) : null}
         </div>
+        {showPasswordOverlay === true ? <PasswordUnlockedOverlay /> : null}
       </div>
-    </div>
+    </PageElement>
   );
 };

@@ -10,6 +10,7 @@ import { NewTabButton } from '@/new-tab-button';
 import { DefaultScale } from '@/toolbar/default-scale';
 import { FitHeight } from '@/toolbar/fit-height';
 import { FitPage } from '@/toolbar/fit-page';
+import { FitToContent } from '@/toolbar/fit-to-content';
 import { FitWidth } from '@/toolbar/fit-width';
 import { Scale } from '@/toolbar/scale';
 import { SettingsModal } from '@/toolbar/settings-modal';
@@ -30,6 +31,7 @@ interface ToolbarProps {
   totalDocuments: number;
   onClose?: () => void;
   newTabUrl?: string | null;
+  onFitToContent?: (width: number) => void;
   onPreviousDocument?: () => void;
   onNextDocument?: () => void;
   previousDocumentDisabled?: boolean;
@@ -52,6 +54,7 @@ export const Toolbar = ({
   totalDocuments,
   onClose,
   newTabUrl = null,
+  onFitToContent,
   onPreviousDocument,
   onNextDocument,
   previousDocumentDisabled,
@@ -80,13 +83,20 @@ export const Toolbar = ({
 
         <Separator />
 
-        {standalone ? <FitWidth scrollContainerRef={scrollContainerRef} scale={scale} onFitToWidth={setScale} /> : null}
+        <FitWidth scrollContainerRef={scrollContainerRef} scale={scale} onFitToWidth={setScale} />
 
         <FitHeight scrollContainerRef={scrollContainerRef} scale={scale} onFitToHeight={setScale} />
 
         {standalone ? <FitPage scrollContainerRef={scrollContainerRef} scale={scale} onFitToPage={setScale} /> : null}
 
         <DefaultScale scrollContainerRef={scrollContainerRef} onDefaultScale={setScale} />
+
+        {onFitToContent !== undefined ? (
+          <>
+            <Separator />
+            <FitToContent scrollContainerRef={scrollContainerRef} onFitToContent={onFitToContent} />
+          </>
+        ) : null}
 
         <Separator />
 

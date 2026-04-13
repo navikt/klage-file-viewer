@@ -12,7 +12,7 @@ export const RotateButton = ({ pageNumber, onRotate }: RotateButtonProps) => {
   const isPageDark = invertColors && theme === ThemeMode.Dark;
 
   return (
-    <Theme theme={isPageDark ? undefined : 'light'} className="absolute top-1 left-1 z-10">
+    <Theme theme={isPageDark ? undefined : 'light'} className="absolute top-2 left-2 z-10">
       <Tooltip content="Roter til venstre / mot klokken" placement="right" describesChild>
         <Button
           type="button"

@@ -8,7 +8,7 @@ interface JsonTreeProps {
 }
 
 export const JsonTree = ({ value, initialExpanded = true }: JsonTreeProps) => (
-  <pre className="wrap-break-word m-0 whitespace-pre-wrap leading-relaxed">
+  <pre className="m-0 w-fit whitespace-pre leading-relaxed">
     <JsonValue value={value} depth={0} initialExpanded={initialExpanded} />
   </pre>
 );

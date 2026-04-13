@@ -6,6 +6,7 @@ import type { ResolvedVariant } from '@/file-header/variant-types';
 import { FileErrorLayout } from '@/files/file-error-layout';
 import { JsonTree } from '@/files/json/json-tree';
 import { useJsonData } from '@/files/json/use-json-data';
+import { PageElement } from '@/files/page-element';
 import { useRegisterRefresh } from '@/hooks/use-refresh-registry';
 import type { FileEntry } from '@/types';
 import { useFileData } from '@/use-file-data';
@@ -106,9 +107,11 @@ export const LoadedJsonSection = ({
         documentNavigation={documentNavigation}
       />
 
-      <div className="w-full overflow-auto rounded-lg bg-ax-bg-neutral-moderate/30 p-4 font-mono text-sm shadow-ax-dialog">
-        <JsonTree value={json} />
-      </div>
+      <PageElement pageNumber={1}>
+        <div className="w-fit rounded-lg bg-ax-bg-neutral-moderate/30 p-4 font-mono text-sm shadow-ax-dialog">
+          <JsonTree value={json} />
+        </div>
+      </PageElement>
     </>
   );
 };

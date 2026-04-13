@@ -1,12 +1,12 @@
 import { BodyShort, Loader, VStack } from '@navikt/ds-react';
 import type { ReactNode } from 'react';
 import { FileHeader } from '@/file-header/file-header';
-import { A4_HEIGHT_PT, A4_WIDTH_PT } from '@/scale/constants';
+import { A4_HEIGHT_PX, A4_WIDTH_PX } from '@/scale/constants';
 
-/** Compute pixel dimensions for an A4 page at the given scale (percentage, e.g. 125). */
+/** Compute pixel dimensions for an A4 page at the given scale (percentage, e.g. 100). */
 export const getA4Dimensions = (scale: number) => ({
-  width: A4_WIDTH_PT * (scale / 100),
-  height: A4_HEIGHT_PT * (scale / 100),
+  width: A4_WIDTH_PX * (scale / 100),
+  height: A4_HEIGHT_PX * (scale / 100),
 });
 
 interface PlaceholderWrapperProps {

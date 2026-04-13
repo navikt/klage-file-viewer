@@ -18,7 +18,7 @@ export const ZOOM_OUT_REGEX = /zoom ut|forminsk/i;
 export const THEME_BUTTON_REGEX = /lys|mørk/i;
 export const DOCUMENT_COUNT_REGEX = /Dokument \d+ av \d+/;
 export const DOCUMENT_COUNT_CAPTURE_REGEX = /Dokument (\d+) av (\d+)/;
-export const INITIAL_SCALE = '125';
+export const INITIAL_SCALE = '100';
 const MATCH_COUNTER_REGEX = /^\d+ \/ \d+$/;
 export const DOCUMENT_WITH_VARIANTS_URL = '/?files=doc%3AVedtak%20om%20tilbakekreving';
 export const SINGLE_PDF_URL = '/?files=file%3AKlagevedtak.pdf';

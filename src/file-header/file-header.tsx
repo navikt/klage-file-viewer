@@ -90,7 +90,7 @@ export const FileHeader = ({
       aria-label={`Verktøylinje for ${title}`}
       background="neutral-moderate"
       padding="space-4"
-      className="sticky top-11.75 z-20 flex w-full flex-row items-center justify-between gap-1"
+      className="sticky top-11.75 z-20 mx-2 flex flex-row items-center justify-between gap-1 self-stretch"
       shadow="dialog"
       borderRadius="8"
       data-klage-file-viewer-file-header

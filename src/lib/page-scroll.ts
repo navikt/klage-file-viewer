@@ -58,6 +58,9 @@ export const getMostVisiblePage = (scrollContainer: HTMLElement, toolbarHeight: 
   const containerRect = scrollContainer.getBoundingClientRect();
   const visibleTop = containerRect.top + toolbarHeight;
 
+  // First fully-visible page (topmost in DOM order) wins.
+  // Falls back to the page with the largest visible area when none is fully visible.
+  let firstFullyVisible: HTMLDivElement | null = null;
   let bestElement: HTMLDivElement | null = null;
   let bestVisibleArea = 0;
 
@@ -73,13 +76,25 @@ export const getMostVisiblePage = (scrollContainer: HTMLElement, toolbarHeight: 
     const visibleWidth = Math.max(0, overlapRight - overlapLeft);
     const visibleArea = visibleHeight * visibleWidth;
 
+    if (firstFullyVisible === null && pageRect.height > 0 && pageRect.width > 0) {
+      const fullyVisible =
+        pageRect.top >= visibleTop - 1 &&
+        pageRect.bottom <= containerRect.bottom + 1 &&
+        pageRect.left >= containerRect.left - 1 &&
+        pageRect.right <= containerRect.right + 1;
+
+      if (fullyVisible) {
+        firstFullyVisible = page;
+      }
+    }
+
     if (visibleArea > bestVisibleArea) {
       bestVisibleArea = visibleArea;
       bestElement = page;
     }
   }
 
-  return bestElement;
+  return firstFullyVisible ?? bestElement;
 };
 
 /**

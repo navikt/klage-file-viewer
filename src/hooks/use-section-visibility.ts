@@ -77,17 +77,28 @@ export const useSectionVisibility = ({
           ratios.set(entry.target, entry.intersectionRatio);
         }
 
+        // Prefer the topmost section that is completely in view.
+        // Fall back to the section with the highest ratio when none is fully visible.
+        let firstFullyVisible: number | undefined;
         let maxVisibility = 0;
         let mostVisibleIndex = 0;
 
         for (const [element, ratio] of ratios) {
+          const sectionIndex = Number.parseInt(element.getAttribute('data-klage-file-viewer-section-index') ?? '0', 10);
+
+          if (ratio >= 0.99 && (firstFullyVisible === undefined || sectionIndex < firstFullyVisible)) {
+            firstFullyVisible = sectionIndex;
+          }
+
           if (ratio > maxVisibility) {
             maxVisibility = ratio;
-            mostVisibleIndex = Number.parseInt(element.getAttribute('data-klage-file-viewer-section-index') ?? '0', 10);
+            mostVisibleIndex = sectionIndex;
           }
         }
 
-        if (maxVisibility > 0) {
+        if (firstFullyVisible !== undefined) {
+          setCurrentDocumentIndex(firstFullyVisible);
+        } else if (maxVisibility > 0) {
           setCurrentDocumentIndex(mostVisibleIndex);
         }
       },

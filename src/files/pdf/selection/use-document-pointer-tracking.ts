@@ -2,6 +2,7 @@ import type { PdfDocumentObject, Rotation } from '@embedpdf/models';
 import { useEffect, useRef } from 'react';
 import { getVerticalTextBounds, glyphAt, screenToGlyph, snapToNearest } from '@/files/pdf/selection/hit-test';
 import type { ScreenPageGeometry } from '@/files/pdf/selection/types';
+import { PX_PER_PT } from '@/scale/constants';
 
 // Cache outer page element → inner content element to avoid querySelector on every pointermove.
 const innerElementCache = new WeakMap<HTMLElement, HTMLElement | null>();
@@ -199,7 +200,7 @@ const hitTestPage = (
   }
 
   const rotation = rotations.get(pageIndex) ?? 0;
-  const scaleFactor = scale / 100;
+  const scaleFactor = (scale / 100) * PX_PER_PT;
   const baseWidth = page.size.width * scaleFactor;
   const baseHeight = page.size.height * scaleFactor;
 

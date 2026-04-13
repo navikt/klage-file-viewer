@@ -28,20 +28,20 @@ export const getFirstScalablePage = (scrollContainer: HTMLElement): HTMLDivEleme
  * Measure the rendered content dimensions of a scalable page element.
  *
  * The page element itself has `w-full` so its `offsetWidth` reflects the
- * container width, not the actual content width. The first child element
- * (the `w-fit` wrapper around the canvas) carries the real content dimensions.
+ * container width, not the actual content width. The element marked with
+ * `data-klage-file-viewer-content` carries the real content dimensions
+ * (the sized wrapper for PDFs, the `<img>` for images).
  *
  * Returns `null` when the content element cannot be found or has zero size.
  */
 const getContentDimensions = (pageElement: HTMLElement): { width: number; height: number } | null => {
-  const contentElement = pageElement.firstElementChild;
+  const contentElement = pageElement.querySelector<HTMLElement>('[data-klage-file-viewer-content]');
 
-  if (contentElement === null || !(contentElement instanceof HTMLElement)) {
+  if (contentElement === null) {
     return null;
   }
 
-  const width = contentElement.offsetWidth;
-  const height = contentElement.offsetHeight;
+  const { width, height } = contentElement.getBoundingClientRect();
 
   if (width === 0 || height === 0) {
     return null;
@@ -91,7 +91,7 @@ export const computeFitWidthScale = (
 
   const available = getAvailableDimensions(pageElement, scrollContainer, toolbarHeight);
   const unscaledWidth = content.width / (currentScale / 100);
-  const fitScale = Math.floor((available.width / unscaledWidth) * 100);
+  const fitScale = (available.width / unscaledWidth) * 100;
 
   return clamp(fitScale, MIN_SCALE, MAX_SCALE);
 };
@@ -116,7 +116,43 @@ export const computeFitHeightScale = (
 
   const available = getAvailableDimensions(pageElement, container, toolbarHeight);
   const unscaledHeight = content.height / (currentScale / 100);
-  const fitScale = Math.floor((available.height / unscaledHeight) * 100);
+  const fitScale = (available.height / unscaledHeight) * 100;
 
   return clamp(fitScale, MIN_SCALE, MAX_SCALE);
+};
+
+/**
+ * Compute the viewer width needed to exactly fit the current content.
+ *
+ * All file types follow the same DOM pattern:
+ *   [data-klage-file-viewer-scalable]  (page element, w-full)
+ *     > overflow-x-auto wrapper
+ *       > [data-klage-file-viewer-content]  (w-fit)
+ *
+ * For shadow-bearing content (Excel, JSON, Image) a `px-2` scroll-margin
+ * wrapper holds the content element. This padding is included in the
+ * bounding rect measurement so shadows are visible at scroll edges.
+ *
+ * The formula only adds external overhead (scrollbar, borders) between
+ * the scroll container's outer edge and the page element's content area.
+ *
+ * Returns the target viewer width in pixels, or `null` when no page or
+ * content can be measured.
+ */
+export const computeFitToContentWidth = (scrollContainer: HTMLElement, toolbarHeight: number): number | null => {
+  const pageElement = getScalablePage(scrollContainer, toolbarHeight);
+
+  if (pageElement === null) {
+    return null;
+  }
+
+  const content = getContentDimensions(pageElement);
+
+  if (content === null) {
+    return null;
+  }
+
+  const overhead = scrollContainer.offsetWidth - pageElement.clientWidth;
+
+  return Math.ceil(content.width) + overhead;
 };

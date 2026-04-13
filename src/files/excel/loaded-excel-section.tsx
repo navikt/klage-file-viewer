@@ -1,4 +1,4 @@
-import { BodyShort, Loader, VStack } from '@navikt/ds-react';
+import { BodyShort } from '@navikt/ds-react';
 import { useEffect } from 'react';
 import { useFileViewerConfig } from '@/context';
 import { type DocumentNavigation, FileHeader } from '@/file-header/file-header';
@@ -7,6 +7,7 @@ import { ExcelPlaceholderTable } from '@/files/excel/excel-placeholder-table';
 import { ExcelTable } from '@/files/excel/excel-table';
 import { useExcelData } from '@/files/excel/use-excel-data';
 import { FileErrorLayout } from '@/files/file-error-layout';
+import { PageElement } from '@/files/page-element';
 import { useRegisterRefresh } from '@/hooks/use-refresh-registry';
 import { usePageNavigation } from '@/lib/use-page-navigation';
 import type { FileEntry } from '@/types';
@@ -131,25 +132,16 @@ export const LoadedExcelSection = ({
           const sheetNumber = index + 1;
 
           return (
-            <div
+            <PageElement
               key={sheet.name}
-              data-klage-file-viewer-page-number={sheetNumber}
+              pageNumber={sheetNumber}
               ref={(el) => {
                 setSheetRef(sheetNumber, el);
               }}
-              className="relative w-full"
+              loadingMessage={showLoadingOverlay ? 'Leser Excel-fil …' : undefined}
             >
-              {showLoadingOverlay ? (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-ax-bg-neutral-moderate/70 backdrop-blur-xs">
-                  <VStack align="center" gap="space-8">
-                    <Loader size="3xlarge" />
-                    <BodyShort>Leser Excel-fil …</BodyShort>
-                  </VStack>
-                </div>
-              ) : null}
-
               <ExcelTable sheetName={sheet.name} rows={sheet.rows} />
-            </div>
+            </PageElement>
           );
         })}
       </div>

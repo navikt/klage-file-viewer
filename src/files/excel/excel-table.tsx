@@ -13,41 +13,39 @@ export const ExcelTable = memo(({ sheetName, rows }: ExcelTableProps) => {
   const columnLabels = Array.from({ length: columnCount }, (_, i) => columnIndexToLabel(i));
 
   return (
-    <div className="overflow-hidden rounded-lg bg-ax-bg-default shadow-ax-dialog">
+    <div className="w-fit overflow-hidden rounded-lg bg-ax-bg-default shadow-ax-dialog">
       <ExcelSheetHeader sheetName={sheetName} />
 
       {rows.length === 0 ? (
         <p className="p-4 text-center text-ax-text-neutral-subtle">Arket er tomt</p>
       ) : (
         <div className="p-2">
-          <div className="overflow-x-auto">
-            <table className="min-w-fit border-collapse text-sm">
-              <thead>
-                <tr>
-                  <HeaderCell className="sticky left-0 z-20">
-                    <span className="sr-only">Rad</span>
+          <table className="min-w-fit border-collapse text-sm">
+            <thead>
+              <tr>
+                <HeaderCell className="sticky left-0 z-20">
+                  <span className="sr-only">Rad</span>
+                </HeaderCell>
+
+                {columnLabels.map((columnLabel) => (
+                  <HeaderCell key={columnLabel} className="z-10 font-ax-bold">
+                    {columnLabel}
                   </HeaderCell>
-
-                  {columnLabels.map((columnLabel) => (
-                    <HeaderCell key={columnLabel} className="z-10 font-ax-bold">
-                      {columnLabel}
-                    </HeaderCell>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody>
-                {rows.map((row, rowIndex) => (
-                  <ExcelTableRow
-                    // biome-ignore lint/suspicious/noArrayIndexKey: rows have no stable id
-                    key={rowIndex}
-                    row={row}
-                    rowIndex={rowIndex}
-                  />
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </tr>
+            </thead>
+
+            <tbody>
+              {rows.map((row, rowIndex) => (
+                <ExcelTableRow
+                  // biome-ignore lint/suspicious/noArrayIndexKey: rows have no stable id
+                  key={rowIndex}
+                  row={row}
+                  rowIndex={rowIndex}
+                />
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
