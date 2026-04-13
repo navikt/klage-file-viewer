@@ -1,15 +1,15 @@
 import type { AvailableItem, FileType } from '@dev/types';
 import { ThemeMode } from '@dev/use-persisted-theme';
 import {
-  ExpandIcon,
   FileExcelIcon,
   FileImageIcon,
   FileJpegIcon,
   FileJsonIcon,
   FilePdfIcon,
   FilePngIcon,
+  MonitorIcon,
   MoonIcon,
-  ShrinkIcon,
+  SidebarBothIcon,
   SunIcon,
 } from '@navikt/aksel-icons';
 import { BodyShort, Box, Button, HStack, Tag, ToggleGroup } from '@navikt/ds-react';
@@ -114,8 +114,8 @@ const Toolbar = ({
         <div style={{ width: '1px', height: '24px', background: 'var(--a-border-divider)' }} />
 
         <ToggleGroup onChange={toggleStandalone} value={standalone.toString()} size="small">
-          <ToggleGroup.Item label="Standalone" value="true" icon={<ExpandIcon aria-hidden />} />
-          <ToggleGroup.Item label="Innebygd" value="false" icon={<ShrinkIcon aria-hidden />} />
+          <ToggleGroup.Item label="Standalone" value="true" icon={<MonitorIcon aria-hidden />} />
+          <ToggleGroup.Item label="Innebygd" value="false" icon={<SidebarBothIcon aria-hidden />} />
         </ToggleGroup>
 
         <div style={{ width: '1px', height: '24px', background: 'var(--a-border-divider)' }} />
