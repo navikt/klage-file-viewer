@@ -17,7 +17,7 @@ const SCALE_STEP = 25;
 export const Scale = ({ scale, setScale }: Props) => {
   const [input, setInput] = useState('');
 
-  useEffect(() => setInput(scale.toString(10)), [scale]);
+  useEffect(() => setInput(Math.round(scale).toString(10)), [scale]);
 
   const submit = () => {
     const parsed = Number.parseInt(input, 10);
@@ -43,7 +43,7 @@ export const Scale = ({ scale, setScale }: Props) => {
       case 'Escape':
         event.preventDefault();
         event.stopPropagation();
-        setInput(scale.toString(10));
+        setInput(Math.round(scale).toString(10));
         break;
       case 'ArrowUp': {
         event.preventDefault();
@@ -56,7 +56,7 @@ export const Scale = ({ scale, setScale }: Props) => {
           handleZoomIn(10);
           break;
         }
-        const newValue = clamp(scale + 1, MIN_SCALE, MAX_SCALE);
+        const newValue = clamp(Math.round(scale) + 1, MIN_SCALE, MAX_SCALE);
         setInput(newValue.toString(10));
         setScale(newValue);
         break;
@@ -72,7 +72,7 @@ export const Scale = ({ scale, setScale }: Props) => {
           handleZoomOut(10);
           break;
         }
-        const newValue = clamp(scale - 1, MIN_SCALE, MAX_SCALE);
+        const newValue = clamp(Math.round(scale) - 1, MIN_SCALE, MAX_SCALE);
         setInput(newValue.toString(10));
         setScale(newValue);
         break;

@@ -9,6 +9,7 @@ import { HighlightLayer } from '@/files/pdf/search/highlight-layer';
 import type { HighlightRect } from '@/files/pdf/search/types';
 import { PageSelectionLayer } from '@/files/pdf/selection/page-selection-layer';
 import type { PageSelectionRange, ScreenPageGeometry } from '@/files/pdf/selection/types';
+import { PX_PER_PT } from '@/scale/constants';
 
 interface PdfPageProps {
   engine: PdfEngine;
@@ -81,7 +82,7 @@ export const PdfPage = ({
     return null;
   }
 
-  const scaleFactor = scale / 100;
+  const scaleFactor = (scale / 100) * PX_PER_PT;
   const baseWidth = page.size.width * scaleFactor;
   const baseHeight = page.size.height * scaleFactor;
   const swapped = rotation === 1 || rotation === 3;
@@ -99,7 +100,7 @@ export const PdfPage = ({
     >
       <RotateButton pageNumber={pageNumber} onRotate={() => onRotate(pageIndex)} />
       <div className="w-full overflow-x-auto">
-        <div ref={contentRef} className="relative mx-auto" style={{ width, height }}>
+        <div ref={contentRef} className="relative mx-auto" data-klage-file-viewer-content style={{ width, height }}>
           <div
             data-klage-file-viewer-page-content
             className="relative select-none"

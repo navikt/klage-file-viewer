@@ -1,5 +1,5 @@
 import { Box, VStack } from '@navikt/ds-react';
-import { type Ref, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { type Ref, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { FileViewerProvider, type KlageFileViewerProviderProps, useFileViewerConfig } from '@/context';
 import type { DocumentNavigation } from '@/file-header/file-header';
 import { FileSection } from '@/file-section';
@@ -12,8 +12,15 @@ import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useLazyLoading } from '@/hooks/use-lazy-loading';
 import { RefreshRegistryProvider, useRefreshRegistry } from '@/hooks/use-refresh-registry';
 import { useSectionVisibility } from '@/hooks/use-section-visibility';
+import { clamp } from '@/lib/clamp';
 import { PrintProvider } from '@/lib/print-frame';
-import { A4_WIDTH_PT } from '@/scale/constants';
+import {
+  DEFAULT_INLINE_WIDTH,
+  KLAGE_FILE_VIEWER_WIDTH_KEY,
+  MIN_INLINE_WIDTH,
+  SECTION_PADDING_INLINE,
+} from '@/scale/constants';
+import { ScaleHandle } from '@/scale-handle';
 import { Toolbar } from '@/toolbar/toolbar';
 import { ToolbarHeightProvider, useToolbarHeight } from '@/toolbar-height-context';
 import type { FileEntry } from '@/types';
@@ -109,6 +116,14 @@ const KlageFileViewerInner = ({
   const toolbarHeight = useToolbarHeight();
 
   const { scale, setScale } = useInitialScale(scrollContainerRef, standalone, toolbarHeight);
+
+  const [viewerWidth, setViewerWidthState] = useState<number>(() => readInlineWidth());
+
+  const setViewerWidth = useCallback((width: number) => {
+    const clamped = clamp(Math.round(width), MIN_INLINE_WIDTH, window.innerWidth);
+    setViewerWidthState(clamped);
+    persistInlineWidth(clamped);
+  }, []);
 
   useImperativeHandle(handleRef, () => ({
     focus: () => scrollContainerRef.current?.focus(),
@@ -257,76 +272,113 @@ const KlageFileViewerInner = ({
   );
 
   return (
-    <Box
-      as="section"
-      background="neutral-softA"
-      shadow="dialog"
-      borderRadius="4"
-      position="relative"
-      width={standalone ? '100%' : undefined}
-      height="100%"
-      flexGrow="1"
-      overflowX="clip"
-      overflowY="auto"
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-      className={className}
-      ref={scrollContainerRef}
-      aria-label={`Filviser - ${files.map((f) => f.title).join(', ')}`}
-      data-klage-file-viewer
-      style={standalone ? undefined : { width: A4_WIDTH_PT * (scale / 100) + 16, minWidth: 500, maxWidth: '100%' }}
+    <div
+      className="relative h-full"
+      style={
+        standalone
+          ? { width: '100%', flexGrow: 1 }
+          : { width: viewerWidth, minWidth: MIN_INLINE_WIDTH, maxWidth: '100%' }
+      }
     >
-      <VStack width="100%" overflow="clip" className="outline-ax-accent-500 focus-within:outline">
-        <Toolbar
-          ref={toolbarRef}
-          scale={scale}
-          setScale={setScale}
-          scrollContainerRef={scrollContainerRef}
-          isSearchOpen={isSearchOpen}
-          setIsSearchOpen={setIsSearchOpen}
-          searchDocuments={searchDocuments}
-          onHighlightsChange={setSearchHighlights}
-          currentMatchIndex={currentMatchIndex}
-          onCurrentMatchIndexChange={setCurrentMatchIndex}
-          searchInputRef={searchInputRef}
-          currentDocumentIndex={currentDocumentIndex}
-          totalDocuments={files.length}
-          onClose={onClose}
-          newTabUrl={newTabUrl}
-          onPreviousDocument={onPreviousDocument}
-          onNextDocument={onNextDocument}
-          previousDocumentDisabled={previousDocumentDisabled}
-          nextDocumentDisabled={nextDocumentDisabled}
-        />
+      <Box
+        as="section"
+        background="neutral-softA"
+        shadow="dialog"
+        borderRadius="4"
+        position="relative"
+        width="100%"
+        height="100%"
+        flexGrow="1"
+        overflowX="clip"
+        overflowY="auto"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        className={className}
+        ref={scrollContainerRef}
+        aria-label={`Filviser - ${files.map((f) => f.title).join(', ')}`}
+        data-klage-file-viewer
+      >
+        <VStack width="100%" overflow="clip" className="outline-ax-accent-500 focus-within:outline">
+          <Toolbar
+            ref={toolbarRef}
+            scale={scale}
+            setScale={setScale}
+            scrollContainerRef={scrollContainerRef}
+            isSearchOpen={isSearchOpen}
+            setIsSearchOpen={setIsSearchOpen}
+            searchDocuments={searchDocuments}
+            onHighlightsChange={setSearchHighlights}
+            currentMatchIndex={currentMatchIndex}
+            onCurrentMatchIndexChange={setCurrentMatchIndex}
+            searchInputRef={searchInputRef}
+            currentDocumentIndex={currentDocumentIndex}
+            totalDocuments={files.length}
+            onClose={onClose}
+            newTabUrl={newTabUrl}
+            onFitToContent={standalone ? undefined : setViewerWidth}
+            onPreviousDocument={onPreviousDocument}
+            onNextDocument={onNextDocument}
+            previousDocumentDisabled={previousDocumentDisabled}
+            nextDocumentDisabled={nextDocumentDisabled}
+          />
 
-        {/* Scrollable container with all file sections */}
-        <VStack align="center" overflow="clip" position="relative" flexGrow="1" gap="space-16" width="100%">
-          {files.map((file, index) => (
-            <VStack
-              key={file.url}
-              data-klage-file-viewer-section-index={index}
-              ref={(el) => setSectionRef(index, el)}
-              paddingBlock="space-4"
-              paddingInline="space-8"
-              width="100%"
-              align="center"
-              data-klage-file-viewer-document={file.title}
-            >
-              <FileSection
-                file={file}
-                scale={scale}
-                scrollContainerRef={scrollContainerRef}
-                shouldLoad={index < loadedSectionCount}
-                onPageCountReady={(pageCount) => handlePageCountReady(index, pageCount)}
-                onSearchableReady={searchableReadyCallbacks[index]}
-                highlightsByPage={highlightsBySection[index]}
-                currentMatchIndex={currentMatchIndex}
-                documentNavigation={documentNavigations[index]}
-              />
-            </VStack>
-          ))}
+          {/* Scrollable container with all file sections */}
+          <VStack align="center" overflow="clip" position="relative" flexGrow="1" gap="space-16" width="100%">
+            {files.map((file, index) => (
+              <VStack
+                key={file.url}
+                data-klage-file-viewer-section-index={index}
+                ref={(el) => setSectionRef(index, el)}
+                paddingBlock="space-4"
+                width="100%"
+                align="center"
+                style={{ paddingInline: SECTION_PADDING_INLINE }}
+                data-klage-file-viewer-document={file.title}
+              >
+                <FileSection
+                  file={file}
+                  scale={scale}
+                  scrollContainerRef={scrollContainerRef}
+                  shouldLoad={index < loadedSectionCount}
+                  onPageCountReady={(pageCount) => handlePageCountReady(index, pageCount)}
+                  onSearchableReady={searchableReadyCallbacks[index]}
+                  highlightsByPage={highlightsBySection[index]}
+                  currentMatchIndex={currentMatchIndex}
+                  documentNavigation={documentNavigations[index]}
+                />
+              </VStack>
+            ))}
+          </VStack>
         </VStack>
-      </VStack>
-    </Box>
+      </Box>
+
+      {!standalone ? <ScaleHandle width={viewerWidth} setWidth={setViewerWidth} /> : null}
+    </div>
   );
+};
+
+const readInlineWidth = (): number => {
+  try {
+    const raw = localStorage.getItem(KLAGE_FILE_VIEWER_WIDTH_KEY);
+
+    if (raw !== null) {
+      const parsed = Number.parseFloat(raw.trim());
+
+      if (Number.isFinite(parsed)) {
+        return clamp(Math.round(parsed), MIN_INLINE_WIDTH, window.innerWidth);
+      }
+    }
+  } catch {
+    // Ignore errors (e.g. localStorage unavailable).
+  }
+
+  return DEFAULT_INLINE_WIDTH;
+};
+
+const persistInlineWidth = (width: number): void => {
+  try {
+    localStorage.setItem(KLAGE_FILE_VIEWER_WIDTH_KEY, width.toString(10));
+  } catch {
+    // Ignore errors (e.g. localStorage unavailable).
+  }
 };

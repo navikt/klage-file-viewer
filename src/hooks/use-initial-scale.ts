@@ -128,7 +128,7 @@ export const useInitialScale = (
   standalone: boolean,
   toolbarHeight = 0,
 ): UseInitialScaleResult => {
-  const storedScale = useRef(standalone ? readStoredScale() : INITIAL_SCALE);
+  const storedScale = useRef(standalone ? readStoredScale() : KlageFileViewerFitMode.PAGE_WIDTH);
   const initialNumericScale = typeof storedScale.current === 'number' ? storedScale.current : INITIAL_SCALE;
   const [scale, setScale] = useState(initialNumericScale);
   const appliedRef = useRef(typeof storedScale.current === 'number');

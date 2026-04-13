@@ -74,17 +74,28 @@ export const usePageNavigation = (
           ratios.set(entry.target, entry.intersectionRatio);
         }
 
+        // Prefer the topmost page that is completely in view.
+        // Fall back to the page with the highest ratio when no page is fully visible.
+        let firstFullyVisible: number | undefined;
         let maxVisibility = 0;
         let mostVisibleItem = 1;
 
         for (const [element, ratio] of ratios) {
+          const pageNumber = Number.parseInt(element.getAttribute('data-klage-file-viewer-page-number') ?? '1', 10);
+
+          if (ratio >= 0.99 && (firstFullyVisible === undefined || pageNumber < firstFullyVisible)) {
+            firstFullyVisible = pageNumber;
+          }
+
           if (ratio > maxVisibility) {
             maxVisibility = ratio;
-            mostVisibleItem = Number.parseInt(element.getAttribute('data-klage-file-viewer-page-number') ?? '1', 10);
+            mostVisibleItem = pageNumber;
           }
         }
 
-        if (maxVisibility > 0) {
+        if (firstFullyVisible !== undefined) {
+          setCurrentPage(firstFullyVisible);
+        } else if (maxVisibility > 0) {
           setCurrentPage(mostVisibleItem);
         }
       },

@@ -124,6 +124,7 @@ export const LoadedImageSection = ({
           src={objectUrl}
           alt={file.title}
           className="mx-auto block max-w-none shadow-ax-dialog"
+          data-klage-file-viewer-content
           style={{ width: `calc(210mm * ${scaleFactor.toString()})`, imageRendering }}
           draggable={false}
         />
