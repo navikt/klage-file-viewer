@@ -95,7 +95,7 @@ export const PdfPage = ({
       ref={handleRef}
       data-klage-file-viewer-page-number={pageNumber}
       data-klage-file-viewer-scalable
-      className="relative flex w-full justify-center"
+      className="relative flex w-full justify-center overflow-x-auto"
     >
       <div ref={contentRef} className="relative" style={{ width, height }}>
         <div
