@@ -13,6 +13,7 @@ import { useLazyLoading } from '@/hooks/use-lazy-loading';
 import { RefreshRegistryProvider, useRefreshRegistry } from '@/hooks/use-refresh-registry';
 import { useSectionVisibility } from '@/hooks/use-section-visibility';
 import { PrintProvider } from '@/lib/print-frame';
+import { A4_WIDTH_PT } from '@/scale/constants';
 import { Toolbar } from '@/toolbar/toolbar';
 import { ToolbarHeightProvider, useToolbarHeight } from '@/toolbar-height-context';
 import type { FileEntry } from '@/types';
@@ -262,7 +263,7 @@ const KlageFileViewerInner = ({
       shadow="dialog"
       borderRadius="4"
       position="relative"
-      width="100%"
+      width={standalone ? '100%' : undefined}
       height="100%"
       flexGrow="1"
       overflowX="clip"
@@ -273,6 +274,7 @@ const KlageFileViewerInner = ({
       ref={scrollContainerRef}
       aria-label={`Filviser - ${files.map((f) => f.title).join(', ')}`}
       data-klage-file-viewer
+      style={standalone ? undefined : { width: A4_WIDTH_PT * (scale / 100) + 16, minWidth: 500, maxWidth: '100%' }}
     >
       <VStack width="100%" overflow="clip" className="outline-ax-accent-500 focus-within:outline">
         <Toolbar

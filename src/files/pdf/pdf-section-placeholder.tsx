@@ -1,12 +1,7 @@
 import { BodyShort, Loader, VStack } from '@navikt/ds-react';
 import type { ReactNode } from 'react';
 import { FileHeader } from '@/file-header/file-header';
-
-/** A4 page width in PDF points (72 DPI). */
-const A4_WIDTH_PT = 595;
-
-/** A4 page height in PDF points (72 DPI). */
-const A4_HEIGHT_PT = 842;
+import { A4_HEIGHT_PT, A4_WIDTH_PT } from '@/scale/constants';
 
 /** Compute pixel dimensions for an A4 page at the given scale (percentage, e.g. 125). */
 export const getA4Dimensions = (scale: number) => ({

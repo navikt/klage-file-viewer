@@ -72,7 +72,6 @@ const App = () => {
               display: 'flex',
               justifyContent: 'center',
               width: standalone ? '100%' : undefined,
-              minWidth: standalone ? undefined : '50em',
               marginInlineEnd: standalone ? undefined : 'auto',
             }}
             data-dev-app-wrapper

@@ -1,3 +1,9 @@
+/** A4 page width in PDF points (72 DPI). */
+export const A4_WIDTH_PT = 595;
+
+/** A4 page height in PDF points (72 DPI). */
+export const A4_HEIGHT_PT = 842;
+
 export const PDF_PAGE_HEIGHT = 1140;
 export const PDF_PAGE_WIDTH = 811;
 export const PDF_MARGIN = 20;
