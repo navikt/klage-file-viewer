@@ -164,15 +164,6 @@ export const useCopyHandler = (
       e.preventDefault();
       e.clipboardData?.setData('text/plain', text);
       e.clipboardData?.setData('text/html', htmlRef.current);
-
-      // biome-ignore lint/suspicious/noConsole: temporary debug logging for verifying copy output
-      console.groupCollapsed('[copy] clipboard data set');
-      // biome-ignore lint/suspicious/noConsole: temporary debug logging
-      console.log('text/plain:', text);
-      // biome-ignore lint/suspicious/noConsole: temporary debug logging
-      console.log('text/html:', htmlRef.current);
-      // biome-ignore lint/suspicious/noConsole: temporary debug logging
-      console.groupEnd();
     };
 
     document.addEventListener('copy', handleCopy);
@@ -197,36 +188,6 @@ const reflowPage = (
   const blocks = analyzePageReflow(rawText, range, geo, documentStats);
   const plain = blocksToPlain(blocks);
   const html = blocksToHtml(blocks);
-
-  // biome-ignore lint/suspicious/noConsole: temporary debug logging for verifying copy output
-  console.groupCollapsed(
-    `[copy] reflowPage (page ${String(range.pageIndex)}, chars ${String(range.startCharIndex)}–${String(range.endCharIndex)})`,
-  );
-  // biome-ignore lint/suspicious/noConsole: temporary debug logging
-  console.log('blocks:', blocks);
-  // biome-ignore lint/suspicious/noConsole: temporary debug logging
-  console.log('plain:', plain);
-  // biome-ignore lint/suspicious/noConsole: temporary debug logging
-  console.log('html:', html);
-  // biome-ignore lint/suspicious/noConsole: temporary — dump test fixture data for analyzePageReflow
-  console.log(
-    'TEST_FIXTURE:',
-    JSON.stringify({
-      pageText: geo.pageText,
-      pageWidth: geo.pageWidth,
-      runs: geo.runs.map((r) => ({
-        rect: r.rect,
-        charStart: r.charStart,
-        fontSize: r.fontSize,
-        fontWeight: r.fontWeight,
-        italic: r.italic,
-        fontName: r.fontName,
-        glyphs: r.glyphs.map((g) => ({ x: g.x, y: g.y, width: g.width, height: g.height, flags: g.flags })),
-      })),
-    }),
-  );
-  // biome-ignore lint/suspicious/noConsole: temporary debug logging
-  console.groupEnd();
 
   return { plain, html };
 };
