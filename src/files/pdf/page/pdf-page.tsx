@@ -95,51 +95,53 @@ export const PdfPage = ({
       ref={handleRef}
       data-klage-file-viewer-page-number={pageNumber}
       data-klage-file-viewer-scalable
-      className="relative flex w-full justify-center overflow-x-auto"
+      className="relative w-full"
     >
-      <div ref={contentRef} className="relative" style={{ width, height }}>
-        <div
-          data-klage-file-viewer-page-content
-          className="relative select-none"
-          style={{
-            width: baseWidth,
-            height: baseHeight,
-            transformOrigin: '0 0',
-            transform: rotationMatrix,
-          }}
-        >
-          <PdfPageImage engine={engine} doc={doc} page={page} visible={visible} />
-          <PageSelectionLayer
-            engine={engine}
-            doc={doc}
-            pageIndex={pageIndex}
-            page={page}
-            scale={scale}
-            rotation={rotation}
-            baseWidth={baseWidth}
-            baseHeight={baseHeight}
-            visible={visible}
-            selectionRange={selectionRange}
-            isSelecting={isSelecting}
-            onMouseDown={onMouseDown}
-            geometryRegistry={geometryRegistry}
-          />
-          <PageOcrLayer
-            engine={engine}
-            doc={doc}
-            page={page}
-            pageIndex={pageIndex}
-            visible={visible}
-            baseWidth={baseWidth}
-            baseHeight={baseHeight}
-            onOcrDetected={onOcrDetected}
-          />
-          {highlights !== undefined && highlights.length > 0 ? (
-            <HighlightLayer highlights={highlights} currentMatchIndex={currentMatchIndex ?? 0} />
-          ) : null}
+      <RotateButton pageNumber={pageNumber} onRotate={() => onRotate(pageIndex)} />
+      <div className="flex w-full justify-center overflow-x-auto">
+        <div ref={contentRef} className="relative" style={{ width, height }}>
+          <div
+            data-klage-file-viewer-page-content
+            className="relative select-none"
+            style={{
+              width: baseWidth,
+              height: baseHeight,
+              transformOrigin: '0 0',
+              transform: rotationMatrix,
+            }}
+          >
+            <PdfPageImage engine={engine} doc={doc} page={page} visible={visible} />
+            <PageSelectionLayer
+              engine={engine}
+              doc={doc}
+              pageIndex={pageIndex}
+              page={page}
+              scale={scale}
+              rotation={rotation}
+              baseWidth={baseWidth}
+              baseHeight={baseHeight}
+              visible={visible}
+              selectionRange={selectionRange}
+              isSelecting={isSelecting}
+              onMouseDown={onMouseDown}
+              geometryRegistry={geometryRegistry}
+            />
+            <PageOcrLayer
+              engine={engine}
+              doc={doc}
+              page={page}
+              pageIndex={pageIndex}
+              visible={visible}
+              baseWidth={baseWidth}
+              baseHeight={baseHeight}
+              onOcrDetected={onOcrDetected}
+            />
+            {highlights !== undefined && highlights.length > 0 ? (
+              <HighlightLayer highlights={highlights} currentMatchIndex={currentMatchIndex ?? 0} />
+            ) : null}
+          </div>
+          {showPasswordOverlay === true ? <PasswordUnlockedOverlay /> : null}
         </div>
-        {showPasswordOverlay === true ? <PasswordUnlockedOverlay /> : null}
-        <RotateButton pageNumber={pageNumber} onRotate={() => onRotate(pageIndex)} />
       </div>
     </div>
   );
