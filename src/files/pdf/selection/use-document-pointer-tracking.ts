@@ -3,6 +3,20 @@ import { useEffect, useRef } from 'react';
 import { getVerticalTextBounds, glyphAt, screenToGlyph, snapToNearest } from '@/files/pdf/selection/hit-test';
 import type { ScreenPageGeometry } from '@/files/pdf/selection/types';
 
+// Cache outer page element → inner content element to avoid querySelector on every pointermove.
+const innerElementCache = new WeakMap<HTMLElement, HTMLElement | null>();
+
+const getCachedInnerElement = (outer: HTMLElement): HTMLElement | null => {
+  let inner = innerElementCache.get(outer);
+
+  if (inner === undefined) {
+    inner = outer.querySelector<HTMLElement>('[data-klage-file-viewer-page-content]');
+    innerElementCache.set(outer, inner);
+  }
+
+  return inner ?? null;
+};
+
 interface PageInfo {
   /** The registered DOM element for the page (outer wrapper with data-klage-file-viewer-page-number). */
   element: HTMLElement;
@@ -126,7 +140,7 @@ const resolvePointerToChar = (
     const rect = pageInfo.element.getBoundingClientRect();
 
     if (clientY >= rect.top && clientY <= rect.bottom && clientX >= rect.left && clientX <= rect.right) {
-      return hitTestPage(clientX, clientY, pageInfo.pageIndex, rect, doc, scale, rotations, geometryMap);
+      return hitTestPage(clientX, clientY, pageInfo.pageIndex, pageInfo.element, doc, scale, rotations, geometryMap);
     }
   }
 
@@ -157,12 +171,16 @@ const buildSortedPages = (pageElements: Map<number, HTMLElement>): PageInfo[] =>
 
 /**
  * Hit-test a specific page given client coordinates.
+ *
+ * Uses the inner content element's `getBoundingClientRect()` for coordinate
+ * mapping. This correctly handles horizontal scroll, centering, and any
+ * CSS transforms — matching what `SelectionOverlay.toGlyphCoords` does.
  */
 const hitTestPage = (
   clientX: number,
   clientY: number,
   pageIndex: number,
-  pageRect: DOMRect,
+  pageElement: HTMLElement,
   doc: PdfDocumentObject,
   scale: number,
   rotations: Map<number, Rotation>,
@@ -185,20 +203,27 @@ const hitTestPage = (
   const baseWidth = page.size.width * scaleFactor;
   const baseHeight = page.size.height * scaleFactor;
 
-  // The page element is a centering wrapper — the actual content is centered
-  // within it. We need to find the content area within the wrapper.
-  const swapped = rotation === 1 || rotation === 3;
-  const contentWidth = swapped ? baseHeight : baseWidth;
-  const contentHeight = swapped ? baseWidth : baseHeight;
+  // Use the inner content element's bounding rect for accurate coordinate
+  // mapping. This accounts for scroll offset, centering, and CSS transforms.
+  const innerEl = getCachedInnerElement(pageElement);
+  let sx: number;
+  let sy: number;
 
-  // Content is horizontally centred within the page wrapper.
-  const contentLeft = pageRect.left + (pageRect.width - contentWidth) / 2;
-  const contentTop = pageRect.top + (pageRect.height - contentHeight) / 2;
-
-  // Transform client coords to page-local screen coords (relative to the
-  // rotated bounding box, matching what SelectionOverlay's hitTest does).
-  const sx = clientX - contentLeft;
-  const sy = clientY - contentTop;
+  if (innerEl !== null) {
+    const innerRect = innerEl.getBoundingClientRect();
+    sx = clientX - innerRect.left;
+    sy = clientY - innerRect.top;
+  } else {
+    // Fallback: centering formula (may be inaccurate with horizontal scroll).
+    const pageRect = pageElement.getBoundingClientRect();
+    const swapped = rotation === 1 || rotation === 3;
+    const contentWidth = swapped ? baseHeight : baseWidth;
+    const contentHeight = swapped ? baseWidth : baseHeight;
+    const contentLeft = pageRect.left + (pageRect.width - contentWidth) / 2;
+    const contentTop = pageRect.top + (pageRect.height - contentHeight) / 2;
+    sx = clientX - contentLeft;
+    sy = clientY - contentTop;
+  }
 
   const { x, y } = screenToGlyph(sx, sy, rotation, baseWidth, baseHeight);
 
@@ -304,7 +329,7 @@ const resolveGapPosition = (
     const rect = pageInfo.element.getBoundingClientRect();
 
     if (clientY >= rect.top && clientY <= rect.bottom) {
-      return hitTestPage(clientX, clientY, pageInfo.pageIndex, rect, doc, scale, rotations, geometryMap);
+      return hitTestPage(clientX, clientY, pageInfo.pageIndex, pageInfo.element, doc, scale, rotations, geometryMap);
     }
   }
 

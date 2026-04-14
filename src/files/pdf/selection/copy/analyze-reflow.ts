@@ -108,7 +108,7 @@ const buildSingleBlock = (
   lineInfos: LineInfo[],
 ): InternalBlock[] => {
   const fontSize = lineInfos[0]?.dominantFontSize;
-  const leftEdge = lineInfos[0]?.leftEdge;
+  const leftEdge = lineInfos[0]?.crossStart;
   const spans = buildSpansForRange(
     range.startCharIndex,
     range.endCharIndex,
@@ -194,14 +194,14 @@ const buildMultiLineBlocks = (
       if (sep === ' ' && lastLine !== undefined) {
         lastLine.text += ` ${text}`;
         mergeSpansWithSpace(lastLine.spans, spans);
-        lastLine.rightEdge = lineInfo.rightEdge;
+        lastLine.rightEdge = lineInfo.crossEnd;
       } else {
         currentBlock.lines.push({
           text,
           spans,
           fontSize: lineInfo.dominantFontSize,
-          leftEdge: lineInfo.leftEdge,
-          rightEdge: lineInfo.rightEdge,
+          leftEdge: lineInfo.crossStart,
+          rightEdge: lineInfo.crossEnd,
         });
       }
     }
@@ -227,14 +227,14 @@ const lineSeparator = (
   maxRight: number,
 ): '\n\n' | '\n' | ' ' => {
   if (gap !== undefined) {
-    const avgHeight = (prevLine.height + nextLine.height) / 2;
+    const avgLineSize = (prevLine.lineSize + nextLine.lineSize) / 2;
 
-    if (avgHeight > 0 && gap >= avgHeight * EMPTY_LINE_GAP_FACTOR) {
+    if (avgLineSize > 0 && gap >= avgLineSize * EMPTY_LINE_GAP_FACTOR) {
       return '\n\n';
     }
   }
 
-  const isFullWidth = maxRight > 0 && prevLine.rightEdge >= maxRight * FULL_WIDTH_THRESHOLD;
+  const isFullWidth = maxRight > 0 && prevLine.crossEnd >= maxRight * FULL_WIDTH_THRESHOLD;
 
   if (isFullWidth) {
     return ' ';

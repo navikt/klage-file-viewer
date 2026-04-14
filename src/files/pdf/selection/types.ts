@@ -1,4 +1,4 @@
-import type { PdfPageGeometry } from '@embedpdf/models';
+import type { PdfPageGeometry, Rotation } from '@embedpdf/models';
 
 /** A selection range within a single page. */
 export interface PageSelectionRange {
@@ -116,4 +116,21 @@ export interface ScreenPageGeometry {
    * block) would treat all lines as "full width" and merge them.
    */
   pageWidth: number | undefined;
+  /**
+   * The page height in screen coordinates (page.size.height × scale).
+   *
+   * For rotated pages (/Rotate 90°/270°), the cross-axis extent is the
+   * page height rather than width. Used by reflow analysis alongside
+   * `pageWidth` to pick the correct cross-axis page extent.
+   */
+  pageHeight: number | undefined;
+  /**
+   * Inherent PDF `/Rotate` attribute of the page (0, 1, 2, or 3).
+   *
+   * This is the rotation baked into the PDF page object — **not** the
+   * user-applied rotation from the viewer UI. When non-zero, glyph
+   * coordinates are in a rotated device space where text lines may be
+   * vertical columns instead of horizontal rows.
+   */
+  pageRotation: Rotation | undefined;
 }

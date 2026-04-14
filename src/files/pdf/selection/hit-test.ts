@@ -204,94 +204,141 @@ const LINE_OVERLAP_THRESHOLD = 0.5;
  * (no glyph under the pointer), snap to the nearest character boundary.
  *
  * Mirrors native browser text-selection behaviour:
- *  - **Below all text** → last character on the page
- *  - **Above all text** → first character on the page
- *  - **At a line's Y level but horizontally outside** → last char on the
- *    line (if to the right) or first char (if to the left)
- *  - **Between lines vertically** → last char of the line above
+ *  - **Beyond all text** → first or last character on the page
+ *  - **At a line's level but outside on the cross axis** → end or start of
+ *    line depending on which side
+ *  - **Between lines** → boundary of the nearer line
+ *
+ * For pages with inherent /Rotate 90°/270°, text lines are vertical
+ * columns. The "line" and "cross" axes are swapped accordingly. When
+ * the inherent rotation causes reading order to run opposite to the
+ * spatial axis direction (/Rotate 90 or 180), boundary snapping accounts
+ * for the reversal.
  */
 export const snapToNearest = (geo: ScreenPageGeometry, x: number, y: number): number => {
   if (geo.runs.length === 0) {
     return -1;
   }
 
-  // Collect line spans: groups of runs that share the same visual row.
+  const rotated = geo.pageRotation === 1 || geo.pageRotation === 3;
+  const lineCoord = rotated ? x : y;
+  const crossCoord = rotated ? y : x;
+
+  // Lines are sorted by ascending lineStart (spatial order).
+  // For /Rotate 90 and 180, spatial order is the reverse of reading order.
   const lines = collectLines(geo);
 
   if (lines.length === 0) {
     return -1;
   }
 
-  // Find which line the pointer is on or between.
-  const firstLine = lines[0];
-  const lastLine = lines[lines.length - 1];
+  const firstSpatial = lines[0];
+  const lastSpatial = lines[lines.length - 1];
 
-  if (firstLine === undefined || lastLine === undefined) {
+  if (firstSpatial === undefined || lastSpatial === undefined) {
     return -1;
   }
 
-  // Above all text → first char.
-  if (y < firstLine.top) {
-    return firstLine.charStart;
+  // Line-axis reversed: for /Rotate 90 (1) and 180 (2), reading order
+  // runs opposite to the spatial line-axis direction.
+  const lineReversed = geo.pageRotation === 1 || geo.pageRotation === 2;
+
+  // Cross-axis reversed: for /Rotate 180 (2) and 270 (3), within-line
+  // reading order runs opposite to the spatial cross-axis direction.
+  const crossReversed = geo.pageRotation === 2 || geo.pageRotation === 3;
+
+  // Pointer is below/right of all lines in the spatial sense.
+  if (lineCoord > lastSpatial.lineEnd) {
+    return lineReversed ? lastSpatial.charStart : lastSpatial.charEnd;
   }
 
-  // Below all text → last char.
-  if (y > lastLine.bottom) {
-    return lastLine.charEnd;
+  // Pointer is above/left of all lines in the spatial sense.
+  if (lineCoord < firstSpatial.lineStart) {
+    return lineReversed ? firstSpatial.charEnd : firstSpatial.charStart;
   }
 
-  // Check if the pointer vertically overlaps a line.
-  for (const line of lines) {
-    if (y >= line.top && y <= line.bottom) {
-      // Horizontally to the right → end of line.
-      if (x >= line.right) {
-        return line.charEnd;
-      }
+  return snapToLine(lines, lineCoord, crossCoord, lineReversed, crossReversed) ?? lastSpatial.charEnd;
+};
 
-      // Horizontally to the left → start of line.
-      if (x <= line.left) {
-        return line.charStart;
-      }
-
-      // Inside the line box but glyphAt missed — return closest char end.
-      return line.charEnd;
-    }
+/** Snap to a character boundary when the pointer is within a line's extent on the line axis. */
+const snapWithinLine = (line: LineBounds, crossCoord: number, crossReversed: boolean): number => {
+  if (crossCoord >= line.crossEnd) {
+    return crossReversed ? line.charStart : line.charEnd;
   }
 
-  // Between lines — find the gap and snap to the end of the line above.
-  for (let i = 0; i < lines.length - 1; i++) {
-    const above = lines[i];
-    const below = lines[i + 1];
+  if (crossCoord <= line.crossStart) {
+    return crossReversed ? line.charEnd : line.charStart;
+  }
 
-    if (above === undefined || below === undefined) {
+  return line.charEnd;
+};
+
+/** Snap to a character boundary when the pointer falls in the gap between two lines. */
+const snapBetweenLines = (prev: LineBounds, next: LineBounds, lineCoord: number, lineReversed: boolean): number => {
+  const gapMid = (prev.lineEnd + next.lineStart) / 2;
+
+  if (lineCoord <= gapMid) {
+    return lineReversed ? prev.charStart : prev.charEnd;
+  }
+
+  return lineReversed ? next.charEnd : next.charStart;
+};
+
+/** Find the character at the pointer's position within or between lines. */
+const snapToLine = (
+  lines: LineBounds[],
+  lineCoord: number,
+  crossCoord: number,
+  lineReversed: boolean,
+  crossReversed: boolean,
+): number | null => {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line === undefined) {
       continue;
     }
 
-    if (y > above.bottom && y < below.top) {
-      return above.charEnd;
+    if (lineCoord >= line.lineStart && lineCoord <= line.lineEnd) {
+      return snapWithinLine(line, crossCoord, crossReversed);
+    }
+
+    const nextLine = lines[i + 1];
+
+    if (nextLine !== undefined && lineCoord > line.lineEnd && lineCoord < nextLine.lineStart) {
+      return snapBetweenLines(line, nextLine, lineCoord, lineReversed);
     }
   }
 
-  // Fallback — shouldn't reach here, but return last char.
-  return lastLine.charEnd;
+  return null;
 };
 
-/** A visual line: one or more runs that share the same vertical extent. */
+/**
+ * A visual line: one or more runs that share the same extent on the
+ * grouping axis (Y for horizontal text, X for rotated text).
+ */
 interface LineBounds {
-  top: number;
-  bottom: number;
-  left: number;
-  right: number;
+  /** Start of the line on the grouping axis (Y top or X left). */
+  lineStart: number;
+  /** End of the line on the grouping axis (Y bottom or X right). */
+  lineEnd: number;
+  /** Start of the line on the cross axis (X left or Y top). */
+  crossStart: number;
+  /** End of the line on the cross axis (X right or Y bottom). */
+  crossEnd: number;
   charStart: number;
   charEnd: number;
 }
 
 /**
- * Group runs into visual lines based on vertical overlap.
- * Runs are processed in order; a new line starts when a run's vertical
- * centre is too far from the current line's extent.
+ * Group runs into visual lines based on overlap on the grouping axis,
+ * then sort lines by ascending lineStart (spatial order).
+ *
+ * For horizontal text (rotation 0/2): groups by Y overlap.
+ * For vertical text (rotation 1/3): groups by X overlap.
  */
 const collectLines = (geo: ScreenPageGeometry): LineBounds[] => {
+  const rotated = geo.pageRotation === 1 || geo.pageRotation === 3;
   const lines: LineBounds[] = [];
   let current: LineBounds | null = null;
 
@@ -300,50 +347,46 @@ const collectLines = (geo: ScreenPageGeometry): LineBounds[] => {
       continue;
     }
 
-    // Skip zero-size runs.
     if (run.rect.width === 0 && run.rect.height === 0) {
       continue;
     }
 
-    const runTop = run.rect.y;
-    const runBottom = run.rect.y + run.rect.height;
-    const runLeft = run.rect.x;
-    const runRight = run.rect.x + run.rect.width;
+    const linePos = rotated ? run.rect.x : run.rect.y;
+    const lineSize = rotated ? run.rect.width : run.rect.height;
+    const crossPos = rotated ? run.rect.y : run.rect.x;
+    const crossSize = rotated ? run.rect.height : run.rect.width;
     const runCharEnd = run.charStart + run.glyphs.length - 1;
 
     if (current === null) {
       current = {
-        top: runTop,
-        bottom: runBottom,
-        left: runLeft,
-        right: runRight,
+        lineStart: linePos,
+        lineEnd: linePos + lineSize,
+        crossStart: crossPos,
+        crossEnd: crossPos + crossSize,
         charStart: run.charStart,
         charEnd: runCharEnd,
       };
       continue;
     }
 
-    // Check vertical overlap with current line.
-    const overlapTop = Math.max(current.top, runTop);
-    const overlapBottom = Math.min(current.bottom, runBottom);
-    const overlap = Math.max(0, overlapBottom - overlapTop);
-    const union = Math.max(current.bottom, runBottom) - Math.min(current.top, runTop);
+    const overlapStart = Math.max(current.lineStart, linePos);
+    const overlapEnd = Math.min(current.lineEnd, linePos + lineSize);
+    const overlap = Math.max(0, overlapEnd - overlapStart);
+    const union = Math.max(current.lineEnd, linePos + lineSize) - Math.min(current.lineStart, linePos);
 
     if (union > 0 && overlap / union >= LINE_OVERLAP_THRESHOLD) {
-      // Same line — extend.
-      current.top = Math.min(current.top, runTop);
-      current.bottom = Math.max(current.bottom, runBottom);
-      current.left = Math.min(current.left, runLeft);
-      current.right = Math.max(current.right, runRight);
+      current.lineStart = Math.min(current.lineStart, linePos);
+      current.lineEnd = Math.max(current.lineEnd, linePos + lineSize);
+      current.crossStart = Math.min(current.crossStart, crossPos);
+      current.crossEnd = Math.max(current.crossEnd, crossPos + crossSize);
       current.charEnd = Math.max(current.charEnd, runCharEnd);
     } else {
-      // New line.
       lines.push(current);
       current = {
-        top: runTop,
-        bottom: runBottom,
-        left: runLeft,
-        right: runRight,
+        lineStart: linePos,
+        lineEnd: linePos + lineSize,
+        crossStart: crossPos,
+        crossEnd: crossPos + crossSize,
         charStart: run.charStart,
         charEnd: runCharEnd,
       };
@@ -353,6 +396,11 @@ const collectLines = (geo: ScreenPageGeometry): LineBounds[] => {
   if (current !== null) {
     lines.push(current);
   }
+
+  // Sort by lineStart so spatial-order assumptions in snapToNearest hold.
+  // Content-stream order may not match spatial order (e.g. /Rotate 90 pages
+  // have columns in right-to-left reading order = descending X).
+  lines.sort((a, b) => a.lineStart - b.lineStart);
 
   return lines;
 };

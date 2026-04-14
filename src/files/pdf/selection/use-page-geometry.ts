@@ -1,4 +1,4 @@
-import type { PdfDocumentObject, PdfEngine, PdfPageObject, PdfTextRun } from '@embedpdf/models';
+import type { PdfDocumentObject, PdfEngine, PdfPageObject, PdfTextRun, Rotation } from '@embedpdf/models';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PageGeometry, ScreenPageGeometry, ScreenRun, ScreenRunGlyph } from '@/files/pdf/selection/types';
 
@@ -13,6 +13,10 @@ interface RawPageData {
   textRuns: PdfTextRun[];
   /** Page width in engine units (before scaling). */
   pageWidth: number;
+  /** Page height in engine units (before scaling). */
+  pageHeight: number;
+  /** Inherent page rotation from the PDF /Rotate attribute. */
+  pageRotation: Rotation;
 }
 
 /**
@@ -91,7 +95,14 @@ export const usePageGeometry = (
 
         if (!cancelled) {
           fetchedPageRef.current = page.index;
-          setRawData({ geometry, pageText, textRuns: textRunsResult.runs, pageWidth: page.size.width });
+          setRawData({
+            geometry,
+            pageText,
+            textRuns: textRunsResult.runs,
+            pageWidth: page.size.width,
+            pageHeight: page.size.height,
+            pageRotation: page.rotation,
+          });
         }
       } catch {
         // Geometry extraction is best-effort — selection simply won't work
@@ -114,7 +125,15 @@ export const usePageGeometry = (
       return null;
     }
 
-    return transformGeometry(rawData.geometry, scale, rawData.pageText, rawData.textRuns, rawData.pageWidth);
+    return transformGeometry(
+      rawData.geometry,
+      scale,
+      rawData.pageText,
+      rawData.textRuns,
+      rawData.pageWidth,
+      rawData.pageHeight,
+      rawData.pageRotation,
+    );
   }, [rawData, scale]);
 
   return { geometry };
@@ -159,6 +178,8 @@ const transformGeometry = (
   pageText: string | undefined,
   textRuns: PdfTextRun[],
   pageWidth: number,
+  pageHeight: number,
+  pageRotation: Rotation,
 ): ScreenPageGeometry => {
   const factor = scale / 100;
   const fontLookup = buildFontLookup(textRuns);
@@ -182,7 +203,7 @@ const transformGeometry = (
     };
   });
 
-  return reorderRunsVisually(runs, pageText, pageWidth * factor);
+  return reorderRunsVisually(runs, pageText, pageWidth * factor, pageHeight * factor, pageRotation);
 };
 
 /**
@@ -244,9 +265,15 @@ const transformGlyph = (
 const SAME_LINE_OVERLAP = 0.5;
 
 /**
- * Sort runs into visual reading order (top-to-bottom, left-to-right),
- * reassign `charStart` indices sequentially, and — if the order changed —
- * remap `pageText` and build a `visualToOriginal` mapping.
+ * Sort runs into visual reading order, reassign `charStart` indices
+ * sequentially, and — if the order changed — remap `pageText` and build
+ * a `visualToOriginal` mapping.
+ *
+ * Reading order depends on the page's inherent /Rotate:
+ *  - 0:   lines by Y top→bottom, within line X left→right
+ *  - 90:  columns by X right→left, within column Y top→bottom
+ *  - 180: lines by Y bottom→top, within line X right→left
+ *  - 270: columns by X left→right, within column Y bottom→top
  *
  * When the content-stream order already matches visual order the function
  * returns early without allocating a mapping array.
@@ -255,21 +282,36 @@ const reorderRunsVisually = (
   runs: ScreenRun[],
   pageText: string | undefined,
   pageWidth: number,
+  pageHeight: number,
+  pageRotation: Rotation,
 ): ScreenPageGeometry => {
   if (runs.length <= 1) {
-    return { runs, pageText, visualToOriginal: undefined, pageWidth };
+    return { runs, pageText, visualToOriginal: undefined, pageWidth, pageHeight, pageRotation };
   }
 
-  // Pair each run with its original array index so we can detect reordering.
   const indexed = runs.map((run, i) => ({ run, originalIdx: i }));
 
-  // Group runs into visual lines, then sort lines top-to-bottom and runs
-  // within each line left-to-right.
-  const lines = groupIntoLines(indexed.map((e) => e.run));
+  // For /Rotate 90 and 270 the "line" axis is X (columns); otherwise Y.
+  const useX = pageRotation === 1 || pageRotation === 3;
+  const lines = groupIntoLines(
+    indexed.map((e) => e.run),
+    useX,
+  );
+
+  // groupIntoLines returns lines sorted by ascending grouping-axis centre.
+  // For /Rotate 90 (1) and 180 (2) reading order runs in the opposite
+  // direction, so we reverse.
+  if (pageRotation === 1 || pageRotation === 2) {
+    lines.reverse();
+  }
+
+  // Within each line, sort runs by the cross-axis in reading order.
+  // Ascending for /Rotate 0 and 90; descending for 180 and 270.
+  const crossSign = pageRotation === 2 || pageRotation === 3 ? -1 : 1;
+
   const sorted: { run: ScreenRun; originalIdx: number }[] = [];
 
   for (const line of lines) {
-    // Sort runs within the line by X position.
     const lineEntries: { run: ScreenRun; originalIdx: number }[] = [];
 
     for (const run of line) {
@@ -280,7 +322,12 @@ const reorderRunsVisually = (
       }
     }
 
-    lineEntries.sort((a, b) => a.run.rect.x - b.run.rect.x);
+    lineEntries.sort((a, b) => {
+      const aProp = useX ? a.run.rect.y : a.run.rect.x;
+      const bProp = useX ? b.run.rect.y : b.run.rect.x;
+
+      return crossSign * (aProp - bProp);
+    });
 
     for (const entry of lineEntries) {
       sorted.push(entry);
@@ -291,7 +338,7 @@ const reorderRunsVisually = (
   const orderChanged = sorted.some((entry, i) => entry.originalIdx !== i);
 
   if (!orderChanged) {
-    return { runs, pageText, visualToOriginal: undefined, pageWidth };
+    return { runs, pageText, visualToOriginal: undefined, pageWidth, pageHeight, pageRotation };
   }
 
   // Build the visual-to-original char index mapping and reassign charStart.
@@ -325,28 +372,28 @@ const reorderRunsVisually = (
     remappedPageText = chars.join('');
   }
 
-  return { runs: reorderedRuns, pageText: remappedPageText, visualToOriginal, pageWidth };
+  return { runs: reorderedRuns, pageText: remappedPageText, visualToOriginal, pageWidth, pageHeight, pageRotation };
 };
 
 /**
- * Group runs into visual lines based on vertical overlap, returning lines
- * sorted from top to bottom.
+ * Group runs into visual lines based on overlap on a grouping axis,
+ * returning lines sorted by ascending axis centre.
  *
- * Each "line" is a set of runs whose vertical extents overlap significantly.
- * Lines are sorted by their average Y centre.
+ * @param useX When `true`, group by X overlap (columns for rotated pages).
+ *             When `false`, group by Y overlap (lines for normal text).
  */
-const groupIntoLines = (runs: ScreenRun[]): ScreenRun[][] => {
-  // Sort a working copy by Y centre so we process top-to-bottom.
-  const byY = [...runs].sort((a, b) => {
-    const aCy = a.rect.y + a.rect.height / 2;
-    const bCy = b.rect.y + b.rect.height / 2;
+const groupIntoLines = (runs: ScreenRun[], useX: boolean): ScreenRun[][] => {
+  // Sort a working copy by the grouping-axis centre.
+  const sorted = [...runs].sort((a, b) => {
+    const aC = useX ? a.rect.x + a.rect.width / 2 : a.rect.y + a.rect.height / 2;
+    const bC = useX ? b.rect.x + b.rect.width / 2 : b.rect.y + b.rect.height / 2;
 
-    return aCy - bCy;
+    return aC - bC;
   });
 
-  const lines: { runs: ScreenRun[]; top: number; bottom: number }[] = [];
+  const lines: { runs: ScreenRun[]; start: number; end: number }[] = [];
 
-  for (const run of byY) {
+  for (const run of sorted) {
     // Skip zero-size runs.
     if (run.rect.width === 0 && run.rect.height === 0) {
       // Still include them — attach to the current line (or start a new one).
@@ -357,38 +404,39 @@ const groupIntoLines = (runs: ScreenRun[]): ScreenRun[][] => {
           lastLine.runs.push(run);
         }
       } else {
-        lines.push({ runs: [run], top: run.rect.y, bottom: run.rect.y });
+        const pos = useX ? run.rect.x : run.rect.y;
+        lines.push({ runs: [run], start: pos, end: pos });
       }
 
       continue;
     }
 
-    const runTop = run.rect.y;
-    const runBottom = run.rect.y + run.rect.height;
+    const runStart = useX ? run.rect.x : run.rect.y;
+    const runEnd = useX ? run.rect.x + run.rect.width : run.rect.y + run.rect.height;
 
     // Try to attach to an existing line.
     let attached = false;
 
     for (const line of lines) {
-      const overlapTop = Math.max(line.top, runTop);
-      const overlapBottom = Math.min(line.bottom, runBottom);
-      const overlap = Math.max(0, overlapBottom - overlapTop);
-      const union = Math.max(line.bottom, runBottom) - Math.min(line.top, runTop);
+      const overlapStart = Math.max(line.start, runStart);
+      const overlapEnd = Math.min(line.end, runEnd);
+      const overlap = Math.max(0, overlapEnd - overlapStart);
+      const union = Math.max(line.end, runEnd) - Math.min(line.start, runStart);
 
       if (union > 0 && overlap / union >= SAME_LINE_OVERLAP) {
         line.runs.push(run);
-        line.top = Math.min(line.top, runTop);
-        line.bottom = Math.max(line.bottom, runBottom);
+        line.start = Math.min(line.start, runStart);
+        line.end = Math.max(line.end, runEnd);
         attached = true;
         break;
       }
     }
 
     if (!attached) {
-      lines.push({ runs: [run], top: runTop, bottom: runBottom });
+      lines.push({ runs: [run], start: runStart, end: runEnd });
     }
   }
 
-  // Lines are already in top-to-bottom order (we processed by Y centre).
+  // Lines are in ascending order of the grouping-axis centre.
   return lines.map((l) => l.runs);
 };

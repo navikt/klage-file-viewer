@@ -203,14 +203,18 @@ export const computeDocumentStats = (pages: ScreenPageGeometry[]): DocumentStats
 };
 
 /**
- * Compute the baseline (body) left edge from ALL visible runs on the page.
+ * Compute the baseline (body) cross-axis start edge from ALL visible runs.
  *
- * Buckets left edges by pixel position, weighted by character count. The
- * baseline is the leftmost edge that appears with significant frequency
+ * For horizontal text this is the leftmost significant X edge.
+ * For rotated text (90°/270°) this is the topmost significant Y edge.
+ *
+ * Buckets edges by pixel position, weighted by character count. The
+ * baseline is the smallest edge that appears with significant frequency
  * (≥5% of total characters). This avoids picking an indented block that
  * happens to have the most text while still filtering out rare outliers.
  */
 export const computeBaselineLeftEdge = (geo: ScreenPageGeometry): number | undefined => {
+  const rotated = geo.pageRotation === 1 || geo.pageRotation === 3;
   const edgeCounts = new Map<number, number>();
   let totalChars = 0;
 
@@ -221,7 +225,8 @@ export const computeBaselineLeftEdge = (geo: ScreenPageGeometry): number | undef
       continue;
     }
 
-    const rounded = Math.round(run.rect.x);
+    const crossStart = rotated ? run.rect.y : run.rect.x;
+    const rounded = Math.round(crossStart);
     const charCount = run.glyphs.length;
     edgeCounts.set(rounded, (edgeCounts.get(rounded) ?? 0) + charCount);
     totalChars += charCount;

@@ -99,6 +99,7 @@ export const PdfPage = ({
     >
       <div ref={contentRef} className="relative" style={{ width, height }}>
         <div
+          data-klage-file-viewer-page-content
           className="relative select-none"
           style={{
             width: baseWidth,

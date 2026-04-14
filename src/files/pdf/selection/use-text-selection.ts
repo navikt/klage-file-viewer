@@ -410,51 +410,83 @@ const expandToLineBoundary = (
     return null;
   }
 
-  const anchorTop = anchorRun.rect.y;
-  const anchorBottom = anchorRun.rect.y + anchorRun.rect.height;
+  // For pages with inherent /Rotate 90°/270°, text lines are vertical
+  // columns — use X overlap instead of Y overlap.
+  const anchorExtent = runLineExtent(anchorRun, geo.pageRotation);
 
   let from = anchorRun.charStart;
   let to = anchorRun.charStart + anchorRun.glyphs.length - 1;
 
-  // Expand backward through runs on the same visual row
-  for (let r = resolved.runIdx - 1; r >= 0; r--) {
+  from = expandBackward(geo, resolved.runIdx, anchorExtent, from);
+  to = expandForward(geo, resolved.runIdx, anchorExtent, to);
+
+  return { from, to };
+};
+
+/** Get the line-axis extent of a run (Y for horizontal text, X for rotated). */
+const runLineExtent = (
+  run: ScreenRun,
+  pageRotation: import('@embedpdf/models').Rotation | undefined,
+): { start: number; end: number } => {
+  const rotated = pageRotation === 1 || pageRotation === 3;
+
+  return rotated
+    ? { start: run.rect.x, end: run.rect.x + run.rect.width }
+    : { start: run.rect.y, end: run.rect.y + run.rect.height };
+};
+
+const expandBackward = (
+  geo: ScreenPageGeometry,
+  runIdx: number,
+  anchor: { start: number; end: number },
+  initialFrom: number,
+): number => {
+  let from = initialFrom;
+
+  for (let r = runIdx - 1; r >= 0; r--) {
     const run = geo.runs[r];
 
-    if (run === undefined) {
+    if (run === undefined || isZeroSizeRun(run)) {
       continue;
     }
 
-    if (isZeroSizeRun(run)) {
-      continue;
-    }
+    const extent = runLineExtent(run, geo.pageRotation);
 
-    if (!runsOverlapVertically(run.rect.y, run.rect.y + run.rect.height, anchorTop, anchorBottom)) {
+    if (!runsOverlapVertically(extent.start, extent.end, anchor.start, anchor.end)) {
       break;
     }
 
     from = run.charStart;
   }
 
-  // Expand forward through runs on the same visual row
-  for (let r = resolved.runIdx + 1; r < geo.runs.length; r++) {
+  return from;
+};
+
+const expandForward = (
+  geo: ScreenPageGeometry,
+  runIdx: number,
+  anchor: { start: number; end: number },
+  initialTo: number,
+): number => {
+  let to = initialTo;
+
+  for (let r = runIdx + 1; r < geo.runs.length; r++) {
     const run = geo.runs[r];
 
-    if (run === undefined) {
+    if (run === undefined || isZeroSizeRun(run)) {
       continue;
     }
 
-    if (isZeroSizeRun(run)) {
-      continue;
-    }
+    const extent = runLineExtent(run, geo.pageRotation);
 
-    if (!runsOverlapVertically(run.rect.y, run.rect.y + run.rect.height, anchorTop, anchorBottom)) {
+    if (!runsOverlapVertically(extent.start, extent.end, anchor.start, anchor.end)) {
       break;
     }
 
     to = run.charStart + run.glyphs.length - 1;
   }
 
-  return { from, to };
+  return to;
 };
 
 // ── Page range builder ───────────────────────────────────────────────────

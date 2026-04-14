@@ -59,17 +59,20 @@ export const detectAlignment = (
     const line = lines[0];
 
     if (line !== undefined && baselineLeftEdge !== undefined && maxRight > 0) {
-      const leftOffset = (line.leftEdge ?? 0) - baselineLeftEdge;
-      const rightOffset = maxRight - (line.rightEdge ?? maxRight);
-      const pageWidth = maxRight - baselineLeftEdge;
+      const crossStartOffset = (line.leftEdge ?? 0) - baselineLeftEdge;
+      const crossEndOffset = maxRight - (line.rightEdge ?? maxRight);
+      const crossExtent = maxRight - baselineLeftEdge;
 
-      // Right-aligned: far from left baseline, close to right edge.
-      if (leftOffset > pageWidth * 0.4 && rightOffset <= ALIGNMENT_TOLERANCE) {
+      // Right-aligned: far from cross-axis start, close to cross-axis end.
+      if (crossStartOffset > crossExtent * 0.4 && crossEndOffset <= ALIGNMENT_TOLERANCE) {
         return 'right';
       }
 
       // Center-aligned: similar offsets on both sides.
-      if (leftOffset > ALIGNMENT_TOLERANCE && Math.abs(leftOffset - rightOffset) <= ALIGNMENT_TOLERANCE * 2) {
+      if (
+        crossStartOffset > ALIGNMENT_TOLERANCE &&
+        Math.abs(crossStartOffset - crossEndOffset) <= ALIGNMENT_TOLERANCE * 2
+      ) {
         return 'center';
       }
     }
@@ -208,7 +211,7 @@ export const isIndentedLine = (lineInfo: LineInfo, baselineLeftEdge: number | un
     return false;
   }
 
-  const indent = lineInfo.leftEdge - baselineLeftEdge;
+  const indent = lineInfo.crossStart - baselineLeftEdge;
 
   return indent >= LIST_INDENT_THRESHOLD && indent <= LIST_INDENT_MAX;
 };

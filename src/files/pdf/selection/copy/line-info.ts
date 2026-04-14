@@ -14,14 +14,23 @@ export const MIN_LINES_FOR_STATS = 2;
 
 /** Information about a single visual line within the selection. */
 export interface LineInfo {
-  /** The Y-centre of the line in screen coordinates. */
-  yCentre: number;
-  /** Average line height of runs on this line. */
-  height: number;
-  /** The right-most edge (x + width) of all runs on this line. */
-  rightEdge: number;
-  /** The left-most edge of all runs on this line. */
-  leftEdge: number;
+  /**
+   * Centre of the line on the grouping axis (Y for horizontal text,
+   * X for rotated text where lines are vertical columns).
+   */
+  lineCentre: number;
+  /** Size of the line on the grouping axis (height for horizontal, width for rotated). */
+  lineSize: number;
+  /**
+   * Start edge on the cross axis — the "left" edge in reading direction.
+   * For /Rotate 0: X of leftmost glyph.  For /Rotate 90: Y of topmost glyph.
+   */
+  crossStart: number;
+  /**
+   * End edge on the cross axis — the "right" edge in reading direction.
+   * For /Rotate 0: X + width of rightmost glyph.  For /Rotate 90: Y + height of bottommost glyph.
+   */
+  crossEnd: number;
   /** Index of the first character in this line (within the page). */
   charStart: number;
   /** Index of the last character in this line (within the page). */
@@ -40,17 +49,19 @@ export interface LineInfo {
 
 /**
  * Walk the runs that overlap the selection range and group them into visual
- * lines based on their Y position.
+ * lines based on their position on the line-grouping axis (Y for horizontal
+ * text, X for rotated text where lines are vertical columns).
  */
 export const collectLineInfo = (range: PageSelectionRange, geo: ScreenPageGeometry): LineInfo[] => {
   const { startCharIndex, endCharIndex } = range;
+  const rotated = geo.pageRotation === 1 || geo.pageRotation === 3;
   const lines: LineInfo[] = [];
 
-  let currentLineY = Number.NEGATIVE_INFINITY;
-  let currentLineHeightSum = 0;
+  let currentLineCentre = Number.NEGATIVE_INFINITY;
+  let currentLineSizeSum = 0;
   let currentLineRunCount = 0;
-  let currentLineRightEdge = Number.NEGATIVE_INFINITY;
-  let currentLineLeftEdge = Number.POSITIVE_INFINITY;
+  let currentLineCrossEnd = Number.NEGATIVE_INFINITY;
+  let currentLineCrossStart = Number.POSITIVE_INFINITY;
   let currentLineCharStart = 0;
   let currentLineCharEnd = 0;
   let lineTolerance = 0;
@@ -64,10 +75,10 @@ export const collectLineInfo = (range: PageSelectionRange, geo: ScreenPageGeomet
   const flushLine = () => {
     if (currentLineRunCount > 0) {
       lines.push({
-        yCentre: currentLineY,
-        height: currentLineHeightSum / currentLineRunCount,
-        rightEdge: currentLineRightEdge,
-        leftEdge: currentLineLeftEdge,
+        lineCentre: currentLineCentre,
+        lineSize: currentLineSizeSum / currentLineRunCount,
+        crossEnd: currentLineCrossEnd,
+        crossStart: currentLineCrossStart,
         charStart: currentLineCharStart,
         charEnd: currentLineCharEnd,
         dominantFontSize: totalFontChars > 0 ? fontSizeWeightedSum / totalFontChars : undefined,
@@ -89,31 +100,36 @@ export const collectLineInfo = (range: PageSelectionRange, geo: ScreenPageGeomet
       continue;
     }
 
-    const runYCentre = run.rect.y + run.rect.height / 2;
-    const runRight = run.rect.x + run.rect.width;
-    const runLeft = run.rect.x;
+    // Line-grouping axis: Y for horizontal text, X for rotated text.
+    const runLineAxisCentre = rotated ? run.rect.x + run.rect.width / 2 : run.rect.y + run.rect.height / 2;
+    const runLineAxisSize = rotated ? run.rect.width : run.rect.height;
+
+    // Cross axis: X for horizontal text, Y for rotated text.
+    const runCrossStart = rotated ? run.rect.y : run.rect.x;
+    const runCrossEnd = rotated ? run.rect.y + run.rect.height : run.rect.x + run.rect.width;
+
     const runCharStart = run.charStart;
     const runCharEnd = runCharStart + run.glyphs.length - 1;
     const glyphCount = run.glyphs.length;
 
-    if (currentLineRunCount === 0 || Math.abs(runYCentre - currentLineY) > lineTolerance) {
+    if (currentLineRunCount === 0 || Math.abs(runLineAxisCentre - currentLineCentre) > lineTolerance) {
       // Start a new line.
       flushLine();
       resetFontAccumulators();
-      currentLineY = runYCentre;
-      currentLineHeightSum = run.rect.height;
+      currentLineCentre = runLineAxisCentre;
+      currentLineSizeSum = runLineAxisSize;
       currentLineRunCount = 1;
-      currentLineRightEdge = runRight;
-      currentLineLeftEdge = runLeft;
+      currentLineCrossEnd = runCrossEnd;
+      currentLineCrossStart = runCrossStart;
       currentLineCharStart = runCharStart;
       currentLineCharEnd = runCharEnd;
-      lineTolerance = run.rect.height / 2;
+      lineTolerance = runLineAxisSize / 2;
     } else {
       // Same line — accumulate.
-      currentLineHeightSum += run.rect.height;
+      currentLineSizeSum += runLineAxisSize;
       currentLineRunCount += 1;
-      currentLineRightEdge = Math.max(currentLineRightEdge, runRight);
-      currentLineLeftEdge = Math.min(currentLineLeftEdge, runLeft);
+      currentLineCrossEnd = Math.max(currentLineCrossEnd, runCrossEnd);
+      currentLineCrossStart = Math.min(currentLineCrossStart, runCrossStart);
       currentLineCharEnd = Math.max(currentLineCharEnd, runCharEnd);
     }
 
@@ -143,19 +159,24 @@ export const collectLineInfo = (range: PageSelectionRange, geo: ScreenPageGeomet
 // ---------------------------------------------------------------------------
 
 /**
- * Compute the maximum right edge for full-width detection.
+ * Compute the maximum cross-axis extent for full-width detection.
  *
- * When the geometry includes a `pageWidth` (from the PDF page dimensions),
- * we use that so a page with only short lines doesn't falsely treat them
- * as "full width." Falls back to the rightmost text edge when `pageWidth`
- * is not available (e.g. in test fixtures without it).
+ * For horizontal text: the page width (or max X+width from runs).
+ * For rotated text: the page height (or max Y+height from runs).
+ *
+ * When the geometry includes page dimensions, we use those so a page
+ * with only short lines doesn't falsely treat them as "full width."
  */
 export const computePageMaxRight = (geo: ScreenPageGeometry): number => {
-  if (geo.pageWidth !== undefined && geo.pageWidth > 0) {
-    return geo.pageWidth;
+  const rotated = geo.pageRotation === 1 || geo.pageRotation === 3;
+
+  const pageDimension = rotated ? geo.pageHeight : geo.pageWidth;
+
+  if (pageDimension !== undefined && pageDimension > 0) {
+    return pageDimension;
   }
 
-  let maxRight = 0;
+  let maxCross = 0;
 
   for (const run of geo.runs) {
     const hasVisibleGlyph = run.glyphs.some((g) => g.flags !== GLYPH_FLAG_EMPTY);
@@ -164,11 +185,11 @@ export const computePageMaxRight = (geo: ScreenPageGeometry): number => {
       continue;
     }
 
-    const runRight = run.rect.x + run.rect.width;
-    maxRight = Math.max(maxRight, runRight);
+    const runCrossEnd = rotated ? run.rect.y + run.rect.height : run.rect.x + run.rect.width;
+    maxCross = Math.max(maxCross, runCrossEnd);
   }
 
-  return maxRight;
+  return maxCross;
 };
 
 /** Check whether a run overlaps a character index range. */
@@ -185,7 +206,7 @@ const runOverlapsRange = (run: ScreenRun, startCharIndex: number, endCharIndex: 
   return runEnd >= startCharIndex && runStart <= endCharIndex;
 };
 
-/** Compute the vertical gaps between consecutive lines. */
+/** Compute the gaps between consecutive lines on the grouping axis. */
 export const computeLineGaps = (lines: LineInfo[]): number[] => {
   const gaps: number[] = [];
 
@@ -197,7 +218,7 @@ export const computeLineGaps = (lines: LineInfo[]): number[] => {
       continue;
     }
 
-    const gap = Math.abs(curr.yCentre - prev.yCentre);
+    const gap = Math.abs(curr.lineCentre - prev.lineCentre);
     gaps.push(gap);
   }
 
