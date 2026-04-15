@@ -47,12 +47,12 @@ export const FileSection = ({
   );
 
   const resolvedFile = useMemo<FileEntry>(() => {
-    if (!variantData.hasRedactedDocuments || !variantData.hasAccessToArchivedDocuments) {
+    if (!variantData.hasExplicitFormat) {
       return file;
     }
 
     return { ...file, query: { ...file.query, format: variantData.format } };
-  }, [file, variantData.hasRedactedDocuments, variantData.hasAccessToArchivedDocuments, variantData.format]);
+  }, [file, variantData.hasExplicitFormat, variantData.format]);
 
   switch (variantData.filtype) {
     case 'PDF':
@@ -133,6 +133,7 @@ const resolveVariantData = (
       hasAccess: true,
       format: 'ARKIV',
       skjerming: null,
+      hasExplicitFormat: false,
       hasRedactedDocuments: false,
       hasAccessToArchivedDocuments: false,
       showRedacted,
@@ -143,6 +144,7 @@ const resolveVariantData = (
   if (!Array.isArray(variants)) {
     return {
       ...variants,
+      hasExplicitFormat: true,
       hasRedactedDocuments: variants.format === 'SLADDET',
       hasAccessToArchivedDocuments: false,
       showRedacted,
@@ -162,6 +164,7 @@ const resolveVariantData = (
 
   return {
     ...active,
+    hasExplicitFormat: true,
     hasRedactedDocuments,
     hasAccessToArchivedDocuments,
     showRedacted,

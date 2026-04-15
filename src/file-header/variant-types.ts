@@ -5,22 +5,20 @@ export interface ResolvedVariant {
   format: VariantFormat;
   hasAccess: boolean;
   skjerming: Skjerming | null;
+  /** Whether the original variants included explicit format information (not just a plain FileType string). */
+  hasExplicitFormat: boolean;
   hasRedactedDocuments: boolean;
   hasAccessToArchivedDocuments: boolean;
   showRedacted: boolean;
   setShowRedacted: (showRedacted: boolean) => void;
 }
 
-/** Append `format=…` to a base URL when the variant supports toggling between redacted/unredacted. */
+/** Append `format=…` to a base URL when the variant has explicit format information. */
 export const resolveVariantUrl = (
   baseUrl: string | undefined,
   variant: ResolvedVariant | undefined,
 ): string | undefined => {
-  if (baseUrl === undefined || variant === undefined) {
-    return baseUrl;
-  }
-
-  if (!variant.hasRedactedDocuments || !variant.hasAccessToArchivedDocuments) {
+  if (baseUrl === undefined || variant === undefined || !variant.hasExplicitFormat) {
     return baseUrl;
   }
 
