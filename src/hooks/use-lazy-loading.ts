@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-/** Minimum total pages to load on initial render (across all sections). */
+/**
+ * How far ahead of the viewport (as a percentage of the scroll container height)
+ * the sentinel should trigger loading the next section.
+ * 300% = 3 viewport heights of lookahead.
+ */
+const SENTINEL_ROOT_MARGIN = '300% 0px 300% 0px';
+
+/** Minimum total pages to load before relying on the sentinel alone. */
 const MIN_INITIAL_PAGES = 5;
-
-/** Number of rendered pages to keep below the viewport as a scroll buffer. */
-const PAGE_BUFFER_COUNT = 3;
 
 interface UseLazyLoadingParams {
   /** Total number of file sections available. */
@@ -20,32 +24,31 @@ interface UseLazyLoadingResult {
   sectionPageCounts: Map<number, number>;
   /** Callback for a section to report its page count once loaded. */
   handlePageCountReady: (sectionIndex: number, pageCount: number) => void;
+  /** Ref callback to attach to the sentinel element placed after the last loaded section. */
+  sentinelRef: (el: HTMLDivElement | null) => void;
 }
 
 export const useLazyLoading = ({ sectionCount, scrollContainerRef }: UseLazyLoadingParams): UseLazyLoadingResult => {
   const [loadedSectionCount, setLoadedSectionCount] = useState(Math.min(1, sectionCount));
   const [sectionPageCounts, setSectionPageCounts] = useState<Map<number, number>>(new Map());
 
-  // Derived: total loaded pages and whether initial load phase is complete
+  const sentinelElementRef = useRef<HTMLDivElement | null>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  // Derived: total loaded pages
   let totalLoadedPages = 0;
 
   for (const count of sectionPageCounts.values()) {
     totalLoadedPages += count;
   }
 
-  const allSectionsReportedDuringInitial = sectionPageCounts.size >= loadedSectionCount && loadedSectionCount > 0;
-
-  const initialLoadComplete =
-    loadedSectionCount >= sectionCount || (allSectionsReportedDuringInitial && totalLoadedPages >= MIN_INITIAL_PAGES);
-
-  // Phase 1: initial progressive loading until we reach MIN_INITIAL_PAGES
+  // Bootstrap phase: keep loading sections until MIN_INITIAL_PAGES is reached.
+  // Waits for each loaded section to report its page count before loading the next.
   useEffect(() => {
-    // Wait until all currently-loading sections have reported their page counts.
     if (sectionPageCounts.size < loadedSectionCount) {
       return;
     }
 
-    // All sections already loaded — nothing to do.
     if (loadedSectionCount >= sectionCount) {
       return;
     }
@@ -55,63 +58,84 @@ export const useLazyLoading = ({ sectionCount, scrollContainerRef }: UseLazyLoad
     }
   }, [sectionPageCounts.size, loadedSectionCount, sectionCount, totalLoadedPages]);
 
-  // Phase 2: scroll-based buffer — only active after initial load is complete
+  // Sentinel phase: use IntersectionObserver to load more sections as the user scrolls.
+  // Back-pressure: only increment when all loaded sections have reported their page count.
   useEffect(() => {
-    if (!initialLoadComplete) {
-      return;
-    }
-
     const scrollContainer = scrollContainerRef.current;
 
     if (scrollContainer === null) {
       return;
     }
 
-    const checkScrollBuffer = () => {
-      if (loadedSectionCount >= sectionCount) {
-        return;
-      }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
 
-      const pagesBelow = countPagesBelow(scrollContainer);
+        if (entry === undefined || !entry.isIntersecting) {
+          return;
+        }
 
-      if (pagesBelow < PAGE_BUFFER_COUNT) {
-        setLoadedSectionCount((prev) => Math.min(prev + 1, sectionCount));
-      }
-    };
+        setLoadedSectionCount((prev) => {
+          if (prev >= sectionCount) {
+            return prev;
+          }
 
-    scrollContainer.addEventListener('scroll', checkScrollBuffer, { passive: true });
+          return prev + 1;
+        });
+      },
+      {
+        root: scrollContainer,
+        rootMargin: SENTINEL_ROOT_MARGIN,
+      },
+    );
 
-    // Run once immediately in case the loaded content is short.
-    checkScrollBuffer();
+    observerRef.current = observer;
+
+    if (sentinelElementRef.current !== null) {
+      observer.observe(sentinelElementRef.current);
+    }
 
     return () => {
-      scrollContainer.removeEventListener('scroll', checkScrollBuffer);
+      observer.disconnect();
+      observerRef.current = null;
     };
-  }, [initialLoadComplete, loadedSectionCount, sectionCount, scrollContainerRef]);
+  }, [scrollContainerRef, sectionCount]);
 
-  // Re-check the buffer whenever new pages finish rendering (totalLoadedPages changes).
+  // Re-observe the sentinel after a new section finishes loading.
+  // This handles the case where the sentinel is still in the buffer zone after
+  // a section loads — the IO won't re-fire for an already-intersecting element,
+  // so we force a re-observe to check again.
   useEffect(() => {
-    if (!initialLoadComplete || loadedSectionCount >= sectionCount || totalLoadedPages === 0) {
+    const observer = observerRef.current;
+    const sentinel = sentinelElementRef.current;
+
+    if (observer === null || sentinel === null || loadedSectionCount >= sectionCount) {
       return;
     }
 
-    const scrollContainer = scrollContainerRef.current;
-
-    if (scrollContainer === null) {
+    // Only re-observe once all loaded sections have reported their page counts (back-pressure).
+    if (sectionPageCounts.size < loadedSectionCount) {
       return;
     }
 
-    // Small delay so the DOM has time to update after pages render.
-    const timerId = setTimeout(() => {
-      const pagesBelow = countPagesBelow(scrollContainer);
+    observer.unobserve(sentinel);
+    observer.observe(sentinel);
+  }, [sectionPageCounts.size, loadedSectionCount, sectionCount]);
 
-      if (pagesBelow < PAGE_BUFFER_COUNT) {
-        setLoadedSectionCount((prev) => Math.min(prev + 1, sectionCount));
-      }
-    }, 150);
+  // Callback ref for the sentinel element.
+  const sentinelRef = useCallback((el: HTMLDivElement | null) => {
+    const observer = observerRef.current;
 
-    return () => clearTimeout(timerId);
-  }, [totalLoadedPages, initialLoadComplete, loadedSectionCount, sectionCount, scrollContainerRef]);
+    if (observer !== null && sentinelElementRef.current !== null) {
+      observer.unobserve(sentinelElementRef.current);
+    }
+
+    sentinelElementRef.current = el;
+
+    if (observer !== null && el !== null) {
+      observer.observe(el);
+    }
+  }, []);
 
   // Reset lazy-loading state when the section count changes.
   useEffect(() => {
@@ -132,24 +156,5 @@ export const useLazyLoading = ({ sectionCount, scrollContainerRef }: UseLazyLoad
     });
   }, []);
 
-  return { loadedSectionCount, sectionPageCounts, handlePageCountReady };
-};
-
-/**
- * Count how many rendered page elements have their top edge below the
- * viewport bottom of the scroll container. Queries the DOM directly via
- * `[data-klage-file-viewer-page-number]` so it works across all sections without extra ref tracking.
- */
-const countPagesBelow = (scrollContainer: HTMLDivElement): number => {
-  const viewportBottom = scrollContainer.getBoundingClientRect().bottom;
-  const pages = scrollContainer.querySelectorAll<HTMLDivElement>('[data-klage-file-viewer-page-number]');
-  let count = 0;
-
-  for (const page of pages) {
-    if (page.getBoundingClientRect().top >= viewportBottom) {
-      count++;
-    }
-  }
-
-  return count;
+  return { loadedSectionCount, sectionPageCounts, handlePageCountReady, sentinelRef };
 };

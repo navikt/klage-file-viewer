@@ -134,7 +134,7 @@ const KlageFileViewerInner = ({
   const [pdfSearchInfoMap, setPdfSearchInfoMap] = useState<Map<number, PdfSectionSearchInfo>>(() => new Map());
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  const { loadedSectionCount, sectionPageCounts, handlePageCountReady } = useLazyLoading({
+  const { loadedSectionCount, sectionPageCounts, handlePageCountReady, sentinelRef } = useLazyLoading({
     sectionCount: files.length,
     scrollContainerRef,
   });
@@ -348,6 +348,8 @@ const KlageFileViewerInner = ({
                 />
               </VStack>
             ))}
+
+            {loadedSectionCount < files.length ? <div ref={sentinelRef} aria-hidden /> : null}
           </VStack>
         </VStack>
       </Box>
