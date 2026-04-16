@@ -118,12 +118,12 @@ export const LoadedImageSection = ({
       <div
         data-klage-file-viewer-page-number={1}
         data-klage-file-viewer-scalable
-        className="relative flex w-full justify-center overflow-x-auto"
+        className="relative w-full overflow-x-auto"
       >
         <img
           src={objectUrl}
           alt={file.title}
-          className="block max-w-none shadow-ax-dialog"
+          className="mx-auto block max-w-none shadow-ax-dialog"
           style={{ width: `calc(210mm * ${scaleFactor.toString()})`, imageRendering }}
           draggable={false}
         />

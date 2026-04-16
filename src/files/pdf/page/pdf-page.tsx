@@ -98,8 +98,8 @@ export const PdfPage = ({
       className="relative w-full"
     >
       <RotateButton pageNumber={pageNumber} onRotate={() => onRotate(pageIndex)} />
-      <div className="flex w-full justify-center overflow-x-auto">
-        <div ref={contentRef} className="relative" style={{ width, height }}>
+      <div className="w-full overflow-x-auto">
+        <div ref={contentRef} className="relative mx-auto" style={{ width, height }}>
           <div
             data-klage-file-viewer-page-content
             className="relative select-none"
