@@ -1,6 +1,6 @@
 import type { Rotation } from '@embedpdf/models';
 import type { ScreenPageGeometry, ScreenRunGlyph } from '@/files/pdf/selection/types';
-import { GLYPH_FLAG_EMPTY } from '@/files/pdf/selection/types';
+import { GLYPH_FLAG_EMPTY, hasGlyphFlag } from '@/files/pdf/selection/types';
 
 // ---------------------------------------------------------------------------
 // Glyph bounds helpers
@@ -61,7 +61,7 @@ const glyphAtExact = (geo: ScreenPageGeometry, x: number, y: number): number => 
     }
 
     const hitIdx = run.glyphs.findIndex((g) => {
-      if (g.flags === GLYPH_FLAG_EMPTY) {
+      if (hasGlyphFlag(g.flags, GLYPH_FLAG_EMPTY)) {
         return false;
       }
 
@@ -107,7 +107,7 @@ const glyphAtWithTolerance = (geo: ScreenPageGeometry, x: number, y: number, tol
     for (let i = 0; i < run.glyphs.length; i++) {
       const g = run.glyphs[i];
 
-      if (g === undefined || g.flags === GLYPH_FLAG_EMPTY) {
+      if (g === undefined || hasGlyphFlag(g.flags, GLYPH_FLAG_EMPTY)) {
         continue;
       }
 
@@ -140,7 +140,7 @@ const computeTolerance = (geo: ScreenPageGeometry, factor: number): number => {
 
   for (const run of geo.runs) {
     for (const g of run.glyphs) {
-      if (g.flags === GLYPH_FLAG_EMPTY) {
+      if (hasGlyphFlag(g.flags, GLYPH_FLAG_EMPTY)) {
         continue;
       }
 

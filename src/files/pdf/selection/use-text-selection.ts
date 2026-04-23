@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PageSelectionRange, ScreenPageGeometry, ScreenRun, TextSelection } from '@/files/pdf/selection/types';
-import { GLYPH_FLAG_EMPTY, GLYPH_FLAG_SPACE } from '@/files/pdf/selection/types';
+import { GLYPH_FLAG_EMPTY, GLYPH_FLAG_SPACE, hasGlyphFlag } from '@/files/pdf/selection/types';
 
 interface SelectionAnchor {
   pageIndex: number;
@@ -262,7 +262,8 @@ const isZeroSizeRun = (run: ScreenRun): boolean => run.rect.width === 0 && run.r
  * Check if a glyph acts as a word boundary (space or empty) based solely on
  * the glyph flag. Used as the fallback when page text is unavailable.
  */
-const isGlyphWordBoundary = (flags: number): boolean => flags === GLYPH_FLAG_SPACE || flags === GLYPH_FLAG_EMPTY;
+const isGlyphWordBoundary = (flags: number): boolean =>
+  hasGlyphFlag(flags, GLYPH_FLAG_SPACE) || hasGlyphFlag(flags, GLYPH_FLAG_EMPTY);
 
 /**
  * Check whether a character is a "word" character — a letter, digit, or

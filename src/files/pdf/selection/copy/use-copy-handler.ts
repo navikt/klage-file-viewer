@@ -1,30 +1,25 @@
-import type { PdfDocumentObject, PdfEngine } from '@embedpdf/models';
+import type { PageTextSlice, PdfDocumentObject, PdfEngine } from '@embedpdf/models';
 import { useEffect, useRef } from 'react';
-import {
-  analyzePageReflow,
-  computeDocumentStats,
-  type DocumentStats,
-  EMPTY_REFLOW,
-  type PageReflow,
-} from '@/files/pdf/selection/copy/analyze-reflow';
-import { buildOriginalSlice } from '@/files/pdf/selection/copy/build-original-slice';
-import { blocksToHtml, blocksToPlain, escapeHtml } from '@/files/pdf/selection/copy/formatters';
-import type { PageSelectionRange, ScreenPageGeometry, TextSelection } from '@/files/pdf/selection/types';
+import { type ReflowBlock, reflowSelection } from '@/files/pdf/selection/copy/reflow';
+import { toHtml, toMarkdown, toPlainText } from '@/files/pdf/selection/copy/serialize';
+import type { ScreenPageGeometry, TextSelection } from '@/files/pdf/selection/types';
+
+const LINE_BREAK = /\r\n|\r|\n/;
 
 /**
- * When our custom PDF selection changes, extract the selected text from the
- * engine and place it inside a hidden DOM element with a real browser
- * Selection. This gives us native Ctrl+C and correct context menus.
+ * When our custom PDF selection changes, extract the selected text and place
+ * it inside a hidden DOM element with a real browser Selection. This gives us
+ * native Ctrl+C and correct context menus, and the `copy` event is intercepted
+ * as a fallback for when the browser selection gets lost.
  *
- * Also intercepts the `copy` event as a fallback for when the browser
- * selection gets lost.
- *
- * Uses page geometry to detect block boundaries and line structure:
- *  - Lines separated by a gap significantly larger than the typical line
- *    spacing are joined with a double newline (block break).
- *  - Short lines (headings, list items, last line of a block) keep a
- *    single newline.
- *  - Full-width lines that wrap to the next line are joined with a space.
+ * Text content is taken from PDFium's native char-index extraction (the cached
+ * `pageText`, or `engine.getTextSlices` when it has not been cached) — the same
+ * approach as EmbedPDF's selection plugin, which keeps soft-broken characters
+ * intact. `reflowSelection` then reconstructs paragraphs and lists from that
+ * text using the geometry purely for line-join decisions (it never re-derives
+ * characters from glyph positions). We slice the cached `pageText`
+ * synchronously when available so the clipboard `copy` event sees the text
+ * immediately, and fall back to the engine only for un-cached pages.
  */
 export const useCopyHandler = (
   engine: PdfEngine | null,
@@ -34,6 +29,7 @@ export const useCopyHandler = (
 ): React.RefObject<HTMLDivElement | null> => {
   const hiddenRef = useRef<HTMLDivElement | null>(null);
   const htmlRef = useRef<string>('');
+  const markdownRef = useRef<string>('');
 
   useEffect(() => {
     const el = hiddenRef.current;
@@ -45,82 +41,61 @@ export const useCopyHandler = (
     if (engine === null || doc === null || selection === null || selection.ranges.length === 0) {
       el.textContent = '';
       htmlRef.current = '';
+      markdownRef.current = '';
 
       return;
     }
 
-    // When runs have been reordered visually, the geometry's pageText is
-    // already in visual order and we can extract selected text directly
-    // without calling the engine (which uses original char indices).
-    // For pages without reordering we fall back to engine.getTextSlices.
-    const canUseLocalText = selection.ranges.every((range) => {
+    const commit = (): void => {
+      const blocks = combineBlocks(pageBlocks);
+
+      el.textContent = toPlainText(blocks);
+      htmlRef.current = toHtml(blocks);
+      markdownRef.current = toMarkdown(blocks);
+      selectHiddenElement(el);
+    };
+
+    // Reflow the cached page text synchronously where available; defer pages
+    // whose text has not been fetched yet to the engine (raw text only).
+    const pageBlocks: (ReflowBlock[] | null)[] = selection.ranges.map((range) => {
       const geo = geometryRegistry.current.get(range.pageIndex);
 
-      return geo?.visualToOriginal !== undefined && geo.pageText !== undefined;
+      if (geo?.pageText === undefined) {
+        return null;
+      }
+
+      const rawText = geo.pageText.slice(range.startCharIndex, range.endCharIndex + 1);
+
+      return reflowSelection(rawText, geo, range);
     });
 
-    if (canUseLocalText) {
-      const allGeos = selection.ranges
-        .map((range) => geometryRegistry.current.get(range.pageIndex))
-        .filter((geo): geo is ScreenPageGeometry => geo !== undefined);
-      const docStats = computeDocumentStats(allGeos);
+    const engineJobs = selection.ranges
+      .map((range, index) => ({ range, index }))
+      .filter(({ index }) => pageBlocks[index] === null);
 
-      const pageResults = selection.ranges.map((range) => {
-        const geo = geometryRegistry.current.get(range.pageIndex);
-
-        if (geo === undefined || geo.pageText === undefined) {
-          return EMPTY_REFLOW;
-        }
-
-        const rawText = geo.pageText.slice(range.startCharIndex, range.endCharIndex + 1);
-
-        return reflowPage(rawText, range, geo, docStats);
-      });
-
-      el.textContent = pageResults.map((r) => r.plain).join('\n\n');
-      htmlRef.current = pageResults.map((r) => r.html).join('');
-      selectHiddenElement(el);
+    if (engineJobs.length === 0) {
+      commit();
     } else {
-      // Build slices — translate visual indices back to original when needed.
-      const slices = selection.ranges.map((range) => {
-        const geo = geometryRegistry.current.get(range.pageIndex);
-
-        return buildOriginalSlice(range, geo);
-      });
+      const slices: PageTextSlice[] = engineJobs.map(({ range }) => ({
+        pageIndex: range.pageIndex,
+        charIndex: range.startCharIndex,
+        charCount: range.endCharIndex - range.startCharIndex + 1,
+      }));
 
       const task = engine.getTextSlices(doc, slices);
 
       task.wait(
         (texts) => {
-          const allGeos = selection.ranges
-            .map((range) => geometryRegistry.current.get(range.pageIndex))
-            .filter((geo): geo is ScreenPageGeometry => geo !== undefined);
-          const docStats = computeDocumentStats(allGeos);
-
-          const pageResults = texts.map((text, i) => {
-            const range = selection.ranges[i];
-
-            if (range === undefined) {
-              return { plain: text, html: `<p>${escapeHtml(text)}</p>` };
-            }
-
-            const geo = geometryRegistry.current.get(range.pageIndex);
-
-            if (geo === undefined) {
-              return { plain: text, html: `<p>${escapeHtml(text)}</p>` };
-            }
-
-            return reflowPage(text, range, geo, docStats);
+          engineJobs.forEach(({ index }, sliceIndex) => {
+            pageBlocks[index] = rawTextToBlocks(texts[sliceIndex] ?? '');
           });
 
-          el.textContent = pageResults.map((r) => r.plain).join('\n\n');
-          htmlRef.current = pageResults.map((r) => r.html).join('');
-
-          selectHiddenElement(el);
+          commit();
         },
         () => {
           el.textContent = '';
           htmlRef.current = '';
+          markdownRef.current = '';
         },
       );
     }
@@ -164,6 +139,7 @@ export const useCopyHandler = (
       e.preventDefault();
       e.clipboardData?.setData('text/plain', text);
       e.clipboardData?.setData('text/html', htmlRef.current);
+      e.clipboardData?.setData('text/markdown', markdownRef.current);
     };
 
     document.addEventListener('copy', handleCopy);
@@ -178,18 +154,45 @@ export const useCopyHandler = (
   return hiddenRef;
 };
 
-/** Analyse text and produce both plain and HTML representations. */
-const reflowPage = (
-  rawText: string,
-  range: PageSelectionRange,
-  geo: ScreenPageGeometry,
-  documentStats?: DocumentStats,
-): PageReflow => {
-  const blocks = analyzePageReflow(rawText, range, geo, documentStats);
-  const plain = blocksToPlain(blocks);
-  const html = blocksToHtml(blocks);
+/** Flatten the per-page blocks, marking each page's first block as gap-separated. */
+const combineBlocks = (pages: (ReflowBlock[] | null)[]): ReflowBlock[] => {
+  const all: ReflowBlock[] = [];
 
-  return { plain, html };
+  for (const blocks of pages) {
+    if (blocks === null) {
+      continue;
+    }
+
+    blocks.forEach((block, index) => {
+      all.push(all.length > 0 && index === 0 ? { ...block, gapBefore: true } : block);
+    });
+  }
+
+  return all;
+};
+
+/** Convert engine-fallback raw text (no geometry) into plain paragraph blocks. */
+const rawTextToBlocks = (text: string): ReflowBlock[] => {
+  const blocks: ReflowBlock[] = [];
+  let blankPending = false;
+
+  for (const raw of text.split(LINE_BREAK)) {
+    if (raw.trim() === '') {
+      blankPending = true;
+      continue;
+    }
+
+    blocks.push({
+      kind: 'paragraph',
+      spans: [{ text: raw.trim(), bold: false, italic: false }],
+      level: 0,
+      headingLevel: 0,
+      gapBefore: blocks.length > 0 && blankPending,
+    });
+    blankPending = false;
+  }
+
+  return blocks;
 };
 
 /** Create a real browser Selection over the hidden element's text content. */

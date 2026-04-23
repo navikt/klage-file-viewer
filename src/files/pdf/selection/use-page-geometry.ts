@@ -163,15 +163,12 @@ const getTotalCharCountFromGeometry = (geo: PageGeometry): number => {
 
 /**
  * Scale an entire {@link PageGeometry} (all runs and their glyphs) from
- * engine device-space to screen coordinates, then reorder runs into visual
- * reading order (top-to-bottom, left-to-right).
+ * engine device-space to screen coordinates.
  *
- * PDF content streams don't guarantee that text objects appear in visual
- * order — headers/footers are often emitted before or between body text.
- * By sorting runs visually and reassigning `charStart` indices we ensure
- * that the character index space matches the visual layout.  This makes
- * forward/backward selection, contiguous range highlighting, and copy all
- * work correctly without special-casing non-visual ordering.
+ * Runs keep PDFium's native char-index order. PDFium's text page already
+ * orders characters in reading order, so the selection char indices map
+ * directly onto `pageText` (fetched via `getTextSlices`) and onto the engine
+ * for copy — matching how EmbedPDF's selection plugin extracts text.
  */
 const transformGeometry = (
   raw: PageGeometry,
@@ -204,7 +201,13 @@ const transformGeometry = (
     };
   });
 
-  return reorderRunsVisually(runs, pageText, pageWidth * factor, pageHeight * factor, pageRotation);
+  return {
+    runs,
+    pageText,
+    pageWidth: pageWidth * factor,
+    pageHeight: pageHeight * factor,
+    pageRotation,
+  };
 };
 
 /**
@@ -254,190 +257,3 @@ const transformGlyph = (
   tightWidth: g.tightWidth !== undefined ? g.tightWidth * factor : undefined,
   tightHeight: g.tightHeight !== undefined ? g.tightHeight * factor : undefined,
 });
-
-// ---------------------------------------------------------------------------
-// Visual run reordering
-// ---------------------------------------------------------------------------
-
-/**
- * Minimum vertical overlap ratio for two runs to be considered on the same
- * visual line during the sort.
- */
-const SAME_LINE_OVERLAP = 0.5;
-
-/**
- * Sort runs into visual reading order, reassign `charStart` indices
- * sequentially, and — if the order changed — remap `pageText` and build
- * a `visualToOriginal` mapping.
- *
- * Reading order depends on the page's inherent /Rotate:
- *  - 0:   lines by Y top→bottom, within line X left→right
- *  - 90:  columns by X right→left, within column Y top→bottom
- *  - 180: lines by Y bottom→top, within line X right→left
- *  - 270: columns by X left→right, within column Y bottom→top
- *
- * When the content-stream order already matches visual order the function
- * returns early without allocating a mapping array.
- */
-const reorderRunsVisually = (
-  runs: ScreenRun[],
-  pageText: string | undefined,
-  pageWidth: number,
-  pageHeight: number,
-  pageRotation: Rotation,
-): ScreenPageGeometry => {
-  if (runs.length <= 1) {
-    return { runs, pageText, visualToOriginal: undefined, pageWidth, pageHeight, pageRotation };
-  }
-
-  const indexed = runs.map((run, i) => ({ run, originalIdx: i }));
-
-  // For /Rotate 90 and 270 the "line" axis is X (columns); otherwise Y.
-  const useX = pageRotation === 1 || pageRotation === 3;
-  const lines = groupIntoLines(
-    indexed.map((e) => e.run),
-    useX,
-  );
-
-  // groupIntoLines returns lines sorted by ascending grouping-axis centre.
-  // For /Rotate 90 (1) and 180 (2) reading order runs in the opposite
-  // direction, so we reverse.
-  if (pageRotation === 1 || pageRotation === 2) {
-    lines.reverse();
-  }
-
-  // Within each line, sort runs by the cross-axis in reading order.
-  // Ascending for /Rotate 0 and 90; descending for 180 and 270.
-  const crossSign = pageRotation === 2 || pageRotation === 3 ? -1 : 1;
-
-  const sorted: { run: ScreenRun; originalIdx: number }[] = [];
-
-  for (const line of lines) {
-    const lineEntries: { run: ScreenRun; originalIdx: number }[] = [];
-
-    for (const run of line) {
-      const entry = indexed.find((e) => e.run === run);
-
-      if (entry !== undefined) {
-        lineEntries.push(entry);
-      }
-    }
-
-    lineEntries.sort((a, b) => {
-      const aProp = useX ? a.run.rect.y : a.run.rect.x;
-      const bProp = useX ? b.run.rect.y : b.run.rect.x;
-
-      return crossSign * (aProp - bProp);
-    });
-
-    for (const entry of lineEntries) {
-      sorted.push(entry);
-    }
-  }
-
-  // Fast path: if the sorted order matches the original, no remapping needed.
-  const orderChanged = sorted.some((entry, i) => entry.originalIdx !== i);
-
-  if (!orderChanged) {
-    return { runs, pageText, visualToOriginal: undefined, pageWidth, pageHeight, pageRotation };
-  }
-
-  // Build the visual-to-original char index mapping and reassign charStart.
-  const visualToOriginal: number[] = [];
-  const reorderedRuns: ScreenRun[] = [];
-  let nextCharStart = 0;
-
-  for (const { run } of sorted) {
-    const originalCharStart = run.charStart;
-    const glyphCount = run.glyphs.length;
-
-    reorderedRuns.push({ ...run, charStart: nextCharStart });
-
-    for (let i = 0; i < glyphCount; i++) {
-      visualToOriginal.push(originalCharStart + i);
-    }
-
-    nextCharStart += glyphCount;
-  }
-
-  // Remap pageText to visual char order.
-  let remappedPageText: string | undefined;
-
-  if (pageText !== undefined) {
-    const chars: string[] = [];
-
-    for (const originalIdx of visualToOriginal) {
-      chars.push(pageText[originalIdx] ?? '');
-    }
-
-    remappedPageText = chars.join('');
-  }
-
-  return { runs: reorderedRuns, pageText: remappedPageText, visualToOriginal, pageWidth, pageHeight, pageRotation };
-};
-
-/**
- * Group runs into visual lines based on overlap on a grouping axis,
- * returning lines sorted by ascending axis centre.
- *
- * @param useX When `true`, group by X overlap (columns for rotated pages).
- *             When `false`, group by Y overlap (lines for normal text).
- */
-const groupIntoLines = (runs: ScreenRun[], useX: boolean): ScreenRun[][] => {
-  // Sort a working copy by the grouping-axis centre.
-  const sorted = [...runs].sort((a, b) => {
-    const aC = useX ? a.rect.x + a.rect.width / 2 : a.rect.y + a.rect.height / 2;
-    const bC = useX ? b.rect.x + b.rect.width / 2 : b.rect.y + b.rect.height / 2;
-
-    return aC - bC;
-  });
-
-  const lines: { runs: ScreenRun[]; start: number; end: number }[] = [];
-
-  for (const run of sorted) {
-    // Skip zero-size runs.
-    if (run.rect.width === 0 && run.rect.height === 0) {
-      // Still include them — attach to the current line (or start a new one).
-      if (lines.length > 0) {
-        const lastLine = lines[lines.length - 1];
-
-        if (lastLine !== undefined) {
-          lastLine.runs.push(run);
-        }
-      } else {
-        const pos = useX ? run.rect.x : run.rect.y;
-        lines.push({ runs: [run], start: pos, end: pos });
-      }
-
-      continue;
-    }
-
-    const runStart = useX ? run.rect.x : run.rect.y;
-    const runEnd = useX ? run.rect.x + run.rect.width : run.rect.y + run.rect.height;
-
-    // Try to attach to an existing line.
-    let attached = false;
-
-    for (const line of lines) {
-      const overlapStart = Math.max(line.start, runStart);
-      const overlapEnd = Math.min(line.end, runEnd);
-      const overlap = Math.max(0, overlapEnd - overlapStart);
-      const union = Math.max(line.end, runEnd) - Math.min(line.start, runStart);
-
-      if (union > 0 && overlap / union >= SAME_LINE_OVERLAP) {
-        line.runs.push(run);
-        line.start = Math.min(line.start, runStart);
-        line.end = Math.max(line.end, runEnd);
-        attached = true;
-        break;
-      }
-    }
-
-    if (!attached) {
-      lines.push({ runs: [run], start: runStart, end: runEnd });
-    }
-  }
-
-  // Lines are in ascending order of the grouping-axis centre.
-  return lines.map((l) => l.runs);
-};

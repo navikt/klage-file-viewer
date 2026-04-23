@@ -377,6 +377,7 @@ export const LoadedPdfSection = ({
         ref={copyTargetRef}
         aria-hidden
         tabIndex={-1}
+        data-klage-file-viewer-copy-target
         style={{
           position: 'absolute',
           top: -9999,

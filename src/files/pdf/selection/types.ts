@@ -24,9 +24,14 @@ export type PageGeometry = PdfPageGeometry;
  * These match the values produced by EmbedPDF's `buildRunsFromGlyphs`:
  *  - 1 = space character
  *  - 2 = empty / zero-size glyph
+ *
+ * Flags are combined as a bitmask.
  */
 export const GLYPH_FLAG_SPACE = 1 as const;
 export const GLYPH_FLAG_EMPTY = 2 as const;
+
+/** Check if a glyph flag has the given bit set. */
+export const hasGlyphFlag = (flags: number, flag: number): boolean => (flags & flag) !== 0;
 
 /**
  * A {@link PageRun} whose glyph positions have been scaled to screen
@@ -64,7 +69,7 @@ export interface ScreenRunGlyph {
   width: number;
   /** Loose-bounds height. */
   height: number;
-  /** Glyph flag: 0 = normal, 1 = space, 2 = empty. */
+  /** Glyph flag bitmask: 0 = normal, 1 = space, 2 = empty. */
   flags: number;
   /** Tight-bounds X (from FPDFText_GetCharBox). Used for hit-testing. */
   tightX: number | undefined;
@@ -93,20 +98,10 @@ export interface ScreenPageGeometry {
    * Fetched via `engine.getTextSlices` alongside the page geometry.
    * May be `undefined` if text extraction failed or is still pending.
    *
-   * When runs have been reordered visually, this string is remapped to
-   * match the visual character order.
+   * Indexed in PDFium's native char order (reading order), matching the
+   * run `charStart` values — so a selection's char range slices it directly.
    */
   pageText: string | undefined;
-  /**
-   * Maps visual (reordered) character indices back to original engine
-   * character indices.  `visualToOriginal[visualIdx] = originalIdx`.
-   *
-   * Present only when the page's runs were reordered from their
-   * content-stream order to visual reading order.  When `undefined`,
-   * the content-stream order already matches visual order and indices
-   * are identical.
-   */
-  visualToOriginal: number[] | undefined;
   /**
    * The page width in screen coordinates (page.size.width × scale).
    *
