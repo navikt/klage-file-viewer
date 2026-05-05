@@ -65,6 +65,7 @@ export const FileErrorLayout = ({
                 download={file.title}
                 icon={<DownloadIcon aria-hidden />}
                 variant="secondary"
+                data-color="neutral"
                 size="small"
                 target="_blank"
               >
