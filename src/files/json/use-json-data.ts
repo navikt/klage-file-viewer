@@ -35,7 +35,8 @@ export const useJsonData = (data: Blob | null): UseJsonData => {
       setParseError(undefined);
 
       try {
-        const parsed: JsonData = await data.json();
+        const text = await data.text();
+        const parsed: JsonData = JSON.parse(text);
 
         if (!cancelled) {
           setJson(parsed);
