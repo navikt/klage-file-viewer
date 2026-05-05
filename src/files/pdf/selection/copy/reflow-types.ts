@@ -26,7 +26,7 @@ export type BlockRole = 'paragraph' | 'heading' | 'list-item';
 export type TextAlignment = 'left' | 'center' | 'right';
 
 /** Internal line representation with geometry fields used only during analysis. */
-export interface InternalLine {
+interface InternalLine {
   spans: ReflowSpan[];
   text: string;
   fontSize: number | undefined;
