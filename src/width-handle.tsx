@@ -3,13 +3,10 @@ import { clamp } from '@/lib/clamp';
 import { MIN_INLINE_WIDTH } from '@/scale/constants';
 
 interface WidthHandleProps {
-  width: number;
   setWidth: (width: number) => void;
 }
 
-export const WidthHandle = ({ width, setWidth }: WidthHandleProps) => {
-  const widthRef = useRef(width);
-  widthRef.current = width;
+export const WidthHandle = ({ setWidth }: WidthHandleProps) => {
   const elementRef = useRef<HTMLDivElement>(null);
 
   const handlePointerDown = useCallback(
@@ -25,12 +22,26 @@ export const WidthHandle = ({ width, setWidth }: WidthHandleProps) => {
       element.setPointerCapture(e.pointerId);
 
       const startX = e.clientX;
-      const startWidth = widthRef.current;
+      const startWidth = container.clientWidth;
       let currentWidth = startWidth;
       let requestAnimationFrameId: number | null = null;
 
       document.body.style.userSelect = 'none';
       document.body.style.cursor = 'col-resize';
+
+      const cleanup = () => {
+        if (requestAnimationFrameId !== null) {
+          cancelAnimationFrame(requestAnimationFrameId);
+        }
+
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        element.removeEventListener('pointermove', onPointerMove);
+        element.removeEventListener('pointerup', onPointerUp);
+        element.removeEventListener('lostpointercapture', onLostPointerCapture);
+
+        setWidth(currentWidth);
+      };
 
       const onPointerMove = (moveEvent: PointerEvent) => {
         const deltaX = moveEvent.clientX - startX;
@@ -45,21 +56,12 @@ export const WidthHandle = ({ width, setWidth }: WidthHandleProps) => {
         }
       };
 
-      const onPointerUp = () => {
-        if (requestAnimationFrameId !== null) {
-          cancelAnimationFrame(requestAnimationFrameId);
-        }
-
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
-        element.removeEventListener('pointermove', onPointerMove);
-        element.removeEventListener('pointerup', onPointerUp);
-
-        setWidth(currentWidth);
-      };
+      const onPointerUp = () => cleanup();
+      const onLostPointerCapture = () => cleanup();
 
       element.addEventListener('pointermove', onPointerMove);
       element.addEventListener('pointerup', onPointerUp);
+      element.addEventListener('lostpointercapture', onLostPointerCapture);
     },
     [setWidth],
   );

@@ -392,7 +392,7 @@ const KlageFileViewerInner = ({
         </VStack>
       </Box>
 
-      {!standalone ? <WidthHandle width={viewerWidth} setWidth={handleWidthDrag} /> : null}
+      {!standalone ? <WidthHandle setWidth={handleWidthDrag} /> : null}
     </div>
   );
 };
