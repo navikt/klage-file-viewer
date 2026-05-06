@@ -59,9 +59,16 @@ const pdfListPlugin = (): Plugin => ({
     });
 
     // Tesseract WASM core (multiple variants, auto-selected by CPU features)
-    server.middlewares.use('/tesseract', (req, res) => {
-      const filename = (req.url ?? '').replace(LEADING_SLASH_REGEX, '');
-      serveNodeModule(res, `tesseract.js-core/${filename}`, 'application/javascript');
+    server.middlewares.use('/tesseract', (req, res, next) => {
+      const file = (req.url ?? '').replace(LEADING_SLASH_REGEX, '');
+
+      if (!file.startsWith('tesseract-core')) {
+        next();
+
+        return;
+      }
+
+      serveNodeModule(res, `tesseract.js-core/${file}`, 'application/javascript');
     });
 
     // Tesseract language data (proxied from jsdelivr)
