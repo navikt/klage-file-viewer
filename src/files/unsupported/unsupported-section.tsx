@@ -1,6 +1,6 @@
-import { DownloadIcon } from '@navikt/aksel-icons';
-import { BodyShort, Button, VStack } from '@navikt/ds-react';
+import { BodyShort, VStack } from '@navikt/ds-react';
 import { useEffect } from 'react';
+import { DownloadButton } from '@/download-button';
 import { type DocumentNavigation, FileHeader } from '@/file-header/file-header';
 import { type ResolvedVariant, resolveVariantUrl } from '@/file-header/variant-types';
 import { getA4Dimensions } from '@/files/pdf/pdf-section-placeholder';
@@ -52,17 +52,17 @@ export const UnsupportedSection = ({
           Filtypen{headerVariant !== undefined ? `, ${headerVariant.filtype},` : ''} kan ikke forhåndsvises.
         </BodyShort>
 
-        <Button
-          as="a"
-          href={resolvedDownloadUrl}
-          download={file.title}
-          icon={<DownloadIcon aria-hidden />}
-          variant="secondary"
-          size="small"
-          target="_blank"
-        >
-          Last ned fil
-        </Button>
+        {resolvedDownloadUrl !== undefined ? (
+          <DownloadButton
+            url={resolvedDownloadUrl}
+            filename={file.title}
+            tooltip="Last ned fil"
+            size="small"
+            variant="secondary"
+          >
+            Last ned fil
+          </DownloadButton>
+        ) : null}
       </VStack>
     </>
   );

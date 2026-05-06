@@ -11,7 +11,7 @@ import {
 } from '@navikt/aksel-icons';
 import { Box, HStack, Tag, Tooltip } from '@navikt/ds-react';
 import type { ReactNode } from 'react';
-import { DownloadButton } from '@/file-header/download-button';
+import { DownloadButton } from '@/download-button';
 import type { DocumentNavigation } from '@/file-header/page-navigation';
 import { PageNavigation } from '@/file-header/page-navigation';
 import { PrintButton } from '@/file-header/print-button';
@@ -136,7 +136,7 @@ export const FileHeader = ({
         ) : null}
 
         {resolvedDownloadUrl !== undefined ? (
-          <DownloadButton url={resolvedDownloadUrl} tooltip="Last ned dokument" />
+          <DownloadButton url={resolvedDownloadUrl} filename={title} tooltip="Last ned" />
         ) : null}
 
         {onPrint !== undefined ? <PrintButton onPrint={onPrint} tooltip="Skriv ut dokument" /> : null}

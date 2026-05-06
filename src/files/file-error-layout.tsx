@@ -1,5 +1,6 @@
-import { ArrowsCirclepathIcon, DownloadIcon } from '@navikt/aksel-icons';
+import { ArrowsCirclepathIcon } from '@navikt/aksel-icons';
 import { Alert, Button, Heading, HStack } from '@navikt/ds-react';
+import { DownloadButton } from '@/download-button';
 import { type DocumentNavigation, FileHeader } from '@/file-header/file-header';
 import { type ResolvedVariant, resolveVariantUrl } from '@/file-header/variant-types';
 import type { FileEntry } from '@/types';
@@ -59,18 +60,15 @@ export const FileErrorLayout = ({
             </Button>
 
             {resolvedDownloadUrl !== undefined ? (
-              <Button
-                as="a"
-                href={resolvedDownloadUrl}
-                download={file.title}
-                icon={<DownloadIcon aria-hidden />}
-                variant="secondary"
-                data-color="neutral"
+              <DownloadButton
+                url={resolvedDownloadUrl}
+                filename={file.title}
+                tooltip="Last ned fil"
                 size="small"
-                target="_blank"
+                variant="secondary"
               >
                 Last ned fil
-              </Button>
+              </DownloadButton>
             ) : null}
 
             <code className="border-2 border-ax-border-neutral bg-ax-bg-neutral-moderate p-2 text-xs">
