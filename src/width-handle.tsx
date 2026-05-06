@@ -26,6 +26,9 @@ export const WidthHandle = ({ setWidth }: WidthHandleProps) => {
       let currentWidth = startWidth;
       let requestAnimationFrameId: number | null = null;
 
+      const previousUserSelect = document.body.style.userSelect;
+      const previousCursor = document.body.style.cursor;
+
       document.body.style.userSelect = 'none';
       document.body.style.cursor = 'col-resize';
 
@@ -34,8 +37,8 @@ export const WidthHandle = ({ setWidth }: WidthHandleProps) => {
           cancelAnimationFrame(requestAnimationFrameId);
         }
 
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
+        document.body.style.userSelect = previousUserSelect;
+        document.body.style.cursor = previousCursor;
         element.removeEventListener('pointermove', onPointerMove);
         element.removeEventListener('pointerup', onPointerUp);
         element.removeEventListener('lostpointercapture', onLostPointerCapture);
