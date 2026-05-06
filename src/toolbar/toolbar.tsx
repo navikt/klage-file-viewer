@@ -12,6 +12,7 @@ import { FitHeight } from '@/toolbar/fit-height';
 import { FitPage } from '@/toolbar/fit-page';
 import { FitToContent } from '@/toolbar/fit-to-content';
 import { FitWidth } from '@/toolbar/fit-width';
+import { LinkWidthToScale } from '@/toolbar/link-width-to-scale';
 import { Scale } from '@/toolbar/scale';
 import { SettingsModal } from '@/toolbar/settings-modal';
 
@@ -32,6 +33,8 @@ interface ToolbarProps {
   onClose?: () => void;
   newTabUrl?: string | null;
   onFitToContent?: (width: number) => void;
+  widthFollowsScale?: boolean;
+  onToggleWidthFollowsScale?: () => void;
   onPreviousDocument?: () => void;
   onNextDocument?: () => void;
   previousDocumentDisabled?: boolean;
@@ -55,6 +58,8 @@ export const Toolbar = ({
   onClose,
   newTabUrl = null,
   onFitToContent,
+  widthFollowsScale,
+  onToggleWidthFollowsScale,
   onPreviousDocument,
   onNextDocument,
   previousDocumentDisabled,
@@ -96,6 +101,10 @@ export const Toolbar = ({
             <Separator />
             <FitToContent scrollContainerRef={scrollContainerRef} onFitToContent={onFitToContent} />
           </>
+        ) : null}
+
+        {onToggleWidthFollowsScale !== undefined && widthFollowsScale !== undefined ? (
+          <LinkWidthToScale active={widthFollowsScale} onToggle={onToggleWidthFollowsScale} />
         ) : null}
 
         <Separator />

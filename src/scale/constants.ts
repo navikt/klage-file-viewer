@@ -28,10 +28,11 @@ export const SCROLL_STEP = 5;
 export const KLAGE_FILE_VIEWER_SCALE_MODE_KEY = 'klage-file-viewer/settings/scale-mode';
 export const KLAGE_FILE_VIEWER_SCALE_VALUE_KEY = 'klage-file-viewer/settings/scale-value';
 export const KLAGE_FILE_VIEWER_WIDTH_KEY = 'klage-file-viewer/settings/viewer-width';
+export const KLAGE_FILE_VIEWER_WIDTH_FOLLOWS_SCALE_KEY = 'klage-file-viewer/settings/width-follows-scale';
 
 /** Horizontal padding per side applied to each page element (px). */
 const SECTION_PADDING_INLINE = 8;
 
 /** Default inline viewer width in pixels (A4 pixel width + section padding). */
 export const DEFAULT_INLINE_WIDTH = A4_WIDTH_PX + SECTION_PADDING_INLINE * 2;
-export const MIN_INLINE_WIDTH = 500;
+export const MIN_INLINE_WIDTH = 600;

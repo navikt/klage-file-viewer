@@ -2,12 +2,12 @@ import { useCallback, useRef } from 'react';
 import { clamp } from '@/lib/clamp';
 import { MIN_INLINE_WIDTH } from '@/scale/constants';
 
-interface ScaleHandleProps {
+interface WidthHandleProps {
   width: number;
   setWidth: (width: number) => void;
 }
 
-export const ScaleHandle = ({ width, setWidth }: ScaleHandleProps) => {
+export const WidthHandle = ({ width, setWidth }: WidthHandleProps) => {
   const widthRef = useRef(width);
   widthRef.current = width;
   const elementRef = useRef<HTMLDivElement>(null);
@@ -27,7 +27,7 @@ export const ScaleHandle = ({ width, setWidth }: ScaleHandleProps) => {
       const startX = e.clientX;
       const startWidth = widthRef.current;
       let currentWidth = startWidth;
-      let rafId: number | null = null;
+      let requestAnimationFrameId: number | null = null;
 
       document.body.style.userSelect = 'none';
       document.body.style.cursor = 'col-resize';
@@ -36,17 +36,18 @@ export const ScaleHandle = ({ width, setWidth }: ScaleHandleProps) => {
         const deltaX = moveEvent.clientX - startX;
         currentWidth = clamp(startWidth + deltaX, MIN_INLINE_WIDTH, window.innerWidth);
 
-        if (rafId === null) {
-          rafId = requestAnimationFrame(() => {
+        if (requestAnimationFrameId === null) {
+          requestAnimationFrameId = requestAnimationFrame(() => {
             container.style.width = `${currentWidth.toString(10)}px`;
-            rafId = null;
+            setWidth(currentWidth);
+            requestAnimationFrameId = null;
           });
         }
       };
 
       const onPointerUp = () => {
-        if (rafId !== null) {
-          cancelAnimationFrame(rafId);
+        if (requestAnimationFrameId !== null) {
+          cancelAnimationFrame(requestAnimationFrameId);
         }
 
         document.body.style.userSelect = '';

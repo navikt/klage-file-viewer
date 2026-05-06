@@ -2,7 +2,6 @@ import { SidebarLeftIcon } from '@navikt/aksel-icons';
 import { Button, Tooltip } from '@navikt/ds-react';
 import { useCallback } from 'react';
 import { computeFitToContentWidth } from '@/lib/page-measure';
-import { MIN_INLINE_WIDTH } from '@/scale/constants';
 import { useToolbarHeight } from '@/toolbar-height-context';
 
 interface Props {
@@ -26,7 +25,7 @@ export const FitToContent = ({ scrollContainerRef, onFitToContent }: Props) => {
       return;
     }
 
-    onFitToContent(Math.max(targetWidth, MIN_INLINE_WIDTH));
+    onFitToContent(targetWidth);
   }, [scrollContainerRef, toolbarHeight, onFitToContent]);
 
   return (

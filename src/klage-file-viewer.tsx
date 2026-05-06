@@ -1,5 +1,5 @@
 import { Box, VStack } from '@navikt/ds-react';
-import { type Ref, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { FileViewerProvider, type KlageFileViewerProviderProps, useFileViewerConfig } from '@/context';
 import type { DocumentNavigation } from '@/file-header/file-header';
 import { FileSection } from '@/file-section';
@@ -13,12 +13,19 @@ import { useLazyLoading } from '@/hooks/use-lazy-loading';
 import { RefreshRegistryProvider, useRefreshRegistry } from '@/hooks/use-refresh-registry';
 import { useSectionVisibility } from '@/hooks/use-section-visibility';
 import { clamp } from '@/lib/clamp';
+import { computeFitToContentWidth } from '@/lib/page-measure';
 import { PrintProvider } from '@/lib/print-frame';
-import { DEFAULT_INLINE_WIDTH, KLAGE_FILE_VIEWER_WIDTH_KEY, MIN_INLINE_WIDTH } from '@/scale/constants';
-import { ScaleHandle } from '@/scale-handle';
+import {
+  DEFAULT_INLINE_WIDTH,
+  KLAGE_FILE_VIEWER_SCALE_VALUE_KEY,
+  KLAGE_FILE_VIEWER_WIDTH_FOLLOWS_SCALE_KEY,
+  KLAGE_FILE_VIEWER_WIDTH_KEY,
+  MIN_INLINE_WIDTH,
+} from '@/scale/constants';
 import { Toolbar } from '@/toolbar/toolbar';
 import { ToolbarHeightProvider, useToolbarHeight } from '@/toolbar-height-context';
 import type { FileEntry } from '@/types';
+import { WidthHandle } from '@/width-handle';
 
 declare const __PDFIUM_WASM_HASH__: string;
 
@@ -112,13 +119,50 @@ const KlageFileViewerInner = ({
 
   const { scale, setScale } = useInitialScale(scrollContainerRef, standalone, toolbarHeight);
 
+  useEffect(() => {
+    persistScale(scale);
+  }, [scale]);
+
   const [viewerWidth, setViewerWidthState] = useState<number>(() => readInlineWidth());
+
+  const [widthFollowsScale, setWidthFollowsScaleState] = useState(() => readWidthFollowsScale());
+
+  const setWidthFollowsScale = useCallback((value: boolean) => {
+    setWidthFollowsScaleState(value);
+    persistWidthFollowsScale(value);
+  }, []);
 
   const setViewerWidth = useCallback((width: number) => {
     const clamped = clamp(Math.round(width), MIN_INLINE_WIDTH, window.innerWidth);
     setViewerWidthState(clamped);
     persistInlineWidth(clamped);
   }, []);
+
+  useEffect(() => {
+    if (!widthFollowsScale || standalone) {
+      return;
+    }
+
+    const scrollContainer = scrollContainerRef.current;
+
+    if (scrollContainer === null) {
+      return;
+    }
+
+    const targetWidth = computeFitToContentWidth(scrollContainer, toolbarHeight);
+    setViewerWidth(targetWidth ?? (scale / 100) * DEFAULT_INLINE_WIDTH);
+  }, [widthFollowsScale, scale, standalone, setViewerWidth, toolbarHeight]);
+
+  const handleWidthDrag = useCallback(
+    (width: number) => {
+      if (widthFollowsScale) {
+        setScale((width / DEFAULT_INLINE_WIDTH) * 100);
+      } else {
+        setViewerWidth(width);
+      }
+    },
+    [widthFollowsScale, setScale, setViewerWidth],
+  );
 
   useImperativeHandle(handleRef, () => ({
     focus: () => scrollContainerRef.current?.focus(),
@@ -311,6 +355,8 @@ const KlageFileViewerInner = ({
             onClose={onClose}
             newTabUrl={newTabUrl}
             onFitToContent={standalone ? undefined : setViewerWidth}
+            widthFollowsScale={standalone ? undefined : widthFollowsScale}
+            onToggleWidthFollowsScale={standalone ? undefined : () => setWidthFollowsScale(!widthFollowsScale)}
             onPreviousDocument={onPreviousDocument}
             onNextDocument={onNextDocument}
             previousDocumentDisabled={previousDocumentDisabled}
@@ -346,7 +392,7 @@ const KlageFileViewerInner = ({
         </VStack>
       </Box>
 
-      {!standalone ? <ScaleHandle width={viewerWidth} setWidth={setViewerWidth} /> : null}
+      {!standalone ? <WidthHandle width={viewerWidth} setWidth={handleWidthDrag} /> : null}
     </div>
   );
 };
@@ -372,6 +418,30 @@ const readInlineWidth = (): number => {
 const persistInlineWidth = (width: number): void => {
   try {
     localStorage.setItem(KLAGE_FILE_VIEWER_WIDTH_KEY, width.toString(10));
+  } catch {
+    // Ignore errors (e.g. localStorage unavailable).
+  }
+};
+
+const persistScale = (scale: number): void => {
+  try {
+    localStorage.setItem(KLAGE_FILE_VIEWER_SCALE_VALUE_KEY, Math.round(scale).toString(10));
+  } catch {
+    // Ignore errors (e.g. localStorage unavailable).
+  }
+};
+
+const readWidthFollowsScale = (): boolean => {
+  try {
+    return localStorage.getItem(KLAGE_FILE_VIEWER_WIDTH_FOLLOWS_SCALE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
+
+const persistWidthFollowsScale = (value: boolean): void => {
+  try {
+    localStorage.setItem(KLAGE_FILE_VIEWER_WIDTH_FOLLOWS_SCALE_KEY, value.toString());
   } catch {
     // Ignore errors (e.g. localStorage unavailable).
   }

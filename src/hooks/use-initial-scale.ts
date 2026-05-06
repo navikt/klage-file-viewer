@@ -33,46 +33,53 @@ const ALL_MODE_VALUES: Set<string> = new Set(Object.values(KlageFileViewerFitMod
 
 const isValidMode = (value: string): value is KlageFileViewerFitMode => ALL_MODE_VALUES.has(value);
 
-const readStoredScale = (): StoredScale => {
+const readStoredScaleValue = (): number => {
   try {
-    const mode = localStorage.getItem(KLAGE_FILE_VIEWER_SCALE_MODE_KEY);
+    const raw = localStorage.getItem(KLAGE_FILE_VIEWER_SCALE_VALUE_KEY);
 
-    if (mode === null) {
-      return INITIAL_SCALE;
-    }
-
-    const trimmedMode = mode.trim();
-
-    if (!isValidMode(trimmedMode)) {
-      return INITIAL_SCALE;
-    }
-
-    if (trimmedMode === KlageFileViewerFitMode.NONE) {
-      return INITIAL_SCALE;
-    }
-
-    if (trimmedMode === KlageFileViewerFitMode.CUSTOM) {
-      const raw = localStorage.getItem(KLAGE_FILE_VIEWER_SCALE_VALUE_KEY);
-
-      if (raw === null) {
-        return INITIAL_SCALE;
-      }
-
-      const parsed = Number.parseFloat(raw.trim());
+    if (raw !== null) {
+      const parsed = Number.parseInt(raw.trim(), 10);
 
       if (Number.isFinite(parsed)) {
-        return clamp(Math.round(parsed), MIN_SCALE, MAX_SCALE);
+        return clamp(parsed, MIN_SCALE, MAX_SCALE);
       }
-
-      return INITIAL_SCALE;
     }
-
-    return trimmedMode;
   } catch {
     // Ignore errors (e.g. localStorage unavailable).
   }
 
   return INITIAL_SCALE;
+};
+
+const readStoredScaleMode = (): KlageFileViewerFitMode => {
+  try {
+    const raw = localStorage.getItem(KLAGE_FILE_VIEWER_SCALE_MODE_KEY);
+
+    if (raw !== null) {
+      const trimmed = raw.trim();
+
+      if (isValidMode(trimmed)) {
+        return trimmed;
+      }
+    }
+  } catch {
+    // Ignore errors (e.g. localStorage unavailable).
+  }
+
+  return KlageFileViewerFitMode.NONE;
+};
+
+const readStoredScale = (): StoredScale => {
+  const mode = readStoredScaleMode();
+
+  switch (mode) {
+    case KlageFileViewerFitMode.CUSTOM:
+      return readStoredScaleValue();
+    case KlageFileViewerFitMode.NONE:
+      return INITIAL_SCALE;
+    default:
+      return mode;
+  }
 };
 
 const computeFitScale = (
@@ -116,19 +123,19 @@ interface UseInitialScaleResult {
  * Reads the initial scale preference from localStorage and applies it.
  *
  * - If the stored mode is `custom`, the stored numeric value is used immediately as the initial scale.
- * - If the stored mode is `page-width`, `page-height`, or `page-fit`,
+ * - If the stored mode is `page-width`, `page-height`, or `page-fit` (standalone only),
  *   the hook starts with {@link INITIAL_SCALE} and then applies the fit mode once the first
  *   scalable page element appears in the DOM.
  * - If the stored mode is `none` or missing, {@link INITIAL_SCALE} is used.
  * - This hook never writes back to localStorage.
- * - When `standalone` is `false`, localStorage is ignored and {@link INITIAL_SCALE} is always used.
+ * - When `standalone` is `false`, fit modes are ignored and only numeric (custom) values are restored.
  */
 export const useInitialScale = (
   scrollContainerRef: React.RefObject<HTMLDivElement | null>,
   standalone: boolean,
   toolbarHeight = 0,
 ): UseInitialScaleResult => {
-  const storedScale = useRef(standalone ? readStoredScale() : KlageFileViewerFitMode.PAGE_WIDTH);
+  const storedScale = useRef(standalone ? readStoredScale() : readStoredScaleValue());
   const initialNumericScale = typeof storedScale.current === 'number' ? storedScale.current : INITIAL_SCALE;
   const [scale, setScale] = useState(initialNumericScale);
   const appliedRef = useRef(typeof storedScale.current === 'number');
