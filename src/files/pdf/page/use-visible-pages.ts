@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const PAGE_NUMBER_ATTR = 'data-klage-file-viewer-page-number';
 
+/** How many viewport heights to extend the observation area in each direction. */
+const OVERSCAN_FACTOR = 3;
+const ROOT_MARGIN = `${(OVERSCAN_FACTOR * 100).toString(10)}% 0px`;
+
 const getPageNumber = (element: Element): number | null => {
   const attr = element.getAttribute(PAGE_NUMBER_ATTR);
 
@@ -64,7 +68,7 @@ export const useVisiblePages = (
       },
       {
         root: scrollContainer,
-        rootMargin: '100% 0px',
+        rootMargin: ROOT_MARGIN,
       },
     );
 

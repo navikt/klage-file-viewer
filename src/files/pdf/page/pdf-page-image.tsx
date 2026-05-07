@@ -1,4 +1,5 @@
 import type { ImageDataLike, PdfDocumentObject, PdfEngine, PdfPageObject } from '@embedpdf/models';
+import { Skeleton, VStack } from '@navikt/ds-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeMode, useFileViewerConfig } from '@/context';
 
@@ -21,6 +22,7 @@ export const PdfPageImage = ({ engine, doc, page, visible }: PdfPageImageProps) 
   const observerRef = useRef<ResizeObserver | null>(null);
   const { theme, invertColors, antiAliasing } = useFileViewerConfig();
   const [physicalSize, setPhysicalSize] = useState<PhysicalSize | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const setCanvasRef = useCallback((el: HTMLCanvasElement | null) => {
     if (observerRef.current !== null) {
@@ -72,6 +74,7 @@ export const PdfPageImage = ({ engine, doc, page, visible }: PdfPageImageProps) 
     if (!visible) {
       clearCanvas(canvasRef.current);
       renderedRef.current = false;
+      setLoading(false);
 
       return;
     }
@@ -81,6 +84,7 @@ export const PdfPageImage = ({ engine, doc, page, visible }: PdfPageImageProps) 
     }
 
     let cancelled = false;
+    setLoading(!renderedRef.current);
 
     // Render at the exact physical pixel count reported by the browser.
     // Pass dpr: 1 to bypass the engine's Math.max(1, dpr) clamp — the
@@ -97,6 +101,7 @@ export const PdfPageImage = ({ engine, doc, page, visible }: PdfPageImageProps) 
 
         paintToCanvas(canvasRef.current, raw);
         renderedRef.current = true;
+        setLoading(false);
 
         console.debug(
           `[PdfPageImage] Rendered page ${page.index.toString(10)} with scale ${renderScale} at ${raw.width.toString(10)}×${raw.height.toString(10)}px (physical: ${physicalSize.width.toString(10)}×${physicalSize.height.toString(10)})`,
@@ -117,14 +122,44 @@ export const PdfPageImage = ({ engine, doc, page, visible }: PdfPageImageProps) 
   const imageRenderingClass = getImageRenderingClass(dpr, antiAliasing);
 
   return (
-    <canvas
-      ref={setCanvasRef}
-      aria-hidden
-      className={`h-full w-full ${imageRenderingClass}`}
-      style={{ filter: filterStyle, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
-    />
+    <div className="relative h-full w-full">
+      <canvas
+        ref={setCanvasRef}
+        aria-hidden
+        className={`h-full w-full ${imageRenderingClass}`}
+        style={{ filter: filterStyle, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}
+      />
+      {loading ? <PageSkeleton /> : null}
+    </div>
   );
 };
+
+const PageSkeleton = () => (
+  <div className="absolute inset-0 bg-white p-[8%]">
+    <VStack gap="space-16" width="100%">
+      <Skeleton variant="text" width="40%" height={28} />
+      <VStack gap="space-8" width="100%">
+        <Skeleton variant="text" width="100%" />
+        <Skeleton variant="text" width="100%" />
+        <Skeleton variant="text" width="95%" />
+        <Skeleton variant="text" width="100%" />
+        <Skeleton variant="text" width="60%" />
+      </VStack>
+      <VStack gap="space-8" width="100%">
+        <Skeleton variant="text" width="100%" />
+        <Skeleton variant="text" width="100%" />
+        <Skeleton variant="text" width="90%" />
+        <Skeleton variant="text" width="100%" />
+        <Skeleton variant="text" width="75%" />
+      </VStack>
+      <VStack gap="space-8" width="100%">
+        <Skeleton variant="text" width="100%" />
+        <Skeleton variant="text" width="100%" />
+        <Skeleton variant="text" width="85%" />
+      </VStack>
+    </VStack>
+  </div>
+);
 
 const paintToCanvas = (canvas: HTMLCanvasElement | null, raw: ImageDataLike): void => {
   if (canvas === null) {
