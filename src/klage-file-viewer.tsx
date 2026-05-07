@@ -15,6 +15,7 @@ import { useSectionVisibility } from '@/hooks/use-section-visibility';
 import { clamp } from '@/lib/clamp';
 import { computeFitToContentWidth } from '@/lib/page-measure';
 import { PrintProvider } from '@/lib/print-frame';
+import { ResizeHandle } from '@/resize-handle';
 import {
   DEFAULT_INLINE_WIDTH,
   KLAGE_FILE_VIEWER_SCALE_VALUE_KEY,
@@ -25,7 +26,6 @@ import {
 import { Toolbar } from '@/toolbar/toolbar';
 import { ToolbarHeightProvider, useToolbarHeight } from '@/toolbar-height-context';
 import type { FileEntry } from '@/types';
-import { WidthHandle } from '@/width-handle';
 
 declare const __PDFIUM_WASM_HASH__: string;
 
@@ -392,7 +392,7 @@ const KlageFileViewerInner = ({
         </VStack>
       </Box>
 
-      {!standalone ? <WidthHandle setWidth={handleWidthDrag} /> : null}
+      {!standalone ? <ResizeHandle setWidth={handleWidthDrag} /> : null}
     </div>
   );
 };

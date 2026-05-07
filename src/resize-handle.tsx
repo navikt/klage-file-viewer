@@ -2,11 +2,11 @@ import { useCallback, useRef } from 'react';
 import { clamp } from '@/lib/clamp';
 import { MIN_INLINE_WIDTH } from '@/scale/constants';
 
-interface WidthHandleProps {
+interface ResizeHandleProps {
   setWidth: (width: number) => void;
 }
 
-export const WidthHandle = ({ setWidth }: WidthHandleProps) => {
+export const ResizeHandle = ({ setWidth }: ResizeHandleProps) => {
   const elementRef = useRef<HTMLDivElement>(null);
 
   const handlePointerDown = useCallback(
