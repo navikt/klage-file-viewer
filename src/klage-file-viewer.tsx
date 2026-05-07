@@ -138,8 +138,10 @@ const KlageFileViewerInner = ({
     persistInlineWidth(clamped);
   }, []);
 
+  const isDraggingRef = useRef(false);
+
   useEffect(() => {
-    if (!widthFollowsScale || standalone) {
+    if (!widthFollowsScale || standalone || isDraggingRef.current) {
       return;
     }
 
@@ -152,6 +154,26 @@ const KlageFileViewerInner = ({
     const targetWidth = computeFitToContentWidth(scrollContainer, toolbarHeight);
     setViewerWidth(targetWidth ?? (scale / 100) * DEFAULT_INLINE_WIDTH);
   }, [widthFollowsScale, scale, standalone, setViewerWidth, toolbarHeight]);
+
+  const handleWidthDragStart = useCallback(() => {
+    isDraggingRef.current = true;
+  }, []);
+
+  const handleWidthDragEnd = useCallback(
+    (width: number) => {
+      if (widthFollowsScale) {
+        setScale((width / DEFAULT_INLINE_WIDTH) * 100);
+      } else {
+        setViewerWidth(width);
+      }
+
+      // Defer clearing until after React flushes the effect triggered by setScale.
+      setTimeout(() => {
+        isDraggingRef.current = false;
+      }, 0);
+    },
+    [widthFollowsScale, setScale, setViewerWidth],
+  );
 
   const handleWidthDrag = useCallback(
     (width: number) => {
@@ -392,7 +414,9 @@ const KlageFileViewerInner = ({
         </VStack>
       </Box>
 
-      {!standalone ? <ResizeHandle setWidth={handleWidthDrag} /> : null}
+      {!standalone ? (
+        <ResizeHandle setWidth={handleWidthDrag} onDragStart={handleWidthDragStart} onDragEnd={handleWidthDragEnd} />
+      ) : null}
     </div>
   );
 };

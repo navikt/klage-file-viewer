@@ -4,9 +4,11 @@ import { MIN_INLINE_WIDTH } from '@/scale/constants';
 
 interface ResizeHandleProps {
   setWidth: (width: number) => void;
+  onDragStart?: () => void;
+  onDragEnd?: (width: number) => void;
 }
 
-export const ResizeHandle = ({ setWidth }: ResizeHandleProps) => {
+export const ResizeHandle = ({ setWidth, onDragStart, onDragEnd }: ResizeHandleProps) => {
   const elementRef = useRef<HTMLDivElement>(null);
 
   const handlePointerDown = useCallback(
@@ -20,6 +22,8 @@ export const ResizeHandle = ({ setWidth }: ResizeHandleProps) => {
       }
 
       element.setPointerCapture(e.pointerId);
+
+      onDragStart?.();
 
       const startX = e.clientX;
       const startWidth = container.clientWidth;
@@ -43,7 +47,11 @@ export const ResizeHandle = ({ setWidth }: ResizeHandleProps) => {
         element.removeEventListener('pointerup', onPointerUp);
         element.removeEventListener('lostpointercapture', onLostPointerCapture);
 
-        setWidth(currentWidth);
+        if (onDragEnd !== undefined) {
+          onDragEnd(currentWidth);
+        } else {
+          setWidth(currentWidth);
+        }
       };
 
       const onPointerMove = (moveEvent: PointerEvent) => {
@@ -66,7 +74,7 @@ export const ResizeHandle = ({ setWidth }: ResizeHandleProps) => {
       element.addEventListener('pointerup', onPointerUp);
       element.addEventListener('lostpointercapture', onLostPointerCapture);
     },
-    [setWidth],
+    [setWidth, onDragStart, onDragEnd],
   );
 
   return (
