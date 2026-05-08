@@ -1,5 +1,5 @@
-import type { LineInfo } from './line-info';
-import type { InternalBlock, TextAlignment } from './reflow-types';
+import type { LineInfo } from '@/files/pdf/selection/copy/line-info';
+import type { InternalBlock, TextAlignment } from '@/files/pdf/selection/copy/reflow-types';
 
 // ---------------------------------------------------------------------------
 // Constants

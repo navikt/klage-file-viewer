@@ -1,7 +1,7 @@
+import { isBoldRun, isItalicRun } from '@/files/pdf/selection/copy/font-detection';
+import type { ReflowSpan } from '@/files/pdf/selection/copy/reflow-types';
 import type { ScreenPageGeometry, ScreenRun } from '@/files/pdf/selection/types';
 import { GLYPH_FLAG_EMPTY } from '@/files/pdf/selection/types';
-import { isBoldRun, isItalicRun } from './font-detection';
-import type { ReflowSpan } from './reflow-types';
 
 // ---------------------------------------------------------------------------
 // Constants

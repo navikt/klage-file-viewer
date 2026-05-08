@@ -1,26 +1,31 @@
-import type { PageSelectionRange, ScreenPageGeometry } from '@/files/pdf/selection/types';
-import { classifyBlock, detectAlignment, detectListMarker, isIndentedLine } from './classify';
+import { classifyBlock, detectAlignment, detectListMarker, isIndentedLine } from '@/files/pdf/selection/copy/classify';
 import {
   computeBaselineFontSize,
   computeBaselineLeftEdge,
   computePageBaselineFontWeight,
   computePageMaxFontSize,
-} from './font-detection';
-import type { LineInfo } from './line-info';
-import { collectLineInfo, computeLineGaps, computePageMaxRight, MIN_LINES_FOR_STATS } from './line-info';
-import type { InternalBlock, ReflowBlock } from './reflow-types';
-import { buildSpansForRange, mergeSpansWithSpace } from './spans';
+} from '@/files/pdf/selection/copy/font-detection';
+import type { LineInfo } from '@/files/pdf/selection/copy/line-info';
+import {
+  collectLineInfo,
+  computeLineGaps,
+  computePageMaxRight,
+  MIN_LINES_FOR_STATS,
+} from '@/files/pdf/selection/copy/line-info';
+import type { InternalBlock, ReflowBlock } from '@/files/pdf/selection/copy/reflow-types';
+import { buildSpansForRange, mergeSpansWithSpace } from '@/files/pdf/selection/copy/spans';
+import type { PageSelectionRange, ScreenPageGeometry } from '@/files/pdf/selection/types';
 
 // biome-ignore lint/performance/noBarrelFile: Re-export public API so external consumers don't need to change imports.
-export { computeDocumentStats } from './font-detection';
+export { computeDocumentStats } from '@/files/pdf/selection/copy/font-detection';
 export type {
   BlockRole,
   DocumentStats,
   PageReflow,
   ReflowBlock,
   ReflowSpan,
-} from './reflow-types';
-export { EMPTY_REFLOW, lineText } from './reflow-types';
+} from '@/files/pdf/selection/copy/reflow-types';
+export { EMPTY_REFLOW, lineText } from '@/files/pdf/selection/copy/reflow-types';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -74,7 +79,7 @@ export const analyzePageReflow = (
   rawText: string,
   range: PageSelectionRange,
   geo: ScreenPageGeometry,
-  documentStats?: import('./reflow-types').DocumentStats,
+  documentStats?: import('@/files/pdf/selection/copy/reflow-types').DocumentStats,
 ): ReflowBlock[] => {
   const lineInfos = collectLineInfo(range, geo);
   const baselineWeight = computePageBaselineFontWeight(geo);

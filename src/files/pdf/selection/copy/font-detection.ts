@@ -1,6 +1,6 @@
+import type { DocumentStats } from '@/files/pdf/selection/copy/reflow-types';
 import type { ScreenPageGeometry, ScreenRun } from '@/files/pdf/selection/types';
 import { GLYPH_FLAG_EMPTY } from '@/files/pdf/selection/types';
-import type { DocumentStats } from './reflow-types';
 
 // ---------------------------------------------------------------------------
 // Constants

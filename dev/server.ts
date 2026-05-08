@@ -1,6 +1,12 @@
 import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { buildDownloadFilename, parseDocumentRequest, parseDownloadRequest, resolveDocumentPath, scanDir } from './api';
+import {
+  buildDownloadFilename,
+  parseDocumentRequest,
+  parseDownloadRequest,
+  resolveDocumentPath,
+  scanDir,
+} from '@dev/api';
 
 const PORT = 5172;
 const DIST_DIR = resolve(import.meta.dirname, 'dist');
