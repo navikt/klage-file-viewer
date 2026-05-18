@@ -8,6 +8,7 @@ import type {
 } from '@embedpdf/models';
 import { MatchFlag } from '@embedpdf/models';
 import type { HighlightRect, PageHighlights, SearchMatch } from '@/files/pdf/search/types';
+import { PX_PER_PT } from '@/scale/constants';
 
 interface ComputeHighlightsResult {
   highlights: PageHighlights[];
@@ -49,7 +50,7 @@ export const computeHighlights = async (
     }
 
     const resultsByPage = groupResultsByPage(searchResult.results);
-    const scaleFactor = document.scale / 100;
+    const scaleFactor = (document.scale / 100) * PX_PER_PT;
 
     for (const [pageIndex, pageResults] of resultsByPage) {
       const page = document.doc.pages[pageIndex];
