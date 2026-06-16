@@ -1,4 +1,13 @@
 {
+  "code_actions_on_format": {
+    "source.fixAll.biome": true,
+    "source.organizeImports.biome": true
+  },
+  "formatter": {
+    "language_server": {
+      "name": "biome"
+    }
+  },
   "lsp": {
     "vtsls": {
       "settings": {
@@ -6,6 +15,25 @@
           "preferences": {
             "importModuleSpecifier": "non-relative"
           }
+        }
+      }
+    },
+    "tailwindcss-language-server": {
+      "settings": {
+        // "classAttributes": [
+        //   "class",
+        //   "className",
+        //   "ngClass",
+        // ],
+        "experimental": {
+          "classRegex": [
+            ":\\s*?[\"'`]([^\"'`]*).*?,",
+            "const\\s\\w*Classes\\s+=\\s+[\"'`]([^\"'`]*)",
+            "const\\s\\w*Class\\s+=\\s+[\"'`]([^\"'`]*)",
+            "const\\s\\w*_CLASSES\\s+=\\s+[\"'`]([^\"'`]*)",
+            "const\\s\\w*_CLASS\\s+=\\s+[\"'`]([^\"'`]*)",
+            "@tw\\s\\*/\\s+[\"'`]([^\"'`]*)"
+          ]
         }
       }
     }
