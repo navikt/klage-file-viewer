@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.16/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
   "root": true,
   "vcs": {
     "enabled": true,
@@ -28,7 +28,7 @@
       "test": "recommended"
     },
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "performance": {
         "noDelete": "error",
         "noBarrelFile": "error",
@@ -39,10 +39,10 @@
         "noReExportAll": "error"
       },
       "a11y": {
-        "recommended": true
+        "preset": "recommended"
       },
       "security": {
-        "recommended": true
+        "preset": "recommended"
       },
       "nursery": {
         "useExplicitType": "off",
@@ -53,11 +53,7 @@
         }
       },
       "correctness": {
-        "useImportExtensions": {
-          "level": "off",
-          "fix": "none",
-          "options": {}
-        },
+        "useImportExtensions": "off",
         "noUnusedImports": {
           "level": "error",
           "fix": "safe",
@@ -65,16 +61,9 @@
         }
       },
       "style": {
-        "noImplicitBoolean": {
-          "level": "off",
-          "fix": "none",
-          "options": {}
-        },
+        "noImplicitBoolean": "off",
         "useDefaultSwitchClause": "off",
-        "useNamingConvention": {
-          "level": "off",
-          "options": {}
-        },
+        "useNamingConvention": "off",
         "noParameterAssign": "error",
         "useAsConstAssertion": "error",
         "useDefaultParameterLast": "error",
@@ -88,11 +77,7 @@
         "useComponentExportOnlyModules": "off",
         "noEnum": "off",
         "useConsistentMemberAccessibility": "off",
-        "useConsistentCurlyBraces": {
-          "level": "off",
-          "fix": "none",
-          "options": {}
-        },
+        "useConsistentCurlyBraces": "off",
         "useConsistentObjectDefinitions": {
           "level": "error",
           "fix": "safe",
