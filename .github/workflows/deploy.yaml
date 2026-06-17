@@ -44,12 +44,14 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
       id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -107,3 +109,28 @@ jobs:
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bun publish
+
+      - name: Generate changelog
+        id: changelog
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          VERSION="$(jq -r .version package.json)"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "## Changes" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          if [ -n "$PREVIOUS_TAG" ]; then
+            git log "${PREVIOUS_TAG}..HEAD" --pretty=format:"- %s" >> RELEASE_NOTES.md
+            echo "" >> RELEASE_NOTES.md
+            echo "" >> RELEASE_NOTES.md
+            echo "**Full Changelog**: [${PREVIOUS_TAG}...${VERSION}](${REPO_URL}/compare/${PREVIOUS_TAG}...${VERSION})" >> RELEASE_NOTES.md
+          else
+            git log --pretty=format:"- %s" >> RELEASE_NOTES.md
+          fi
+
+      - name: Create GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.changelog.outputs.version }}
+          bodyFile: "RELEASE_NOTES.md"
