@@ -200,6 +200,13 @@ export const getVerticalTextBounds = (geo: ScreenPageGeometry): { top: number; b
 const LINE_OVERLAP_THRESHOLD = 0.5;
 
 /**
+ * A cross-axis gap wider than this multiple of the line's own size splits a
+ * collected line into separate segments. Narrower gaps never reach the snapping
+ * code, since `glyphAt` matches within the same radius.
+ */
+const LINE_SPLIT_GAP_FACTOR = DEFAULT_TOLERANCE_FACTOR;
+
+/**
  * When the pointer is within a page's bounds but `glyphAt` returns -1
  * (no glyph under the pointer), snap to the nearest character boundary.
  *
@@ -208,6 +215,11 @@ const LINE_OVERLAP_THRESHOLD = 0.5;
  *  - **At a line's level but outside on the cross axis** → end or start of
  *    line depending on which side
  *  - **Between lines** → boundary of the nearer line
+ *
+ * On a multi-column page several lines share the same position on the line
+ * axis, and a form or table row holds several runs side by side. The segment
+ * nearest on the cross axis wins, so a pointer in a gutter snaps to the content
+ * beside it instead of jumping past it.
  *
  * For pages with inherent /Rotate 90°/270°, text lines are vertical
  * columns. The "line" and "cross" axes are swapped accordingly. When
@@ -292,15 +304,20 @@ const snapToLine = (
   lineReversed: boolean,
   crossReversed: boolean,
 ): number | null => {
+  // Several lines can share the same position on the line axis — one per column
+  // on a multi-column page, or one per cell of a form or table row.
+  const atCoord = lines.filter((line) => lineCoord >= line.lineStart && lineCoord <= line.lineEnd);
+  const nearest = nearestOnCrossAxis(atCoord, crossCoord);
+
+  if (nearest !== null) {
+    return snapWithinLine(nearest, crossCoord, crossReversed);
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
     if (line === undefined) {
       continue;
-    }
-
-    if (lineCoord >= line.lineStart && lineCoord <= line.lineEnd) {
-      return snapWithinLine(line, crossCoord, crossReversed);
     }
 
     const nextLine = lines[i + 1];
@@ -313,9 +330,27 @@ const snapToLine = (
   return null;
 };
 
+/** The line whose cross-axis extent is nearest `crossCoord`, or `null` when there are none. */
+const nearestOnCrossAxis = (lines: LineBounds[], crossCoord: number): LineBounds | null => {
+  let nearest: LineBounds | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (const line of lines) {
+    const distance = Math.max(line.crossStart - crossCoord, crossCoord - line.crossEnd, 0);
+
+    if (distance < nearestDistance) {
+      nearest = line;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearest;
+};
+
 /**
- * A visual line: one or more runs that share the same extent on the
- * grouping axis (Y for horizontal text, X for rotated text).
+ * A visual line, or one side of one: runs that share the same extent on the
+ * grouping axis (Y for horizontal text, X for rotated text) and that are not
+ * separated by a gutter-sized gap on the cross axis.
  */
 interface LineBounds {
   /** Start of the line on the grouping axis (Y top or X left). */
@@ -331,11 +366,15 @@ interface LineBounds {
 }
 
 /**
- * Group runs into visual lines based on overlap on the grouping axis,
- * then sort lines by ascending lineStart (spatial order).
+ * Group runs into visual lines based on overlap on the grouping axis, splitting
+ * a line wherever a gutter-sized gap separates its runs on the cross axis, then
+ * sort by ascending lineStart (spatial order).
  *
  * For horizontal text (rotation 0/2): groups by Y overlap.
  * For vertical text (rotation 1/3): groups by X overlap.
+ *
+ * The split keeps side-by-side content apart when runs arrive in row-major
+ * order — flattened forms and tables — where the cells of a row are consecutive.
  */
 const collectLines = (geo: ScreenPageGeometry): LineBounds[] => {
   const rotated = geo.pageRotation === 1 || geo.pageRotation === 3;
@@ -373,8 +412,10 @@ const collectLines = (geo: ScreenPageGeometry): LineBounds[] => {
     const overlapEnd = Math.min(current.lineEnd, linePos + lineSize);
     const overlap = Math.max(0, overlapEnd - overlapStart);
     const union = Math.max(current.lineEnd, linePos + lineSize) - Math.min(current.lineStart, linePos);
+    const crossGap = Math.max(crossPos - current.crossEnd, current.crossStart - (crossPos + crossSize), 0);
+    const maxCrossGap = Math.max(lineSize, current.lineEnd - current.lineStart) * LINE_SPLIT_GAP_FACTOR;
 
-    if (union > 0 && overlap / union >= LINE_OVERLAP_THRESHOLD) {
+    if (union > 0 && overlap / union >= LINE_OVERLAP_THRESHOLD && crossGap <= maxCrossGap) {
       current.lineStart = Math.min(current.lineStart, linePos);
       current.lineEnd = Math.max(current.lineEnd, linePos + lineSize);
       current.crossStart = Math.min(current.crossStart, crossPos);
@@ -399,7 +440,8 @@ const collectLines = (geo: ScreenPageGeometry): LineBounds[] => {
 
   // Sort by lineStart so spatial-order assumptions in snapToNearest hold.
   // Content-stream order may not match spatial order (e.g. /Rotate 90 pages
-  // have columns in right-to-left reading order = descending X).
+  // have columns in right-to-left reading order = descending X). The sort is
+  // stable, so segments of one line keep their reading order.
   lines.sort((a, b) => a.lineStart - b.lineStart);
 
   return lines;
