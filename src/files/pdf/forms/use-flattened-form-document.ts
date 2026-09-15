@@ -10,7 +10,8 @@ interface FlattenedDocument {
 }
 
 /**
- * Return the document that should be used for rendering and text operations.
+ * Return the document that text operations — selection, search, copy, word
+ * boundaries — should read from.
  *
  * Documents with AcroForm fields are upgraded in the background to a copy
  * where the field values have been flattened into the page content, which is
@@ -18,9 +19,12 @@ interface FlattenedDocument {
  * {@link flattenFormWidgets} for why this is necessary.
  *
  * The upgrade is deliberately asynchronous: the original document is returned
- * immediately so the first page paints without delay, and the flattened copy
- * is swapped in once ready. Flattening does not change a single rendered
- * pixel, so the swap is invisible.
+ * immediately so text is available without delay, and the flattened copy is
+ * swapped in once ready.
+ *
+ * Not safe to render from — flattening bakes each widget's stored `/AP` into
+ * the page and drops the widget, which loses the value whenever that `/AP` is
+ * stale or absent, as on `/NeedAppearances` forms.
  *
  * Documents without form fields are returned unchanged, and cost no more than
  * a scan of the open document for widget annotations.

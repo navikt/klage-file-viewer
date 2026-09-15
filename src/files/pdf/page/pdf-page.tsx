@@ -13,7 +13,10 @@ import { PX_PER_PT } from '@/scale/constants';
 
 interface PdfPageProps {
   engine: PdfEngine;
+  /** Text layers read from this — the flattened copy when there is one. */
   doc: PdfDocumentObject;
+  /** Pages rasterise from this — always the file as opened. */
+  renderDoc: PdfDocumentObject;
   pageIndex: number;
   scale: number;
   rotation: Rotation;
@@ -34,6 +37,7 @@ interface PdfPageProps {
 export const PdfPage = ({
   engine,
   doc,
+  renderDoc,
   pageIndex,
   scale,
   rotation,
@@ -77,8 +81,9 @@ export const PdfPage = ({
   }, [selectionRange, clearSelection]);
 
   const page = doc.pages[pageIndex];
+  const renderPage = renderDoc.pages[pageIndex];
 
-  if (page === undefined) {
+  if (page === undefined || renderPage === undefined) {
     return null;
   }
 
@@ -104,7 +109,7 @@ export const PdfPage = ({
             transform: rotationMatrix,
           }}
         >
-          <PdfPageImage engine={engine} doc={doc} page={page} visible={visible} />
+          <PdfPageImage engine={engine} doc={renderDoc} page={renderPage} visible={visible} />
           <PageSelectionLayer
             engine={engine}
             doc={doc}

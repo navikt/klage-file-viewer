@@ -75,9 +75,10 @@ export const LoadedPdfSection = ({
   } = usePdfDocument(engine, data, { commonPasswords, fileUrl: file.url });
 
   // Form field values live in widget appearance streams, which PDFium's text
-  // APIs cannot see. When the file has form fields this swaps in an equivalent
+  // APIs cannot see. When the file has form fields this produces an equivalent
   // document with those values flattened into the page content, so they behave
-  // like any other text. Renders identically and stays read-only.
+  // like any other text. Text only — pages rasterise from `openedDoc`, since a
+  // flatten that drops a value would otherwise blank it on screen.
   const doc = useFlattenedFormDocument(engine, openedDoc, data, usedPassword);
 
   // Per-page rotation state, persisted to localStorage per file URL + page index.
@@ -337,7 +338,7 @@ export const LoadedPdfSection = ({
   // Loading state
   const isLoading = loading || engineLoading || docLoading;
 
-  if (doc === null || engine === null) {
+  if (doc === null || openedDoc === null || engine === null) {
     return (
       <>
         <FileHeader
@@ -416,6 +417,7 @@ export const LoadedPdfSection = ({
             key={pageIndex}
             engine={engine}
             doc={doc}
+            renderDoc={openedDoc}
             pageIndex={pageIndex}
             scale={scale}
             rotation={rotations.get(pageIndex) ?? 0}
