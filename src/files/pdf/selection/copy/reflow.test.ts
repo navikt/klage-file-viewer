@@ -218,6 +218,50 @@ describe('reflowSelection', () => {
     expect(blocks.every((block) => block.kind !== 'listItem')).toBe(true);
   });
 
+  it('joins soft wraps in a narrow column against the margin of that column', () => {
+    // The left column never reaches the page's right margin.
+    const text = reflowText([
+      { text: 'Left column line one word', y: 0, left: 50 },
+      { text: 'wraps softly to the secon', y: 20, left: 50 },
+      { text: 'line and then a third one', y: 40, left: 50 },
+      { text: 'here.', y: 60, left: 50 },
+      { text: 'Right column text that runs much wider acros', y: 0, left: 300 },
+      { text: 'than the left column does here', y: 20, left: 300 },
+      { text: 'and ends.', y: 40, left: 300 },
+    ]);
+
+    expect(text).toContain('Left column line one word wraps softly to the secon line and then a third one here.');
+    expect(text).toContain('Right column text that runs much wider acros than the left column does here');
+  });
+
+  it('does not take a page number in the corner for a column of its own', () => {
+    // Only one line sits right of the page number's left edge, so it is not a
+    // gutter.
+    const text = reflowText([
+      { text: 'Body line one.', y: 0, left: 50 },
+      { text: 'A longer body line here.', y: 20, left: 50 },
+      { text: 'Short tail.', y: 40, left: 50 },
+      { text: 'Side 2 av 2', y: 200, left: 500 },
+    ]);
+
+    expect(text).toContain('A longer body line here.\nShort tail.');
+  });
+
+  it('never joins a soft wrap into the head of the next column', () => {
+    // The left column's last line fills its margin, but what follows it in
+    // reading order starts at the top of the next column.
+    const text = reflowText([
+      { text: 'Left column first line ok', y: 0, left: 50 },
+      { text: 'and a second line here to', y: 20, left: 50 },
+      { text: 'fill out the whole column.', y: 40, left: 50 },
+      { text: 'Right column heading', y: 0, left: 300 },
+      { text: 'with body text under it here', y: 20, left: 300 },
+      { text: 'that carries on a while.', y: 40, left: 300 },
+    ]);
+
+    expect(text).toContain('fill out the whole column.\nRight column heading');
+  });
+
   it('detects a larger line as a heading and serializes it', () => {
     // Body text dominates the page so the baseline is the small size; the large
     // first line is a heading.

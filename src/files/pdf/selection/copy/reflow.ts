@@ -51,14 +51,15 @@ export const reflowSelection = (rawText: string, geo: ScreenPageGeometry, range:
   const reading = toReadingSpace(geo);
   const pageText = reading.pageText ?? '';
   const geomLines = collectGeomLines(reading);
-  assignIndentLevels(geomLines, reading.pageWidth);
+  assignIndentLevels(geomLines);
 
   const baselineSize = baselineTextSize(geomLines);
   const styleIndex = buildStyleIndex(reading, baselineWeight(reading));
   const gapIndex = buildGapIndex(reading);
-  const rightMargin = geomLines.reduce((max, line) => Math.max(max, line.right), 0);
-  const typicalGap = medianGap(geomLines);
-  const slack = rightMargin * MARGIN_SLACK_FACTOR;
+  const flows = collectFlows(geomLines);
+  const typicalGap = medianFlowGap(flows);
+  const flowTolerance = flowBreakTolerance(geomLines);
+  const margins = collectColumnMargins(geomLines);
 
   const blocks: ReflowBlock[] = [];
 
@@ -79,7 +80,7 @@ export const reflowSelection = (rawText: string, geo: ScreenPageGeometry, range:
       continue;
     }
 
-    const separator = separatorBefore(prev, curr, geomLines, rightMargin, typicalGap, slack);
+    const separator = separatorBefore(prev, curr, geomLines, margins, typicalGap, flowTolerance);
 
     if (separator === ' ') {
       currentLines.push(curr);
@@ -110,9 +111,21 @@ const SPACE_ADVANCE_FACTOR = 0.3;
 // Fraction of line height within which two left edges count as the same column.
 const INDENT_TOLERANCE_FACTOR = 0.5;
 
-// A line whose left edge sits beyond this fraction of the text width is not a
-// list indent (e.g. a right-aligned date) and is treated as level 0.
-const INDENT_MAX_FRACTION = 0.5;
+// Left edges further apart than this multiple of the line height belong to
+// different columns or blocks rather than to different levels of one ladder.
+const MAX_INDENT_STEP_FACTOR = 5;
+
+// How far, as a multiple of the line height, a line may sit above the previous
+// one before it counts as the start of a new flow rather than the same one.
+const FLOW_BREAK_TOLERANCE_FACTOR = 0.5;
+
+// A left edge is only a gutter if at most this fraction of the page's lines
+// straddle it.
+const COLUMN_CROSSING_MAX_FRACTION = 0.1;
+
+// How many lines each side of a candidate gutter must hold for it to be a
+// column boundary rather than, say, a page number set out to the right.
+const MIN_COLUMN_LINES = 3;
 
 // A line whose dominant text size is at least this multiple of the page
 // baseline is treated as a heading.
@@ -475,77 +488,110 @@ const baselineTextSize = (lines: GeomLine[]): number => {
 
 /**
  * Cluster line left-edges into indentation columns and assign each line a
- * nesting level. The leftmost column is level 0; each deeper column is a
- * sub-level (these documents indicate lists purely by indentation).
+ * nesting level. The leftmost column of a ladder is level 0; each deeper column
+ * is a sub-level (these documents indicate lists purely by indentation).
  *
- * A line whose left edge sits past {@link INDENT_MAX_FRACTION} of the text
- * width is treated as level 0, not a deep list level — that catches
- * right-positioned lines (e.g. a right-aligned date) which are not list items.
+ * Edges more than {@link MAX_INDENT_STEP_FACTOR} line heights apart form
+ * separate ladders, so the lines of a right-hand column are not read as deeply
+ * indented list items.
  */
-const assignIndentLevels = (lines: GeomLine[], pageWidth: number | undefined): void => {
+const assignIndentLevels = (lines: GeomLine[]): void => {
   if (lines.length === 0) {
     return;
   }
 
-  const tolerance = indentTolerance(lines);
-  const sorted = [...lines].sort((a, b) => a.left - b.left);
-
-  const columns: number[] = [];
-
-  for (const line of sorted) {
-    const last = columns[columns.length - 1];
-
-    if (last === undefined || line.left - last > tolerance) {
-      columns.push(line.left);
-    }
-  }
-
-  const baseline = columns[0] ?? 0;
-  const maxRight = lines.reduce((max, line) => Math.max(max, line.right), baseline);
-  const reference = pageWidth !== undefined && pageWidth > baseline ? pageWidth : maxRight;
-  const maxIndent = (reference - baseline) * INDENT_MAX_FRACTION;
-  const ladder = columns.filter((column) => column - baseline <= maxIndent);
+  const lineHeight = medianLineHeight(lines);
+  const tolerance = Math.max(2, lineHeight * INDENT_TOLERANCE_FACTOR);
+  const ladders = collectIndentLadders(collectLeftColumns(lines, tolerance), lineHeight * MAX_INDENT_STEP_FACTOR);
 
   for (const line of lines) {
-    if (line.left - baseline > maxIndent) {
-      line.level = 0;
+    line.level = indentLevelFor(line.left, ladders);
+  }
+};
+
+/** Distinct left-edge columns, in ascending order, clustered within `tolerance`. */
+const collectLeftColumns = (lines: GeomLine[], tolerance: number): number[] => {
+  const lefts = lines.map((line) => line.left).sort((a, b) => a - b);
+  const columns: number[] = [];
+  let last: number | null = null;
+
+  for (const left of lefts) {
+    if (last !== null && left - last <= tolerance) {
       continue;
     }
 
-    let nearest = 0;
-    let nearestDistance = Number.POSITIVE_INFINITY;
+    columns.push(left);
+    last = left;
+  }
 
+  return columns;
+};
+
+/** Group the left-edge columns into ladders, splitting at steps too wide to be an indent. */
+const collectIndentLadders = (columns: number[], maxStep: number): number[][] => {
+  const ladders: number[][] = [];
+  let current: number[] = [];
+  let last: number | null = null;
+
+  for (const column of columns) {
+    if (last !== null && column - last > maxStep) {
+      ladders.push(current);
+      current = [];
+    }
+
+    current.push(column);
+    last = column;
+  }
+
+  if (current.length > 0) {
+    ladders.push(current);
+  }
+
+  return ladders;
+};
+
+/** Nesting level of `left` within whichever ladder column sits closest to it. */
+const indentLevelFor = (left: number, ladders: number[][]): number => {
+  let level = 0;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (const ladder of ladders) {
     for (let k = 0; k < ladder.length; k++) {
-      const distance = Math.abs(line.left - (ladder[k] ?? 0));
+      const distance = Math.abs(left - (ladder[k] ?? 0));
 
       if (distance < nearestDistance) {
         nearestDistance = distance;
-        nearest = k;
+        level = k;
       }
     }
-
-    line.level = nearest;
   }
+
+  return level;
 };
 
-const indentTolerance = (lines: GeomLine[]): number => {
+const medianLineHeight = (lines: GeomLine[]): number => {
   const heights = lines.map((line) => line.bottom - line.top).sort((a, b) => a - b);
-  const median = heights[Math.floor(heights.length / 2)] ?? 0;
 
-  return Math.max(2, median * INDENT_TOLERANCE_FACTOR);
+  return heights[Math.floor(heights.length / 2)] ?? 0;
 };
 
-/** Median centre-to-centre gap between consecutive lines (by vertical order). */
-const medianGap = (lines: GeomLine[]): number => {
-  if (lines.length < 2) {
-    return 0;
-  }
-
-  const centres = lines.map((line) => line.centre).sort((a, b) => a - b);
+/** Median centre-to-centre gap between consecutive lines of the same flow. */
+const medianFlowGap = (flows: GeomLine[][]): number => {
   const gaps: number[] = [];
 
-  for (let i = 1; i < centres.length; i++) {
-    gaps.push((centres[i] ?? 0) - (centres[i - 1] ?? 0));
+  for (const flow of flows) {
+    for (let i = 1; i < flow.length; i++) {
+      const previous = flow[i - 1];
+      const line = flow[i];
+
+      if (previous !== undefined && line !== undefined) {
+        gaps.push(line.centre - previous.centre);
+      }
+    }
+  }
+
+  if (gaps.length === 0) {
+    return 0;
   }
 
   gaps.sort((a, b) => a - b);
@@ -553,14 +599,131 @@ const medianGap = (lines: GeomLine[]): number => {
   return gaps[Math.floor(gaps.length / 2)] ?? 0;
 };
 
+/**
+ * Split the lines into flows: maximal sequences, in reading order, that run
+ * down the page. A flow ends where the next line starts higher up again — the
+ * jump from the foot of one column to the head of the next.
+ *
+ * Line gaps are only meaningful within a flow: across interleaved columns
+ * neighbouring lines are no distance apart, which would make every line break
+ * look like a paragraph break.
+ */
+const collectFlows = (lines: GeomLine[]): GeomLine[][] => {
+  const tolerance = flowBreakTolerance(lines);
+  const flows: GeomLine[][] = [];
+  let current: GeomLine[] = [];
+
+  for (const line of lines) {
+    const previous = current[current.length - 1];
+
+    if (previous !== undefined && line.centre + tolerance < previous.centre) {
+      flows.push(current);
+      current = [];
+    }
+
+    current.push(line);
+  }
+
+  if (current.length > 0) {
+    flows.push(current);
+  }
+
+  return flows;
+};
+
+/** How far a line may sit above the previous one and still be the same flow. */
+const flowBreakTolerance = (lines: GeomLine[]): number => medianLineHeight(lines) * FLOW_BREAK_TOLERANCE_FACTOR;
+
+/**
+ * The right margins text is set against: one per page column, plus the
+ * page-wide margin for lines that span the whole page. A narrow column never
+ * reaches the page margin, so its soft wraps would never be joined.
+ */
+interface ColumnMargins {
+  bands: ColumnBand[];
+  page: number;
+}
+
+/** A vertical band of the page holding one column of text. */
+interface ColumnBand {
+  /** Right boundary of the band (the next gutter); `Infinity` for the last one. */
+  end: number;
+  /** Rightmost text edge among the lines that stay inside the band. */
+  margin: number;
+}
+
+/**
+ * Split the page into column bands at the left edges that look like gutters,
+ * and measure each band's own right margin.
+ */
+const collectColumnMargins = (lines: GeomLine[]): ColumnMargins => {
+  const page = lines.reduce((max, line) => Math.max(max, line.right), 0);
+
+  if (lines.length === 0) {
+    return { bands: [], page };
+  }
+
+  const tolerance = Math.max(2, medianLineHeight(lines) * INDENT_TOLERANCE_FACTOR);
+  const maxCrossing = lines.length * COLUMN_CROSSING_MAX_FRACTION;
+  const cuts = collectLeftColumns(lines, tolerance)
+    .slice(1)
+    .filter((cut) => isColumnCut(lines, cut, maxCrossing));
+
+  const bands = [...cuts, Number.POSITIVE_INFINITY].map((end, i) => ({
+    end,
+    margin: bandMargin(lines, cuts[i - 1] ?? Number.NEGATIVE_INFINITY, end),
+  }));
+
+  return { bands, page };
+};
+
+/** Whether `cut` separates two columns rather than falling inside one. */
+const isColumnCut = (lines: GeomLine[], cut: number, maxCrossing: number): boolean => {
+  let before = 0;
+  let after = 0;
+  let crossing = 0;
+
+  for (const line of lines) {
+    if (line.left < cut && line.right > cut) {
+      crossing++;
+    } else if (line.right <= cut) {
+      before++;
+    } else {
+      after++;
+    }
+  }
+
+  return crossing <= maxCrossing && before >= MIN_COLUMN_LINES && after >= MIN_COLUMN_LINES;
+};
+
+/** Rightmost edge among the lines that both start and end within the band. */
+const bandMargin = (lines: GeomLine[], start: number, end: number): number =>
+  lines.reduce(
+    (max, line) => (line.left >= start && line.left < end && line.right <= end ? Math.max(max, line.right) : max),
+    0,
+  );
+
+/** The right margin `line` was set against. */
+const rightMarginFor = (line: GeomLine, margins: ColumnMargins): number => {
+  const band = margins.bands.find((candidate) => line.left < candidate.end);
+
+  // A line running past its band is full-width and was set against the page
+  // margin like any single-column line.
+  if (band === undefined || band.margin === 0 || line.right > band.end) {
+    return margins.page;
+  }
+
+  return band.margin;
+};
+
 /** Decide the separator to place before `curr`. */
 const separatorBefore = (
   prev: TextLine,
   curr: TextLine,
   geomLines: GeomLine[],
-  rightMargin: number,
+  margins: ColumnMargins,
   typicalGap: number,
-  slack: number,
+  flowTolerance: number,
 ): ' ' | '\n' | '\n\n' => {
   if (curr.blankBefore) {
     return '\n\n';
@@ -600,12 +763,19 @@ const separatorBefore = (
     return '\n';
   }
 
+  // A soft wrap runs down the page, so a line starting higher up heads a new
+  // column.
+  if (geomCurr.centre + flowTolerance < geomPrev.centre) {
+    return '\n';
+  }
+
   // Wrap detection: if the next line's first word would not have fit after
   // the current line's last glyph, the break was a soft wrap → join.
   const nextWordWidth = firstWordWidth(geomCurr);
   const spaceWidth = (geomPrev.bottom - geomPrev.top) * SPACE_ADVANCE_FACTOR;
+  const rightMargin = rightMarginFor(geomPrev, margins);
 
-  if (geomPrev.right + spaceWidth + nextWordWidth > rightMargin - slack) {
+  if (geomPrev.right + spaceWidth + nextWordWidth > rightMargin - rightMargin * MARGIN_SLACK_FACTOR) {
     return ' ';
   }
 
