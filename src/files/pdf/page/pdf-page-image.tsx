@@ -91,7 +91,13 @@ export const PdfPageImage = ({ engine, doc, page, visible }: PdfPageImageProps) 
     // physical dimensions already account for DPR.
     const renderScale = physicalSize.width / page.size.width;
 
-    const task = engine.renderPageRaw(doc, page, { scaleFactor: renderScale, rotation: 0, dpr: 1 });
+    const task = engine.renderPageRaw(doc, page, {
+      scaleFactor: renderScale,
+      rotation: 0,
+      dpr: 1,
+      withForms: true, // Form values
+      withAnnotations: true, // Signatures etc.
+    });
 
     task.wait(
       (raw) => {

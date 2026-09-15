@@ -2,6 +2,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 
 export const VIEWER_SELECTOR = '[data-klage-file-viewer]';
 export const FILE_HEADER_SELECTOR = '[data-klage-file-viewer-file-header]';
+const COPY_TARGET_SELECTOR = '[data-klage-file-viewer-copy-target]';
 const FILE_TOOLBAR_NAME = /verktøylinje for/i;
 
 /** Locates all file toolbars (`<nav aria-label="Verktøylinje for …">`) within the viewer. */
@@ -124,3 +125,38 @@ const openSearch = async (page: Page) => {
 const closeSearch = async (page: Page) => {
   await page.keyboard.press('Escape');
 };
+
+/** Where a selection drag starts and ends, as fractions of the page content box. */
+interface DragFractions {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+}
+
+/**
+ * Drag across the first page's content and return the text the selection would
+ * put on the clipboard.
+ *
+ * Geometry reaches the selection overlay asynchronously, so a drag can land
+ * before there is anything to select. Poll this instead of waiting a fixed
+ * number of seconds, which races a slow machine.
+ */
+export const dragAcrossPage = async (page: Page, fractions: DragFractions): Promise<string> => {
+  const pageContent = page.locator('[data-klage-file-viewer-page-content]').first();
+  const box = await pageContent.boundingBox();
+
+  if (box === null) {
+    throw new Error('Page content bounding box not available');
+  }
+
+  await page.mouse.move(box.x + box.width * fractions.startX, box.y + box.height * fractions.startY);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * fractions.endX, box.y + box.height * fractions.endY, { steps: 25 });
+  await page.mouse.up();
+
+  return getCopyTarget(page).evaluate((element) => element.textContent ?? '');
+};
+
+/** The hidden element holding the text the current selection would copy. */
+export const getCopyTarget = (page: Page): Locator => page.locator(COPY_TARGET_SELECTOR).first();

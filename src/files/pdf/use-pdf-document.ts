@@ -36,7 +36,7 @@ const noop = () => {
   // Intentional no-op for PdfTask callbacks where we don't need to handle the result.
 };
 
-const tryOpenDocument = (
+export const tryOpenDocument = (
   engine: PdfEngine,
   file: { id: string; content: ArrayBuffer },
   password?: string,
@@ -74,12 +74,12 @@ const getErrorMessage = (err: unknown): string => {
   return 'Kunne ikke åpne PDF-dokumentet';
 };
 
-const closeDocument = (engine: PdfEngine, doc: PdfDocumentObject): void => {
+export const closeDocument = (engine: PdfEngine, doc: PdfDocumentObject): void => {
   const closeTask = engine.closeDocument(doc);
   closeTask.wait(noop, noop);
 };
 
-const createFile = (content: ArrayBuffer): { id: string; content: ArrayBuffer } => ({
+export const createFile = (content: ArrayBuffer): { id: string; content: ArrayBuffer } => ({
   id: crypto.randomUUID(),
   content,
 });

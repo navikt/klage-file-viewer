@@ -6,7 +6,10 @@ import type { PageSelectionRange, ScreenPageGeometry, ScreenRun, ScreenRunGlyph 
 import { reorderRunsVisually } from '@/files/pdf/selection/use-page-geometry';
 
 const ADVANCE = 6;
-const LINE_HEIGHT = 12;
+const DEFAULT_FONT_SIZE = 10;
+/** Rendered line height as a multiple of the font size. */
+const LINE_HEIGHT_RATIO = 1.2;
+const LINE_HEIGHT = DEFAULT_FONT_SIZE * LINE_HEIGHT_RATIO;
 
 interface RunSpec {
   text: string;
@@ -35,11 +38,16 @@ const buildNative = (specs: RunSpec[], lineBreak: 'gap' | 'glyph'): ScreenPageGe
     const charStart = pageText.length;
     pageText += glyphText;
 
+    const fontSize = spec.fontSize ?? DEFAULT_FONT_SIZE;
+    // The reflow sizes lines by their rendered height, so the synthetic
+    // geometry has to scale with the requested font size.
+    const lineHeight = fontSize * LINE_HEIGHT_RATIO;
+
     const glyphs: ScreenRunGlyph[] = [...glyphText].map((char, i) => ({
       x: spec.left + i * ADVANCE,
       y: spec.y,
       width: ADVANCE,
-      height: LINE_HEIGHT,
+      height: lineHeight,
       flags: char === ' ' ? 1 : char === '\r' || char === '\n' ? 2 : 0,
       tightX: undefined,
       tightY: undefined,
@@ -48,10 +56,10 @@ const buildNative = (specs: RunSpec[], lineBreak: 'gap' | 'glyph'): ScreenPageGe
     }));
 
     runs.push({
-      rect: { x: spec.left, y: spec.y, width: spec.text.length * ADVANCE, height: LINE_HEIGHT },
+      rect: { x: spec.left, y: spec.y, width: spec.text.length * ADVANCE, height: lineHeight },
       charStart,
       glyphs,
-      fontSize: spec.fontSize ?? 10,
+      fontSize,
       fontWeight: 400,
       italic: false,
       fontName: 'Test',

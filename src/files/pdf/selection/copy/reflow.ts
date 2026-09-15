@@ -32,12 +32,13 @@ export interface ReflowBlock {
  * to decide structure:
  *
  *  - left-edge clusters → indentation levels (lists are indicated by indent);
- *  - dominant font size vs the page baseline → headings;
- *  - a change in level or font size, or a large vertical gap, is a structural
+ *  - dominant text size vs the page baseline → headings;
+ *  - a change in level or text size, or a large vertical gap, is a structural
  *    break; otherwise a "next word would not have fit" test joins soft wraps.
  *
  * A misjudged geometry line can only pick the wrong separator/role — never drop
- * a character. Rotated pages (`/Rotate` 90/180/270) are first mapped into an
+ * a character; the one thing geometry adds is a space across a column-sized
+ * horizontal gap. Rotated pages (`/Rotate` 90/180/270) are first mapped into an
  * upright reading space so the same horizontal analysis applies unchanged.
  */
 export const reflowSelection = (rawText: string, geo: ScreenPageGeometry, range: PageSelectionRange): ReflowBlock[] => {
@@ -52,8 +53,9 @@ export const reflowSelection = (rawText: string, geo: ScreenPageGeometry, range:
   const geomLines = collectGeomLines(reading);
   assignIndentLevels(geomLines, reading.pageWidth);
 
-  const baselineFontSize = baselineFontSize_(geomLines);
+  const baselineSize = baselineTextSize(geomLines);
   const styleIndex = buildStyleIndex(reading, baselineWeight(reading));
+  const gapIndex = buildGapIndex(reading);
   const rightMargin = geomLines.reduce((max, line) => Math.max(max, line.right), 0);
   const typicalGap = medianGap(geomLines);
   const slack = rightMargin * MARGIN_SLACK_FACTOR;
@@ -65,8 +67,8 @@ export const reflowSelection = (rawText: string, geo: ScreenPageGeometry, range:
   let currentGap = false;
 
   const flush = (): void => {
-    const spans = buildBlockSpans(currentLines, pageText, styleIndex);
-    blocks.push(makeBlock(spans, currentGeom, baselineFontSize, currentGap));
+    const spans = buildBlockSpans(currentLines, pageText, styleIndex, gapIndex);
+    blocks.push(makeBlock(spans, currentGeom, baselineSize, currentGap));
   };
 
   for (let i = 1; i < textLines.length; i++) {
@@ -112,17 +114,21 @@ const INDENT_TOLERANCE_FACTOR = 0.5;
 // list indent (e.g. a right-aligned date) and is treated as level 0.
 const INDENT_MAX_FRACTION = 0.5;
 
-// A line whose dominant font size is at least this multiple of the page
+// A line whose dominant text size is at least this multiple of the page
 // baseline is treated as a heading.
 const HEADING_RATIO = 1.15;
 
-// Heading-level thresholds (font-size ratio to the baseline).
+// Heading-level thresholds (text-size ratio to the baseline).
 const HEADING_LEVEL_1_RATIO = 1.7;
 const HEADING_LEVEL_2_RATIO = 1.35;
 
-// Adjacent lines whose font sizes differ by at least this ratio are a
+// Adjacent lines whose text sizes differ by at least this ratio are a
 // structural break (e.g. heading → body) and are never wrap-joined.
-const FONT_SIZE_BREAK_RATIO = 1.15;
+const TEXT_SIZE_BREAK_RATIO = 1.15;
+
+// Two glyphs on the same line separated by at least this fraction of the line
+// height (≈1.2 em) are in different columns and get a space between them.
+const COLUMN_GAP_RATIO = 0.25;
 
 // A run whose font weight exceeds the page baseline weight by at least this
 // much is treated as bold.
@@ -137,6 +143,8 @@ const MAX_VALID_FONT_WEIGHT = 900;
 // weight or italic flag.
 const BOLD_NAME_PATTERN = /bold|heavy|black|semibold|demibold/i;
 const ITALIC_NAME_PATTERN = /italic|oblique/i;
+
+const WHITESPACE_PATTERN = /\s/;
 
 interface TextLine {
   text: string;
@@ -160,19 +168,20 @@ interface GeomLine {
   start: number;
   end: number;
   level: number;
-  fontCounts: Map<number, number>;
+  /** Rendered text height → glyph count, used to size the line. */
+  sizeCounts: Map<number, number>;
   glyphs: LineGlyph[];
 }
 
 const makeBlock = (
   spans: ReflowSpan[],
   geomLine: GeomLine | undefined,
-  baselineFontSize: number,
+  baselineSize: number,
   gapBefore: boolean,
 ): ReflowBlock => {
   const level = geomLine?.level ?? 0;
-  const fontSize = geomLine === undefined ? baselineFontSize : dominantFontSize(geomLine);
-  const headingLevel = headingLevelFor(fontSize, baselineFontSize);
+  const size = geomLine === undefined ? baselineSize : dominantTextSize(geomLine);
+  const headingLevel = headingLevelFor(size, baselineSize);
 
   if (headingLevel > 0) {
     return { kind: 'heading', spans, level: 0, headingLevel, gapBefore };
@@ -185,12 +194,12 @@ const makeBlock = (
   return { kind: 'paragraph', spans, level: 0, headingLevel: 0, gapBefore };
 };
 
-const headingLevelFor = (fontSize: number, baseline: number): number => {
-  if (baseline <= 0 || fontSize <= 0) {
+const headingLevelFor = (size: number, baseline: number): number => {
+  if (baseline <= 0 || size <= 0) {
     return 0;
   }
 
-  const ratio = fontSize / baseline;
+  const ratio = size / baseline;
 
   if (ratio < HEADING_RATIO) {
     return 0;
@@ -378,7 +387,7 @@ const collectGeomLines = (geo: ScreenPageGeometry): GeomLine[] => {
         start: runStart,
         end: runEnd,
         level: 0,
-        fontCounts: new Map(),
+        sizeCounts: new Map(),
         glyphs: [],
       };
     } else {
@@ -391,8 +400,18 @@ const collectGeomLines = (geo: ScreenPageGeometry): GeomLine[] => {
       current.end = Math.max(current.end, runEnd);
     }
 
-    if (run.fontSize !== undefined) {
-      current.fontCounts.set(run.fontSize, (current.fontCounts.get(run.fontSize) ?? 0) + run.glyphs.length);
+    // Size the run by how tall it actually renders rather than by
+    // `run.fontSize`. PDFium reports the raw `Tf` operand, which ignores any
+    // scale baked into the text matrix — a page that sets `/F1 1 Tf` and scales
+    // by 10 in `Tm` reports size 1 for every run no matter how large it draws.
+    // Flattened form widgets report their true size, so the two scales would
+    // otherwise coexist on one page and make ordinary field values look like
+    // headings. Run rects are loose (font-metric) boxes in device space, so
+    // they are character-independent and comparable across the whole page.
+    const size = Math.round(run.rect.height * 100) / 100;
+
+    if (size > 0) {
+      current.sizeCounts.set(size, (current.sizeCounts.get(size) ?? 0) + run.glyphs.length);
     }
 
     for (const glyph of run.glyphs) {
@@ -416,12 +435,12 @@ const overlapsVertically = (line: GeomLine, top: number, bottom: number): boolea
   return union > 0 && overlap / union >= 0.5;
 };
 
-/** Dominant (most glyphs) font size of a line, or 0 when unknown. */
-const dominantFontSize = (line: GeomLine): number => {
+/** Dominant (most glyphs) rendered text size of a line, or 0 when unknown. */
+const dominantTextSize = (line: GeomLine): number => {
   let best = 0;
   let bestCount = 0;
 
-  for (const [size, count] of line.fontCounts) {
+  for (const [size, count] of line.sizeCounts) {
     if (count > bestCount) {
       bestCount = count;
       best = size;
@@ -431,12 +450,12 @@ const dominantFontSize = (line: GeomLine): number => {
   return best;
 };
 
-/** The page's baseline (most common) font size across all lines. */
-const baselineFontSize_ = (lines: GeomLine[]): number => {
+/** The page's baseline (most common) rendered text size across all lines. */
+const baselineTextSize = (lines: GeomLine[]): number => {
   const tally = new Map<number, number>();
 
   for (const line of lines) {
-    for (const [size, count] of line.fontCounts) {
+    for (const [size, count] of line.sizeCounts) {
       tally.set(size, (tally.get(size) ?? 0) + count);
     }
   }
@@ -555,15 +574,15 @@ const separatorBefore = (
     return '\n';
   }
 
-  // A change in font size (e.g. heading → body) is a structural break.
+  // A change in text size (e.g. heading → body) is a structural break.
   if (geomPrev !== undefined && geomCurr !== undefined) {
-    const sizePrev = dominantFontSize(geomPrev);
-    const sizeCurr = dominantFontSize(geomCurr);
+    const sizePrev = dominantTextSize(geomPrev);
+    const sizeCurr = dominantTextSize(geomCurr);
 
     if (sizePrev > 0 && sizeCurr > 0) {
       const ratio = Math.max(sizePrev, sizeCurr) / Math.min(sizePrev, sizeCurr);
 
-      if (ratio >= FONT_SIZE_BREAK_RATIO) {
+      if (ratio >= TEXT_SIZE_BREAK_RATIO) {
         return '\n\n';
       }
     }
@@ -657,9 +676,15 @@ interface StyleEntry {
 /**
  * Build the styled spans for a block from its source lines. Content comes from
  * the engine text (`pageText`); style (bold/italic) comes from the run each
- * character belongs to. Wrap-joined lines are separated by a single space.
+ * character belongs to. Wrap-joined lines are separated by a single space, as
+ * are glyphs sitting in separate columns of the same line.
  */
-const buildBlockSpans = (lines: TextLine[], pageText: string, styleIndex: StyleEntry[]): ReflowSpan[] => {
+const buildBlockSpans = (
+  lines: TextLine[],
+  pageText: string,
+  styleIndex: StyleEntry[],
+  gapIndex: Map<number, GapGlyph>,
+): ReflowSpan[] => {
   const raw: ReflowSpan[] = [];
 
   lines.forEach((line, index) => {
@@ -667,9 +692,25 @@ const buildBlockSpans = (lines: TextLine[], pageText: string, styleIndex: StyleE
       raw.push({ text: ' ', bold: false, italic: false });
     }
 
+    let previous: GapGlyph | undefined;
+
     for (let i = line.start; i <= line.end; i++) {
+      const char = pageText[i] ?? '';
+      const blank = char === '' || WHITESPACE_PATTERN.test(char);
+      const glyph = gapIndex.get(i);
+
+      if (!blank && glyph !== undefined && previous !== undefined && needsColumnSpace(previous, glyph)) {
+        raw.push({ text: ' ', bold: false, italic: false });
+      }
+
       const style = lookupStyle(styleIndex, i);
-      raw.push({ text: pageText[i] ?? '', bold: style.bold, italic: style.italic });
+      raw.push({ text: char, bold: style.bold, italic: style.italic });
+
+      if (blank) {
+        previous = undefined;
+      } else if (glyph !== undefined) {
+        previous = glyph;
+      }
     }
   });
 
@@ -786,4 +827,47 @@ const baselineWeight = (geo: ScreenPageGeometry): number => {
   }
 
   return best;
+};
+
+// ---------------------------------------------------------------------------
+// Column gaps
+// ---------------------------------------------------------------------------
+
+/** Horizontal extent of a single glyph. */
+interface GapGlyph {
+  left: number;
+  right: number;
+  height: number;
+}
+
+/**
+ * Index every laid-out glyph by its character index. Side-by-side table columns
+ * are separate runs that PDFium reports back to back in `pageText` with no
+ * space between them — only the horizontal gap tells them apart.
+ */
+const buildGapIndex = (geo: ScreenPageGeometry): Map<number, GapGlyph> => {
+  const index = new Map<number, GapGlyph>();
+
+  for (const run of geo.runs) {
+    run.glyphs.forEach((glyph, offset) => {
+      if (hasGlyphFlag(glyph.flags, GLYPH_FLAG_EMPTY) || glyph.width <= 0) {
+        return;
+      }
+
+      index.set(run.charStart + offset, {
+        left: glyph.x,
+        right: glyph.x + glyph.width,
+        height: glyph.height,
+      });
+    });
+  }
+
+  return index;
+};
+
+/** Whether two consecutive glyphs are far enough apart to need a space. */
+const needsColumnSpace = (previous: GapGlyph, current: GapGlyph): boolean => {
+  const height = Math.max(previous.height, current.height);
+
+  return height > 0 && current.left - previous.right >= height * COLUMN_GAP_RATIO;
 };

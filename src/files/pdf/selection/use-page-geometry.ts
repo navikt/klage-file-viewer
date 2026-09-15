@@ -50,17 +50,26 @@ export const usePageGeometry = (
   visible: boolean,
 ): UsePageGeometryResult => {
   const [rawData, setRawData] = useState<RawPageData | null>(null);
-  const fetchedPageRef = useRef<number | null>(null);
+  const fetchedKeyRef = useRef<string | null>(null);
 
-  // Fetch raw geometry + page text when the page becomes visible (cache by page index).
+  // Fetch raw geometry + page text when the page becomes visible (cached per
+  // document + page, so swapping in a flattened copy refetches).
   useEffect(() => {
     if (!visible) {
       return;
     }
 
+    const fetchKey = `${doc.id}:${page.index}`;
+
     // Already fetched for this page.
-    if (fetchedPageRef.current === page.index) {
+    if (fetchedKeyRef.current === fetchKey) {
       return;
+    }
+
+    // Character indices only mean anything against the document they came from.
+    if (fetchedKeyRef.current !== null) {
+      fetchedKeyRef.current = null;
+      setRawData(null);
     }
 
     let cancelled = false;
@@ -99,7 +108,7 @@ export const usePageGeometry = (
         }
 
         if (!cancelled) {
-          fetchedPageRef.current = page.index;
+          fetchedKeyRef.current = fetchKey;
           setRawData({
             geometry,
             pageText,
