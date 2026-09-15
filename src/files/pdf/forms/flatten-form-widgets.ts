@@ -58,6 +58,8 @@ export const flattenFormWidgets = async (
       return null;
     }
 
+    await regenerateAppearances(engine, workingDoc, widgets, isCancelled);
+
     let flattened = 0;
 
     for (const { page, widget } of widgets) {
@@ -82,6 +84,10 @@ export const flattenFormWidgets = async (
       return null;
     }
 
+    console.debug(
+      `[flattenFormWidgets] Flattened ${flattened.toString(10)} of ${widgets.length.toString(10)} widgets into page content`,
+    );
+
     const buffer = await engine.saveAsCopy(workingDoc).toPromise();
 
     if (isCancelled()) {
@@ -93,6 +99,46 @@ export const flattenFormWidgets = async (
     return null;
   } finally {
     closeDocument(engine, workingDoc);
+  }
+};
+
+/**
+ * Rebuild every widget's `/AP` from its field value.
+ *
+ * A `/NeedAppearances` form leaves the stored appearance stale or missing and
+ * expects the viewer to build one at display time, which the form-fill pass
+ * does when rendering. Flattening reads `/AP` straight off the widget, so
+ * without this the value never reaches the page content and the field is
+ * flattened away to nothing.
+ */
+const regenerateAppearances = async (
+  engine: PdfEngine,
+  doc: PdfDocumentObject,
+  widgets: PageWidget[],
+  isCancelled: () => boolean,
+): Promise<void> => {
+  const idsByPage = new Map<PdfPageObject, string[]>();
+
+  for (const { page, widget } of widgets) {
+    const ids = idsByPage.get(page);
+
+    if (ids === undefined) {
+      idsByPage.set(page, [widget.id]);
+    } else {
+      ids.push(widget.id);
+    }
+  }
+
+  for (const [page, ids] of idsByPage) {
+    if (isCancelled()) {
+      return;
+    }
+
+    // Best effort: a widget PDFium cannot rebuild keeps whatever `/AP` it had.
+    await engine
+      .regenerateWidgetAppearances(doc, page, ids)
+      .toPromise()
+      .catch(() => false);
   }
 };
 
