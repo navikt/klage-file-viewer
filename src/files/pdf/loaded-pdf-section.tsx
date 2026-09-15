@@ -5,6 +5,7 @@ import { useFileViewerConfig } from '@/context';
 import { type DocumentNavigation, FileHeader } from '@/file-header/file-header';
 import type { ResolvedVariant } from '@/file-header/variant-types';
 import { FileErrorLayout } from '@/files/file-error-layout';
+import { useFlattenedFormDocument } from '@/files/pdf/forms/use-flattened-form-document';
 import { PdfPage } from '@/files/pdf/page/pdf-page';
 import { usePersistedRotations } from '@/files/pdf/page/use-persisted-rotations';
 import { useVisiblePages } from '@/files/pdf/page/use-visible-pages';
@@ -64,7 +65,7 @@ export const LoadedPdfSection = ({
   useRegisterRefresh(file.url, refresh);
 
   const {
-    doc,
+    doc: openedDoc,
     loading: docLoading,
     error: docError,
     passwordState,
@@ -72,6 +73,12 @@ export const LoadedPdfSection = ({
     autoTryingPasswords,
     submitPassword,
   } = usePdfDocument(engine, data, { commonPasswords, fileUrl: file.url });
+
+  // Form field values live in widget appearance streams, which PDFium's text
+  // APIs cannot see. When the file has form fields this swaps in an equivalent
+  // document with those values flattened into the page content, so they behave
+  // like any other text. Renders identically and stays read-only.
+  const doc = useFlattenedFormDocument(engine, openedDoc, data, usedPassword);
 
   // Per-page rotation state, persisted to localStorage per file URL + page index.
   const { rotations, handleRotate } = usePersistedRotations(file.url, doc?.pageCount ?? 0);
@@ -95,6 +102,13 @@ export const LoadedPdfSection = ({
   } = useTextSelection();
 
   const copyTargetRef = useCopyHandler(engine, doc, selection, geometryRegistry);
+
+  // Character indices are document-specific, so a selection made before the
+  // flattened copy is swapped in would point at the wrong text afterwards.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `doc` is the trigger — the selection must reset whenever the document is swapped
+  useEffect(() => {
+    clearSelection();
+  }, [doc, clearSelection]);
 
   // Ref for registered page DOM elements — used by both document-level pointer
   // tracking (cross-page selection) and page navigation (scroll-to-page).

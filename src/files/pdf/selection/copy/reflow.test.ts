@@ -5,7 +5,9 @@ import { toHtml, toMarkdown, toPlainText } from '@/files/pdf/selection/copy/seri
 import type { PageSelectionRange, ScreenPageGeometry, ScreenRun, ScreenRunGlyph } from '@/files/pdf/selection/types';
 
 const ADVANCE = 6;
-const LINE_HEIGHT = 12;
+const DEFAULT_FONT_SIZE = 10;
+/** Rendered line height as a multiple of the font size. */
+const LINE_HEIGHT_RATIO = 1.2;
 
 interface LineSpec {
   text: string;
@@ -15,6 +17,14 @@ interface LineSpec {
   left: number;
   /** Font size of the line (defaults to 10). */
   fontSize?: number;
+  /**
+   * Rendered height of the line, when it should not follow `fontSize`.
+   *
+   * PDFium reports the raw `Tf` operand as the font size, so a page that
+   * scales a 1pt font through the text matrix reports size 1 for every run
+   * regardless of how large it draws. This models that mismatch.
+   */
+  renderedHeight?: number;
   /** Whether the line is bold (font weight 700). */
   bold?: boolean;
   /** Whether the line is italic. */
@@ -41,11 +51,16 @@ const buildGeo = (specs: LineSpec[]): { geo: ScreenPageGeometry; range: PageSele
     const charStart = pageText.length;
     pageText += spec.text;
 
+    const fontSize = spec.fontSize ?? DEFAULT_FONT_SIZE;
+    // The reflow sizes lines by their rendered height, so the synthetic
+    // geometry has to scale with the requested font size.
+    const lineHeight = spec.renderedHeight ?? fontSize * LINE_HEIGHT_RATIO;
+
     const glyphs: ScreenRunGlyph[] = [...spec.text].map((char, i) => ({
       x: spec.left + i * ADVANCE,
       y: spec.y,
       width: ADVANCE,
-      height: LINE_HEIGHT,
+      height: lineHeight,
       flags: char === ' ' ? 1 : 0,
       tightX: undefined,
       tightY: undefined,
@@ -54,10 +69,10 @@ const buildGeo = (specs: LineSpec[]): { geo: ScreenPageGeometry; range: PageSele
     }));
 
     runs.push({
-      rect: { x: spec.left, y: spec.y, width: spec.text.length * ADVANCE, height: LINE_HEIGHT },
+      rect: { x: spec.left, y: spec.y, width: spec.text.length * ADVANCE, height: lineHeight },
       charStart,
       glyphs,
-      fontSize: spec.fontSize ?? 10,
+      fontSize,
       fontWeight: spec.bold === true ? 700 : 400,
       italic: spec.italic === true,
       fontName: spec.fontName ?? 'Test',
@@ -77,6 +92,63 @@ const reflowBlocks = (specs: LineSpec[]): ReflowBlock[] => {
 };
 
 const reflowText = (specs: LineSpec[]): string => toPlainText(reflowBlocks(specs));
+
+interface ColumnSpec {
+  text: string;
+  /** Left X of the column. */
+  left: number;
+}
+
+/**
+ * Build a geometry whose lines are made of several runs placed side by side
+ * with no separator character between them in the page text — table columns, as
+ * PDFium reports them.
+ */
+const columnText = (rows: ColumnSpec[][]): string => {
+  let pageText = '';
+  const runs: ScreenRun[] = [];
+  const lineHeight = DEFAULT_FONT_SIZE * LINE_HEIGHT_RATIO;
+
+  rows.forEach((columns, row) => {
+    if (row > 0) {
+      pageText += '\r\n';
+    }
+
+    const y = row * 20;
+
+    for (const column of columns) {
+      const charStart = pageText.length;
+      pageText += column.text;
+
+      const glyphs: ScreenRunGlyph[] = [...column.text].map((char, i) => ({
+        x: column.left + i * ADVANCE,
+        y,
+        width: ADVANCE,
+        height: lineHeight,
+        flags: char === ' ' ? 1 : 0,
+        tightX: undefined,
+        tightY: undefined,
+        tightWidth: undefined,
+        tightHeight: undefined,
+      }));
+
+      runs.push({
+        rect: { x: column.left, y, width: column.text.length * ADVANCE, height: lineHeight },
+        charStart,
+        glyphs,
+        fontSize: DEFAULT_FONT_SIZE,
+        fontWeight: 400,
+        italic: false,
+        fontName: 'Test',
+      });
+    }
+  });
+
+  const geo: ScreenPageGeometry = { runs, pageText, pageWidth: 600, pageHeight: 800, pageRotation: 0 };
+  const range: PageSelectionRange = { pageIndex: 0, startCharIndex: 0, endCharIndex: pageText.length - 1 };
+
+  return toPlainText(reflowSelection(pageText, geo, range));
+};
 
 describe('reflowSelection', () => {
   it('joins a soft-wrapped line with a space when the next word would not fit', () => {
@@ -160,6 +232,62 @@ describe('reflowSelection', () => {
     expect(blocks[1]?.kind).toBe('paragraph');
     expect(toMarkdown(blocks).startsWith('# Stor tittel\n\n')).toBe(true);
     expect(toHtml(blocks).startsWith('<h1>Stor tittel</h1>')).toBe(true);
+  });
+
+  it('does not treat flattened form values as headings', () => {
+    // Reproduces `pdf-skjema.pdf`: the page content sets a 1pt font and scales
+    // it through the text matrix, so PDFium reports `fontSize: 1` for every
+    // label while they render 11 units tall. Field values flattened out of
+    // widget appearance streams report their true `fontSize: 10` and render 12
+    // units tall. Sizing by the reported font size makes the values look 10x
+    // larger than the page baseline; sizing by rendered height puts them
+    // within 9% of it, which is what the eye sees.
+    const label = { fontSize: 1, renderedHeight: 11 };
+    const value = { fontSize: 10, renderedHeight: 12 };
+
+    const blocks = reflowBlocks([
+      { text: 'Virksomhetens navn', y: 0, left: 50, ...label },
+      { text: 'Test AS', y: 20, left: 50, ...value },
+      { text: 'Virksomhetens organisasjonsnummer', y: 40, left: 50, ...label },
+      { text: '1234567890', y: 60, left: 50, ...value },
+    ]);
+
+    expect(blocks.every((block) => block.kind === 'paragraph')).toBe(true);
+    expect(toMarkdown(blocks)).not.toContain('#');
+    expect(toHtml(blocks)).not.toContain('<h');
+  });
+
+  it('inserts a space between two columns on the same line', () => {
+    expect(
+      columnText([
+        [
+          { text: 'Ola Nordmann', left: 50 },
+          { text: '01.01.1970', left: 300 },
+        ],
+      ]),
+    ).toBe('Ola Nordmann 01.01.1970');
+  });
+
+  it('does not split a word whose runs abut on the same line', () => {
+    expect(
+      columnText([
+        [
+          { text: 'Saks', left: 50 },
+          { text: 'nummer', left: 50 + 4 * ADVANCE },
+        ],
+      ]),
+    ).toBe('Saksnummer');
+  });
+
+  it('does not double a separator the page text already has', () => {
+    expect(
+      columnText([
+        [
+          { text: 'Navn ', left: 50 },
+          { text: 'Fodselsdato', left: 300 },
+        ],
+      ]),
+    ).toBe('Navn Fodselsdato');
   });
 
   it('marks a bold run as bold in the emphasis spans', () => {
