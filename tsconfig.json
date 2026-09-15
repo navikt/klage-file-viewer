@@ -30,6 +30,5 @@
       "@dev/*": ["./dev/*"]
     }
   },
-  "include": ["src", "e2e", "dev", "tsdown.config.ts"],
-  "exclude": ["src/**/*.test.ts"]
+  "include": ["src", "e2e", "dev", "tsdown.config.ts"]
 }
