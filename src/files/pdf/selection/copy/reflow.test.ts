@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import type { Rotation } from '@embedpdf/models';
 import { type ReflowBlock, reflowSelection } from '@/files/pdf/selection/copy/reflow';
 import { toHtml, toMarkdown, toPlainText } from '@/files/pdf/selection/copy/serialize';
 import type { PageSelectionRange, ScreenPageGeometry, ScreenRun, ScreenRunGlyph } from '@/files/pdf/selection/types';
@@ -222,16 +223,91 @@ describe('reflowSelection', () => {
       ].join('\n'),
     );
   });
+});
 
-  it('does not reflow rotated pages', () => {
-    const { geo, range } = buildGeo([
-      { text: 'Line one that is quite wide', y: 0, left: 50 },
-      { text: 'Line two', y: 20, left: 50 },
-    ]);
-    const rotated = { ...geo, pageRotation: 1 as const };
-    const blocks = reflowSelection(geo.pageText ?? '', rotated, range);
+const ROTATIONS: Rotation[] = [1, 2, 3];
 
-    expect(blocks.every((block) => block.kind === 'paragraph')).toBe(true);
-    expect(toPlainText(blocks)).toBe('Line one that is quite wide\nLine two');
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+// buildGeo lays glyphs out in upright reading space with these page extents.
+const READING_W = 600;
+const READING_H = 800;
+
+/**
+ * Map an upright reading-space rectangle into the device space of a page with
+ * the given `/Rotate`. This is the mathematical inverse of reflow's internal
+ * `toReadingSpace`, derived independently here so the round-trip actually
+ * exercises the source transform rather than restating it.
+ */
+const readingToDevice = (r: Rect, rotation: Rotation, deviceWidth: number, deviceHeight: number): Rect => {
+  if (rotation === 1) {
+    return { x: deviceWidth - r.y - r.height, y: r.x, width: r.height, height: r.width };
+  }
+
+  if (rotation === 2) {
+    return { x: deviceWidth - r.x - r.width, y: deviceHeight - r.y - r.height, width: r.width, height: r.height };
+  }
+
+  if (rotation === 3) {
+    return { x: r.y, y: deviceHeight - r.x - r.width, width: r.height, height: r.width };
+  }
+
+  return r;
+};
+
+/** Rotate a whole upright geometry into a rotated page's device space. */
+const rotateGeoToDevice = (geo: ScreenPageGeometry, rotation: Rotation): ScreenPageGeometry => {
+  const swapped = rotation === 1 || rotation === 3;
+  const deviceWidth = swapped ? READING_H : READING_W;
+  const deviceHeight = swapped ? READING_W : READING_H;
+
+  const runs: ScreenRun[] = geo.runs.map((run) => ({
+    ...run,
+    rect: readingToDevice(run.rect, rotation, deviceWidth, deviceHeight),
+    glyphs: run.glyphs.map((glyph) => {
+      const box = readingToDevice(
+        { x: glyph.x, y: glyph.y, width: glyph.width, height: glyph.height },
+        rotation,
+        deviceWidth,
+        deviceHeight,
+      );
+
+      return { ...glyph, x: box.x, y: box.y, width: box.width, height: box.height };
+    }),
+  }));
+
+  return { ...geo, runs, pageWidth: deviceWidth, pageHeight: deviceHeight, pageRotation: rotation };
+};
+
+describe('reflowSelection on rotated pages', () => {
+  // A heading, a body paragraph, and a bold indented list item — enough to
+  // exercise structure (heading/list) and formatting (bold) together.
+  const specs: LineSpec[] = [
+    { text: 'Stor tittel', y: 0, left: 50, fontSize: 20 },
+    { text: 'Vanlig innledning her', y: 30, left: 50, fontSize: 10 },
+    { text: 'Uthevet punkt', y: 50, left: 90, fontSize: 10, bold: true },
+  ];
+
+  it('recovers the same structure and formatting as the upright page', () => {
+    const { geo, range } = buildGeo(specs);
+    const upright = reflowSelection(geo.pageText ?? '', geo, range);
+
+    // Guard: the upright result is a meaningful mix, so the equality below is
+    // not vacuously matching two degenerate outputs.
+    expect(upright.some((block) => block.kind === 'heading')).toBe(true);
+    expect(upright.some((block) => block.kind === 'listItem')).toBe(true);
+    expect(upright.some((block) => block.spans.some((span) => span.bold))).toBe(true);
+
+    for (const rotation of ROTATIONS) {
+      const rotated = rotateGeoToDevice(geo, rotation);
+      const blocks = reflowSelection(rotated.pageText ?? '', rotated, range);
+
+      expect(blocks).toEqual(upright);
+    }
   });
 });
