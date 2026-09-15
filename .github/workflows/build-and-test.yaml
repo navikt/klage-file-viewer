@@ -31,7 +31,7 @@ jobs:
       contents: read
     container:
       # Faster than installing browser and OS dependencies every time. Even with caching of the browser binaries.
-      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
     outputs:
       pdfium-hash: ${{ steps.pdfium-hash.outputs.hash }}
       tesseract-version: ${{ steps.tesseract-version.outputs.version }}
@@ -46,7 +46,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .tool-versions
           registries: |
             https://registry.npmjs.org/
             @navikt:https://npm.pkg.github.com|$TOKEN
