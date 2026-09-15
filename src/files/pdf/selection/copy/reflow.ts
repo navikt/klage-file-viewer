@@ -1,4 +1,5 @@
-import type { PageSelectionRange, ScreenPageGeometry, ScreenRun } from '@/files/pdf/selection/types';
+import type { Rotation } from '@embedpdf/models';
+import type { PageSelectionRange, ScreenPageGeometry, ScreenRun, ScreenRunGlyph } from '@/files/pdf/selection/types';
 import { GLYPH_FLAG_EMPTY, GLYPH_FLAG_SPACE, hasGlyphFlag } from '@/files/pdf/selection/types';
 
 /** A run of text within a block sharing the same emphasis. */
@@ -36,8 +37,8 @@ export interface ReflowBlock {
  *    break; otherwise a "next word would not have fit" test joins soft wraps.
  *
  * A misjudged geometry line can only pick the wrong separator/role — never drop
- * a character. Rotated pages are not analysed; each source line becomes a
- * paragraph.
+ * a character. Rotated pages (`/Rotate` 90/180/270) are first mapped into an
+ * upright reading space so the same horizontal analysis applies unchanged.
  */
 export const reflowSelection = (rawText: string, geo: ScreenPageGeometry, range: PageSelectionRange): ReflowBlock[] => {
   const textLines = splitTextLines(rawText, range.startCharIndex);
@@ -46,22 +47,13 @@ export const reflowSelection = (rawText: string, geo: ScreenPageGeometry, range:
     return [];
   }
 
-  if (geo.pageRotation !== undefined && geo.pageRotation !== 0) {
-    return textLines.map((line, index) => ({
-      kind: 'paragraph',
-      spans: [{ text: line.text, bold: false, italic: false }],
-      level: 0,
-      headingLevel: 0,
-      gapBefore: index > 0 && line.blankBefore,
-    }));
-  }
-
-  const pageText = geo.pageText ?? '';
-  const geomLines = collectGeomLines(geo);
-  assignIndentLevels(geomLines, geo.pageWidth);
+  const reading = toReadingSpace(geo);
+  const pageText = reading.pageText ?? '';
+  const geomLines = collectGeomLines(reading);
+  assignIndentLevels(geomLines, reading.pageWidth);
 
   const baselineFontSize = baselineFontSize_(geomLines);
-  const styleIndex = buildStyleIndex(geo, baselineWeight(geo));
+  const styleIndex = buildStyleIndex(reading, baselineWeight(reading));
   const rightMargin = geomLines.reduce((max, line) => Math.max(max, line.right), 0);
   const typicalGap = medianGap(geomLines);
   const slack = rightMargin * MARGIN_SLACK_FACTOR;
@@ -251,6 +243,106 @@ const splitTextLines = (rawText: string, baseIndex: number): TextLine[] => {
   }
 
   return lines;
+};
+
+/**
+ * Map a whole page geometry into an upright reading space where text flows
+ * left→right, top→bottom, so the horizontal reflow analysis applies unchanged.
+ *
+ * Pages with an inherent `/Rotate` (90/180/270) carry glyph geometry in a
+ * rotated device space where reading "lines" may be vertical columns. The
+ * character content (`pageText`) and `charStart` values are already in reading
+ * order (`reorderRunsVisually` ran during geometry transform); only the
+ * coordinates need rotating. Each run rect and glyph box is axis-aligned in
+ * device space, so each is remapped as a rectangle. For 90°/270° the page's
+ * width and height extents swap. Rotation 0 is returned unchanged.
+ */
+const toReadingSpace = (geo: ScreenPageGeometry): ScreenPageGeometry => {
+  const rotation = geo.pageRotation ?? 0;
+
+  if (rotation === 0) {
+    return geo;
+  }
+
+  const { width: deviceWidth, height: deviceHeight } = deviceExtent(geo);
+  const swapped = rotation === 1 || rotation === 3;
+
+  const runs: ScreenRun[] = geo.runs.map((run) => ({
+    ...run,
+    rect: rotateRect(run.rect, rotation, deviceWidth, deviceHeight),
+    glyphs: run.glyphs.map((glyph) => rotateGlyph(glyph, rotation, deviceWidth, deviceHeight)),
+  }));
+
+  return {
+    ...geo,
+    runs,
+    pageWidth: swapped ? geo.pageHeight : geo.pageWidth,
+    pageHeight: swapped ? geo.pageWidth : geo.pageHeight,
+    pageRotation: 0,
+  };
+};
+
+/** Device-space page extent, falling back to the runs' bounding box. */
+const deviceExtent = (geo: ScreenPageGeometry): { width: number; height: number } => {
+  if (geo.pageWidth !== undefined && geo.pageHeight !== undefined) {
+    return { width: geo.pageWidth, height: geo.pageHeight };
+  }
+
+  let width = 0;
+  let height = 0;
+
+  for (const run of geo.runs) {
+    width = Math.max(width, run.rect.x + run.rect.width);
+    height = Math.max(height, run.rect.y + run.rect.height);
+  }
+
+  return { width, height };
+};
+
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Rotate an axis-aligned device-space rectangle into upright reading space for
+ * the given `/Rotate`. `deviceWidth`/`deviceHeight` are the device page extents.
+ */
+const rotateRect = (rect: Rect, rotation: Rotation, deviceWidth: number, deviceHeight: number): Rect => {
+  const { x, y, width: w, height: h } = rect;
+
+  if (rotation === 1) {
+    return { x: y, y: deviceWidth - x - w, width: h, height: w };
+  }
+
+  if (rotation === 2) {
+    return { x: deviceWidth - x - w, y: deviceHeight - y - h, width: w, height: h };
+  }
+
+  if (rotation === 3) {
+    return { x: deviceHeight - y - h, y: x, width: h, height: w };
+  }
+
+  return rect;
+};
+
+/** Rotate a glyph's loose box into reading space, preserving flags/tight bounds. */
+const rotateGlyph = (
+  glyph: ScreenRunGlyph,
+  rotation: Rotation,
+  deviceWidth: number,
+  deviceHeight: number,
+): ScreenRunGlyph => {
+  const box = rotateRect(
+    { x: glyph.x, y: glyph.y, width: glyph.width, height: glyph.height },
+    rotation,
+    deviceWidth,
+    deviceHeight,
+  );
+
+  return { ...glyph, x: box.x, y: box.y, width: box.width, height: box.height };
 };
 
 /** Group all visible runs on the page into positioned lines (in reading order). */

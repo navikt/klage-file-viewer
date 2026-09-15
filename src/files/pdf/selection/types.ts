@@ -34,6 +34,15 @@ export const GLYPH_FLAG_EMPTY = 2 as const;
 export const hasGlyphFlag = (flags: number, flag: number): boolean => (flags & flag) !== 0;
 
 /**
+ * Check whether a run is a "ghost run" positioned at the page origin with zero
+ * size. Used by `repairSoftBreakGeometry` to detect PDFium-emitted carrier
+ * runs at `(0, 0)`. Stricter than a generic zero-size check — it also requires
+ * the rect to be at the origin.
+ */
+export const isOriginGhostRun = (run: ScreenRun): boolean =>
+  run.rect.width === 0 && run.rect.height === 0 && run.rect.x === 0 && run.rect.y === 0;
+
+/**
  * A {@link PageRun} whose glyph positions have been scaled to screen
  * coordinates. Used for hit-testing and selection-rect building in the
  * overlay layer.
