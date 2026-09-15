@@ -1,4 +1,4 @@
-import { waitForPdfRendered } from '@e2e/helpers';
+import { dragAcrossPage, getCopyTarget, waitForPdfRendered } from '@e2e/helpers';
 import { expect, test } from '@playwright/test';
 
 // Broken variants — what copying produces if the selection drops the
@@ -9,6 +9,10 @@ const EN_TOLKER_ALONE = /\ben tolker det\b/;
 const OMPENSERER_ALONE = /\bompenserer ikke\b/;
 const VSNITT_ALONE = /\bvsnitt senere\b/;
 const ENNE_LINJEN_ALONE = /\benne linjen\b/;
+
+// The whole page, from inside the top-left corner (which the rotate button
+// covers) to inside the bottom-right one.
+const SELECTION = { startX: 0.1, startY: 0.1, endX: 0.9, endY: 0.9 };
 
 /**
  * Regression test for the hyphen-soft-break copy bug.
@@ -28,42 +32,11 @@ test.describe('soft-break copy', () => {
 
     await page.goto('/?files=file%3ASoft-break.pdf');
     await waitForPdfRendered(page);
-    // Give the engine a beat to publish geometry to the selection overlay.
-    await page.waitForTimeout(2_000);
 
-    // Drag across the page content. The selection overlay sits absolutely
-    // positioned over the page content; targeting `[data-klage-file-viewer-
-    // page-content]` ensures we get the right hit-testing surface.
-    const pageContent = page.locator('[data-klage-file-viewer-page-content]').first();
-    const box = await pageContent.boundingBox();
-
-    if (box === null) {
-      throw new Error('Page content bounding box not available');
-    }
-
-    // Start the drag well inside the page content. Use percentage-based
-    // offsets so the test is resilient to viewport size and zoom changes.
-    // The top-left corner is covered by the rotate button, so we start
-    // ~10% in from the left and ~10% down to land on actual text glyphs.
-    const startX = box.x + box.width * 0.1;
-    const startY = box.y + box.height * 0.1;
-    const endX = box.x + box.width * 0.9;
-    const endY = box.y + box.height * 0.9;
-
-    await page.mouse.move(startX, startY);
-    await page.mouse.down();
-    await page.mouse.move(endX, endY, { steps: 25 });
-    await page.mouse.up();
-
-    // The hidden copy target's textContent is updated synchronously by
-    // `useCopyHandler` whenever the selection changes. Reading it lets us
-    // assert on the exact string that would land in the clipboard, without
-    // dealing with browser clipboard permissions.
-    const copyTarget = page.locator('[data-klage-file-viewer-copy-target]').first();
-    await expect.poll(async () => copyTarget.evaluate((el) => el.textContent ?? ''), { timeout: 5_000 }).not.toBe('');
+    await expect.poll(async () => dragAcrossPage(page, SELECTION), { timeout: 10_000 }).not.toBe('');
 
     // Raw clipboard text, preserving the reflowed line/paragraph structure.
-    const rawCopied = await copyTarget.evaluate((el) => el.textContent ?? '');
+    const rawCopied = await getCopyTarget(page).evaluate((el) => el.textContent ?? '');
 
     // Whitespace-normalised view for the character-preservation checks, which
     // don't care about exact line wrapping.
