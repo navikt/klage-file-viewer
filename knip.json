@@ -1,5 +1,6 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
-  "project": ["src/**/*.{ts,tsx}", "dev/**/*.{ts,tsx}", ".github/scripts/**/*.ts", "e2e/**/*.ts"],
-  "ignoreDependencies": ["@navikt/ds-css", "@embedpdf/pdfium"]
+  "$schema": "./node_modules/knip/schema.json",
+  "entry": ["dev/styles.css"],
+  "project": ["src/**/*.{ts,tsx,css}", "dev/**/*.{ts,tsx,css}", ".github/scripts/**/*.ts", "e2e/**/*.ts"],
+  "ignoreDependencies": ["@embedpdf/pdfium"]
 }
