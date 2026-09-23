@@ -1,10 +1,24 @@
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from 'react';
 
-export interface FetchErrorInfo {
+/** The server responded with a non-2xx status code. */
+export interface HttpFetchErrorInfo {
+  type: 'http';
   url: string;
   status: number;
   body: string;
 }
+
+/**
+ * The request failed without a usable HTTP response (e.g. network failure, CORS, invalid response headers).
+ * Browsers intentionally hide the underlying cause from JavaScript; it is only visible in the browser console.
+ */
+export interface NetworkFetchErrorInfo {
+  type: 'network';
+  url: string;
+  error: Error;
+}
+
+export type FetchErrorInfo = HttpFetchErrorInfo | NetworkFetchErrorInfo;
 
 export enum ThemeMode {
   Light = 'light',

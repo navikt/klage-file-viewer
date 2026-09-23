@@ -73,21 +73,19 @@ export const useFileData = (url: string | undefined, query?: Record<string, stri
 
         span?.setAttribute('error.message', errorMessage);
         setError(errorMessage);
-        onFetchErrorRef.current?.({ url: fetchUrl, status: response.status, body });
+        onFetchErrorRef.current?.({ type: 'http', url: fetchUrl, status: response.status, body });
         setIsFetching(false);
       } catch (e) {
         if (e instanceof DOMException && e.name === 'AbortError') {
           return;
         }
 
-        const message = e instanceof Error ? e.message : 'Ukjent feil';
+        const error = e instanceof Error ? e : new Error('Ukjent feil', { cause: e });
 
-        if (e instanceof Error) {
-          span?.recordException(e);
-        }
-
-        span?.setAttribute('error.message', message);
-        setError(message);
+        span?.recordException(error);
+        span?.setAttribute('error.message', error.message);
+        setError(getNetworkErrorMessage(error));
+        onFetchErrorRef.current?.({ type: 'network', url: fetchUrl, error });
         setIsFetching(false);
       }
     });
@@ -108,3 +106,10 @@ export const useFileData = (url: string | undefined, query?: Record<string, stri
 
   return { data, loading, fetching, refresh, error };
 };
+
+// `fetch` rejects with a `TypeError` for network-level failures. Its message is generic by design
+// ("Failed to fetch", "Load failed", etc.), and the real cause is only logged by the browser.
+const getNetworkErrorMessage = (error: Error): string =>
+  error instanceof TypeError
+    ? `Nettverksfeil ved henting av fil: ${error.message}. Se nettleserkonsollen for detaljer.`
+    : error.message;

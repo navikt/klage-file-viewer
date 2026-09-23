@@ -89,8 +89,12 @@ Pass configuration props directly to the component:
   theme="light"
   files={files}
   commonPasswords={["secret123"]}
-  onFetchError={({ url, status, body }) => {
-    console.error(`Failed to fetch ${url}: ${status}`);
+  onFetchError={(error) => {
+    if (error.type === "http") {
+      console.error(`Failed to fetch ${error.url}: ${error.status}`, error.body);
+    } else {
+      console.error(`Network error fetching ${error.url}`, error.error);
+    }
   }}
   errorComponent={({ refresh }) => (
     <Button onClick={refresh}>Prøv igjen</Button>
@@ -110,7 +114,7 @@ Pass configuration props directly to the component:
 | `onClose`         | `() => void`                                   | No       | Shows a close button; called when clicked.                                                                      |
 | `newTabUrl`       | `string \| null`                               | No       | Shows a link in the toolbar to open the document set in a new tab.                                              |
 | `className`       | `string`                                       | No       | Additional CSS class for the root element.                                                                      |
-| `onFetchError`    | `(error: FetchErrorInfo) => void`              | No       | Called when a file fetch fails.                                                                                 |
+| `onFetchError`    | `(error: FetchErrorInfo) => void`              | No       | Called when a file fetch fails. See [`FetchErrorInfo`](#fetcherrorinfo).                                        |
 | `errorComponent`  | `React.ComponentType<{ refresh: () => void }>` | No       | Component rendered inside the error alert.                                                                      |
 | `commonPasswords` | `string[]`                                     | No       | Common passwords to automatically try when a PDF is password-protected.                                         |
 | `standalone`      | `boolean`                                      | No       | Shows all fit options (fit-to-width, fit-to-page) when `true`. Defaults to `false`.                             |
@@ -163,6 +167,19 @@ type VariantFormat = 'ARKIV' | 'SLADDET';
 type Skjerming = 'POL' | 'FEIL';
 ```
 
+### `FetchErrorInfo`
+
+Passed to `onFetchError`. Discriminated on `type`:
+
+```ts
+type FetchErrorInfo =
+  | { type: 'http'; url: string; status: number; body: string } // HttpFetchErrorInfo
+  | { type: 'network'; url: string; error: Error }; // NetworkFetchErrorInfo
+```
+
+- **`http`** — The server responded with a non-2xx status code.
+- **`network`** — The request failed without a usable HTTP response (network failure, CORS, invalid response headers, etc.). Browsers intentionally hide the underlying cause from JavaScript, so `error.message` is generic (e.g. `Failed to fetch`). The actual cause is only visible in the browser console.
+
 ### `KlageFileViewerHandle`
 
 Ref handle exposed via `handleRef`:
@@ -193,7 +210,7 @@ The selected mode and custom scale value are persisted to `localStorage` and app
 
 | Export path                            | Description                                                                                                                                                                                                     |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@navikt/klage-file-viewer`            | `KlageFileViewer` component, `ScaleSettings` component, `KlageFileViewerProps`, `KlageFileViewerHandle`, `FileEntry`, `FileType`, `FileVariant`, `FileVariants`, `Skjerming`, `VariantFormat`, `FetchErrorInfo` |
+| `@navikt/klage-file-viewer`            | `KlageFileViewer` component, `ScaleSettings` component, `KlageFileViewerProps`, `KlageFileViewerHandle`, `FileEntry`, `FileType`, `FileVariant`, `FileVariants`, `Skjerming`, `VariantFormat`, `FetchErrorInfo`, `HttpFetchErrorInfo`, `NetworkFetchErrorInfo` |
 | `@navikt/klage-file-viewer/styles.css` | Pre-built CSS (Tailwind + component styles)                                                                                                                                                                     |
 
 ## Features

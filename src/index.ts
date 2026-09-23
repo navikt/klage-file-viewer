@@ -1,4 +1,4 @@
-export type { FetchErrorInfo } from '@/context';
+export type { FetchErrorInfo, HttpFetchErrorInfo, NetworkFetchErrorInfo } from '@/context';
 export type { KlageFileViewerHandle, KlageFileViewerProps } from '@/klage-file-viewer';
 export { KlageFileViewer } from '@/klage-file-viewer';
 export { ScaleSettings } from '@/scale/scale';
