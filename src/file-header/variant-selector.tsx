@@ -1,5 +1,5 @@
 import { FilePlusIcon, FileTextIcon, PasswordHiddenIcon } from '@navikt/aksel-icons';
-import { Tag, ToggleGroup, Tooltip } from '@navikt/ds-react';
+import { Tag, ToggleGroup } from '@navikt/ds-react';
 import type { ReactElement } from 'react';
 import type { ResolvedVariant } from '@/file-header/variant-types';
 import type { VariantFormat } from '@/types';
@@ -32,13 +32,13 @@ export const VariantSelector = ({ variant }: VariantSelectorProps) => {
   return (
     <ToggleGroup size="small" data-color="neutral" value={format} onChange={onChange} aria-label="Velg variant">
       {selectableFormats.map((selectableFormat) => (
-        <Tooltip key={selectableFormat} content={VARIANT_ITEMS[selectableFormat].label} placement="top">
-          <ToggleGroup.Item
-            value={selectableFormat}
-            icon={VARIANT_ITEMS[selectableFormat].icon}
-            className="min-h-6 px-1.5 py-0.5"
-          />
-        </Tooltip>
+        <ToggleGroup.Item
+          key={selectableFormat}
+          value={selectableFormat}
+          icon={VARIANT_ITEMS[selectableFormat].icon}
+          label={VARIANT_ITEMS[selectableFormat].label}
+          className="min-h-6 px-1.5 py-0.5"
+        />
       ))}
     </ToggleGroup>
   );
