@@ -1,5 +1,7 @@
-import { readdirSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { VARIANT_FORMATS } from '@/file-header/variant-types';
+import type { VariantFormat } from '@/types';
 
 // --- Types ---
 
@@ -9,8 +11,10 @@ interface FlatFileInfo {
 }
 
 interface DocumentVariantInfo {
-  format: 'ARKIV' | 'SLADDET';
+  format: VariantFormat;
   filename: string;
+  /** File size in bytes. */
+  filstoerrelse: number;
 }
 
 interface DocumentInfo {
@@ -30,20 +34,8 @@ const JSON_REGEX = /\.json$/i;
 
 // --- Variant helpers ---
 
-const isVariantFilename = (filename: string): filename is 'ARKIV.pdf' | 'SLADDET.pdf' =>
-  filename === 'ARKIV.pdf' || filename === 'SLADDET.pdf';
-
-const getVariantFormat = (filename: string): 'ARKIV' | 'SLADDET' | null => {
-  if (filename === 'ARKIV.pdf') {
-    return 'ARKIV';
-  }
-
-  if (filename === 'SLADDET.pdf') {
-    return 'SLADDET';
-  }
-
-  return null;
-};
+const getVariantFormat = (filename: string): VariantFormat | null =>
+  VARIANT_FORMATS.find((format) => filename === `${format}.pdf`) ?? null;
 
 const isSupportedFilename = (filename: string): boolean =>
   PDF_REGEX.test(filename) || EXCEL_REGEX.test(filename) || IMAGE_REGEX.test(filename) || JSON_REGEX.test(filename);
@@ -70,24 +62,20 @@ export const scanDir = (dir: string, excludeDirs: readonly string[] = []): FileI
 
       const dirPath = resolve(dir, entry.name);
       const children = readdirSync(dirPath, { encoding: 'utf-8' });
-      const variantFiles = children.filter(isVariantFilename);
+      const variants = children
+        .map<DocumentVariantInfo | null>((child) => {
+          const format = getVariantFormat(child);
 
-      if (variantFiles.length > 0) {
-        const variants = variantFiles
-          .map<DocumentVariantInfo | null>((child) => {
-            const format = getVariantFormat(child);
+          if (format === null) {
+            return null;
+          }
 
-            if (format === null) {
-              return null;
-            }
+          return { format, filename: child, filstoerrelse: statSync(resolve(dirPath, child)).size };
+        })
+        .filter((v): v is DocumentVariantInfo => v !== null);
 
-            return { format, filename: child };
-          })
-          .filter((v): v is DocumentVariantInfo => v !== null);
-
-        if (variants.length > 0) {
-          results.push({ type: 'document', name: entry.name, variants });
-        }
+      if (variants.length > 0) {
+        results.push({ type: 'document', name: entry.name, variants });
       }
     } else if (entry.isFile() && isSupportedFilename(entry.name)) {
       results.push({ type: 'file', filename: entry.name });
@@ -108,14 +96,15 @@ export const scanDir = (dir: string, excludeDirs: readonly string[] = []): FileI
 
 const hasPathTraversal = (name: string): boolean => name.includes('/') || name.includes('\\') || name.includes('..');
 
-const isValidFormat = (format: unknown): format is 'ARKIV' | 'SLADDET' => format === 'ARKIV' || format === 'SLADDET';
+const isValidFormat = (format: unknown): format is VariantFormat =>
+  VARIANT_FORMATS.some((validFormat) => validFormat === format);
 
 // --- Request parsing ---
 
 interface DocumentRequest {
   ok: true;
   documentName: string;
-  format: 'ARKIV' | 'SLADDET';
+  format: VariantFormat;
 }
 
 interface RequestError {
@@ -143,7 +132,7 @@ export const parseDocumentRequest = (documentName: string, format: unknown): Doc
     return {
       ok: false,
       status: 400,
-      message: 'Missing or invalid "format" query parameter. Expected "ARKIV" or "SLADDET".',
+      message: 'Missing or invalid "format" query parameter. Expected "ARKIV", "SLADDET" or "FULLVERSJON".',
     };
   }
 
@@ -154,7 +143,7 @@ interface DownloadDocumentRequest {
   ok: true;
   kind: 'document';
   document: string;
-  format: 'ARKIV' | 'SLADDET';
+  format: VariantFormat;
 }
 
 interface DownloadFileRequest {
@@ -171,7 +160,7 @@ export const parseDownloadRequest = (params: {
   format: string | null;
   file: string | null;
 }): DownloadDocumentRequest | DownloadFileRequest | RequestError => {
-  // Document variant download: ?document=<name>&format=ARKIV|SLADDET
+  // Document variant download: ?document=<name>&format=ARKIV|SLADDET|FULLVERSJON
   if (typeof params.document === 'string' && params.document.length > 0) {
     if (hasPathTraversal(params.document)) {
       return { ok: false, status: 400, message: 'Invalid document name' };
@@ -199,11 +188,10 @@ export const parseDownloadRequest = (params: {
 /**
  * Build the download filename for a document variant.
  */
-export const buildDownloadFilename = (document: string, format: 'ARKIV' | 'SLADDET'): string =>
-  `${document} (${format}).pdf`;
+export const buildDownloadFilename = (document: string, format: VariantFormat): string => `${document} (${format}).pdf`;
 
 /**
  * Resolve the file path for a document variant within a base directory.
  */
-export const resolveDocumentPath = (baseDir: string, document: string, format: 'ARKIV' | 'SLADDET'): string =>
+export const resolveDocumentPath = (baseDir: string, document: string, format: VariantFormat): string =>
   resolve(baseDir, document, `${format}.pdf`);

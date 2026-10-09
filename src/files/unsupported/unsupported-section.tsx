@@ -4,6 +4,7 @@ import { DownloadButton } from '@/download-button';
 import { type DocumentNavigation, FileHeader } from '@/file-header/file-header';
 import { type ResolvedVariant, resolveVariantUrl } from '@/file-header/variant-types';
 import { getA4Dimensions } from '@/files/pdf/pdf-section-placeholder';
+import { withFileSize } from '@/lib/format-file-size';
 import type { FileEntry } from '@/types';
 
 interface UnsupportedSectionProps {
@@ -56,7 +57,7 @@ export const UnsupportedSection = ({
           <DownloadButton
             url={resolvedDownloadUrl}
             filename={file.title}
-            tooltip="Last ned fil"
+            tooltip={withFileSize('Last ned fil', headerVariant?.filstoerrelse)}
             size="small"
             variant="secondary"
           >

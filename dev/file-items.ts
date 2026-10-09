@@ -1,6 +1,7 @@
 import type { ApiFileInfo, AvailableItem, DocumentItem, DocumentVariantInfo, FileType, FlatItem } from '@dev/types';
 import { buildNewTabUrl } from '@dev/url-helpers';
-import type { FileEntry, FileVariant } from '@/types';
+import { VARIANT_FORMATS } from '@/file-header/variant-types';
+import type { FileEntry, FileVariant, FileVariants, VariantFormat } from '@/types';
 
 // --- Regex patterns ---
 
@@ -84,7 +85,7 @@ const apiInfoToItem = (info: ApiFileInfo): AvailableItem | null => {
 
 const buildFlatDownloadUrl = (filename: string): string => `/api/download?file=${encodeURIComponent(filename)}`;
 
-const buildDocumentDownloadUrl = (name: string, format: 'ARKIV' | 'SLADDET'): string =>
+const buildDocumentDownloadUrl = (name: string, format: VariantFormat): string =>
   `/api/download?document=${encodeURIComponent(name)}&format=${format}`;
 
 // --- FileEntry builders ---
@@ -105,57 +106,47 @@ const flatItemToFileEntry = (item: FlatItem): FileEntry => {
 const documentItemToFileEntry = (item: DocumentItem): FileEntry => {
   const newTabUrl = buildNewTabUrl([item.key]);
 
-  const hasArkiv = item.variants.some((v: DocumentVariantInfo) => v.format === 'ARKIV');
-  const hasSladdet = item.variants.some((v: DocumentVariantInfo) => v.format === 'SLADDET');
-
-  // Determine which format to use for the initial fetch
-  const initialFormat: 'ARKIV' | 'SLADDET' = hasSladdet ? 'SLADDET' : 'ARKIV';
-  const downloadUrl = buildDocumentDownloadUrl(item.name, initialFormat);
-
-  const documentUrl = `/api/document/${encodeURIComponent(item.name)}`;
-
-  // If we have both variants, use a tuple
-  if (hasArkiv && hasSladdet) {
-    const arkivVariant: FileVariant = {
-      filtype: 'PDF',
-      hasAccess: true,
-      format: 'ARKIV',
-      skjerming: null,
-    };
-
-    const sladdetVariant: FileVariant = {
-      filtype: 'PDF',
-      hasAccess: true,
-      format: 'SLADDET',
-      skjerming: null,
-    };
-
-    return {
-      variants: [arkivVariant, sladdetVariant],
-      title: item.displayName,
-      url: documentUrl,
-      query: { format: initialFormat },
-      downloadUrl,
-      newTabUrl,
-    };
-  }
-
-  // Single variant
-  const format = initialFormat;
-
-  return {
-    variants: {
+  const variants = VARIANT_FORMATS.map((format) => item.variants.find((v) => v.format === format))
+    .filter((v): v is DocumentVariantInfo => v !== undefined)
+    .map<FileVariant>(({ format, filstoerrelse }) => ({
       filtype: 'PDF',
       hasAccess: true,
       format,
+      filstoerrelse,
       skjerming: null,
-    },
+    }));
+
+  // Variants are in display order, so the first one is the preferred initial format.
+  const initialFormat = variants[0]?.format ?? 'ARKIV';
+  const downloadUrl = buildDocumentDownloadUrl(item.name, initialFormat);
+  const documentUrl = `/api/document/${encodeURIComponent(item.name)}`;
+
+  return {
+    variants: toFileVariants(variants, item.fileType),
     title: item.displayName,
     url: documentUrl,
-    query: { format },
+    query: { format: initialFormat },
     downloadUrl,
     newTabUrl,
   };
+};
+
+const toFileVariants = (variants: FileVariant[], fileType: FileType): FileVariants => {
+  const [first, second, third] = variants;
+
+  if (first === undefined) {
+    return fileType;
+  }
+
+  if (second === undefined) {
+    return first;
+  }
+
+  if (third === undefined) {
+    return [first, second];
+  }
+
+  return [first, second, third];
 };
 
 const itemToFileEntry = (item: AvailableItem): FileEntry => {

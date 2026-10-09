@@ -1,3 +1,5 @@
+import type { VariantFormat } from '@/types';
+
 // --- File type ---
 
 type FileType = 'PDF' | 'XLSX' | 'JPEG' | 'PNG' | 'TIFF' | 'JSON';
@@ -10,8 +12,10 @@ interface FlatFileInfo {
 }
 
 interface DocumentVariantInfo {
-  format: 'ARKIV' | 'SLADDET';
+  format: VariantFormat;
   filename: string;
+  /** File size in bytes. */
+  filstoerrelse: number;
 }
 
 interface DocumentInfo {

@@ -127,7 +127,7 @@ A `FileEntry` represents one file in the viewer:
 
 | Property      | Type                                                    | Required | Description                                                          |
 | ------------- | ------------------------------------------------------- | -------- | -------------------------------------------------------------------- |
-| `variants`    | `FileVariant \| [FileVariant, FileVariant] \| FileType` | Yes      | Variant data for the file. Use `FileType` when file has no variants. |
+| `variants`    | `FileVariants`                                          | Yes      | Variant data for the file. Use `FileType` when file has no variants. |
 | `title`       | `string`                                                | Yes      | Display title shown in the sticky header.                            |
 | `url`         | `string`                                                | Yes      | File source URL.                                                     |
 | `query`       | `Record<string, string>`                                | No       | Query parameters sent with the file request.                         |
@@ -136,12 +136,23 @@ A `FileEntry` represents one file in the viewer:
 
 ### `FileVariant`
 
-| Property    | Type             | Required | Description                           |
-| ----------- | ---------------- | -------- | ------------------------------------- |
-| `filtype`   | `FileType`       | Yes      | File type for this variant.           |
-| `hasAccess` | `boolean`        | Yes      | Whether the user has access.          |
-| `format`    | `VariantFormat`  | Yes      | Variant format in the archive.        |
-| `skjerming` | `Skjerming \| null` | Yes   | Shielding classification for variant. |
+| Property        | Type                | Required | Description                           |
+| --------------- | ------------------- | -------- | ------------------------------------- |
+| `filtype`       | `FileType`          | Yes      | File type for this variant.           |
+| `hasAccess`     | `boolean`           | Yes      | Whether the user has access.          |
+| `format`        | `VariantFormat`     | Yes      | Variant format in the archive.        |
+| `skjerming`     | `Skjerming \| null` | Yes      | Shielding classification for variant. |
+| `filstoerrelse` | `number`            | No       | File size in bytes.                   |
+
+### `FileVariants`
+
+```ts
+type FileVariants =
+  | FileVariant
+  | [FileVariant, FileVariant]
+  | [FileVariant, FileVariant, FileVariant]
+  | FileType;
+```
 
 ### `FileType`
 
@@ -158,8 +169,12 @@ type FileType = 'PDF' | 'XLSX' | 'JPEG' | 'PNG' | 'TIFF' | 'JSON' | 'XML' | 'AXM
 ### `VariantFormat`
 
 ```ts
-type VariantFormat = 'ARKIV' | 'SLADDET';
+type VariantFormat = 'ARKIV' | 'SLADDET' | 'FULLVERSJON';
 ```
+
+- **`ARKIV`** — The archived (unredacted) version.
+- **`SLADDET`** — The redacted version.
+- **`FULLVERSJON`** — The full version, which also contains question texts, help texts and unanswered questions from the application dialog.
 
 ### `Skjerming`
 
@@ -226,7 +241,8 @@ The selected mode and custom scale value are persisted to `localStorage` and app
 - **Lazy loading**: Sections load progressively as the user scrolls.
 - **Page virtualization**: PDF pages outside the viewport are replaced with lightweight placeholders to free canvas memory. Pages within one viewport-height above and below the visible area are pre-rendered for smooth scrolling.
 - **Multi-document**: Render multiple files in sequence with a document counter.
-- **Redacted/unredacted toggling**: When a file has two variants (`ARKIV` and `SLADDET`), a toggle button in the per-document header lets the user switch between the redacted and unredacted version. The preference is persisted to `sessionStorage`. When the user lacks access to the unredacted variant, a non-interactive "Sladdet" tag is shown instead.
+- **Variant selection**: When a file has multiple accessible variants (`SLADDET`, `ARKIV` and/or `FULLVERSJON`), an icon-only toggle group (with tooltips) in the per-document header lets the user choose between "Sladdet", "Usladdet" and "Fullversjon". The redacted variant is shown by default when available. If the selected variant is missing or inaccessible, the viewer falls back to `ARKIV`, then `FULLVERSJON`, then `SLADDET`. The selection is persisted to `sessionStorage`. When only one variant is accessible, a non-interactive "Sladdet" or "Fullversjon" tag is shown instead.
+- **File size**: When the variant's `filstoerrelse` is provided, the download button tooltip shows the formatted file size (e.g. "Last ned (1,5 kB)").
 - **Shielding tags**: Variants with a `skjerming` value display a colored tag in the document header — "Begrenset" (warning) for `POL` or "Slettes" (danger) for `FEIL`.
 - **Password-protected PDFs**: Automatically try common passwords; prompt user for manual entry. Successfully used passwords are remembered in `localStorage` per file URL.
 - **Keyboard navigation**: Cmd/Ctrl+Arrow Up/Down to navigate between pages; Cmd/Ctrl+Shift+Arrow Up/Down to navigate between documents.

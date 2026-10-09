@@ -15,10 +15,11 @@ import { DownloadButton } from '@/download-button';
 import type { DocumentNavigation } from '@/file-header/page-navigation';
 import { PageNavigation } from '@/file-header/page-navigation';
 import { PrintButton } from '@/file-header/print-button';
-import { RedactedSwitch } from '@/file-header/redacted-switch';
 import { ReloadButton } from '@/file-header/reload-button';
 import { SkjermingTag } from '@/file-header/skjerming-tag';
+import { VariantSelector } from '@/file-header/variant-selector';
 import { type ResolvedVariant, resolveVariantUrl } from '@/file-header/variant-types';
+import { withFileSize } from '@/lib/format-file-size';
 import { NewTabButton } from '@/new-tab-button';
 import type { FileType } from '@/types';
 
@@ -83,6 +84,7 @@ export const FileHeader = ({
   const fileTypeConfig = variant !== undefined ? FILE_TYPE_CONFIG[variant.filtype] : undefined;
   const resolvedNewTabUrl = resolveVariantUrl(newTabUrl, variant);
   const resolvedDownloadUrl = resolveVariantUrl(downloadUrl, variant);
+  const downloadTooltip = withFileSize('Last ned', variant?.filstoerrelse);
 
   return (
     <Box
@@ -136,7 +138,7 @@ export const FileHeader = ({
         ) : null}
 
         {resolvedDownloadUrl !== undefined ? (
-          <DownloadButton url={resolvedDownloadUrl} filename={title} tooltip="Last ned" />
+          <DownloadButton url={resolvedDownloadUrl} filename={title} tooltip={downloadTooltip} />
         ) : null}
 
         {onPrint !== undefined ? <PrintButton onPrint={onPrint} tooltip="Skriv ut dokument" /> : null}
@@ -144,14 +146,7 @@ export const FileHeader = ({
 
       <HStack gap="space-4" align="center" wrap={false}>
         {variant !== undefined ? <SkjermingTag hasAccess={variant.hasAccess} skjerming={variant.skjerming} /> : null}
-        {variant !== undefined ? (
-          <RedactedSwitch
-            hasRedactedDocuments={variant.hasRedactedDocuments}
-            hasAccessToArchivedDocuments={variant.hasAccessToArchivedDocuments}
-            showRedacted={variant.showRedacted}
-            setShowRedacted={variant.setShowRedacted}
-          />
-        ) : null}
+        {variant !== undefined ? <VariantSelector variant={variant} /> : null}
 
         <Tag
           data-color="brand-blue"

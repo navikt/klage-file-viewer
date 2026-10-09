@@ -2,7 +2,7 @@ import {
   assertPdfContainsText,
   assertPdfDoesNotContainText,
   DOCUMENT_WITH_VARIANTS_URL,
-  getFileToolbars,
+  getVariantSelector,
   waitForContent,
   waitForPdfRendered,
 } from '@e2e/helpers';
@@ -17,57 +17,52 @@ test.describe('KlageFileViewer', () => {
       await waitForPdfRendered(page);
     });
 
-    test('shows redacted version by default', async ({ page }) => {
-      const toolbar = getFileToolbars(page).first();
+    test('shows only Sladdet and Usladdet in the variant selector', async ({ page }) => {
+      const radios = getVariantSelector(page).getByRole('radio');
 
-      // The toggle should show "Sladdet" by default (showing redacted/SLADDET version)
-      await expect(toolbar.getByText('Sladdet')).toBeVisible();
+      await expect(radios).toHaveCount(2);
+      await expect(radios.nth(0)).toHaveAccessibleName('Sladdet');
+      await expect(radios.nth(1)).toHaveAccessibleName('Usladdet');
+    });
+
+    test('shows redacted version by default', async ({ page }) => {
+      const selector = getVariantSelector(page);
+
+      await expect(selector.getByRole('radio', { name: 'Sladdet', exact: true })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
 
       // "hunter2" is only present in the unredacted (ARKIV) version
       await assertPdfDoesNotContainText(page, 'hunter2');
     });
 
-    test('switches to unredacted version when unchecking Sladdet', async ({ page }) => {
-      const toolbar = getFileToolbars(page).first();
+    test('switches to unredacted version when selecting Usladdet', async ({ page }) => {
+      const selector = getVariantSelector(page);
+      const usladdet = selector.getByRole('radio', { name: 'Usladdet' });
 
-      // Verify we start with the redacted version — "hunter2" should not be found
       await assertPdfDoesNotContainText(page, 'hunter2');
 
-      // The toggle should show "Sladdet" by default
-      const toggle = toolbar.getByText('Sladdet');
-      await expect(toggle).toBeVisible();
-
-      // Click to switch to unredacted (ARKIV) version
-      await toggle.click();
-
-      // The toggle should now show "Usladdet"
-      await expect(toolbar.getByText('Usladdet')).toBeVisible();
-
-      // Wait for re-render after variant switch
+      await usladdet.click();
+      await expect(usladdet).toHaveAttribute('aria-checked', 'true');
       await waitForPdfRendered(page);
 
       // "hunter2" should now be found via search — it's only in ARKIV
       await assertPdfContainsText(page, 'hunter2');
     });
 
-    test('switches back to redacted version when checking Sladdet', async ({ page }) => {
-      const toolbar = getFileToolbars(page).first();
+    test('switches back to redacted version when selecting Sladdet', async ({ page }) => {
+      const selector = getVariantSelector(page);
+      const sladdet = selector.getByRole('radio', { name: 'Sladdet', exact: true });
 
-      // Click to switch to unredacted first
-      await toolbar.getByText('Sladdet').click();
+      await selector.getByRole('radio', { name: 'Usladdet' }).click();
       await waitForPdfRendered(page);
       await assertPdfContainsText(page, 'hunter2');
 
-      // Click again to switch back to redacted
-      await toolbar.getByText('Usladdet').click();
-
-      // The toggle should show "Sladdet" again
-      await expect(toolbar.getByText('Sladdet')).toBeVisible();
-
-      // Wait for re-render after variant switch
+      await sladdet.click();
+      await expect(sladdet).toHaveAttribute('aria-checked', 'true');
       await waitForPdfRendered(page);
 
-      // "hunter2" should no longer be found
       await assertPdfDoesNotContainText(page, 'hunter2');
     });
   });

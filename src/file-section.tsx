@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { DocumentNavigation } from '@/file-header/file-header';
-import type { ResolvedVariant } from '@/file-header/variant-types';
+import { resolveVariantData } from '@/file-header/resolve-variant';
 import { ExcelSection } from '@/files/excel/excel-section';
 import { ImageSection } from '@/files/image/image-section';
 import { JsonSection } from '@/files/json/json-section';
@@ -8,8 +8,8 @@ import type { PdfSectionSearchInfo } from '@/files/pdf/loaded-pdf-section';
 import { PdfSection } from '@/files/pdf/pdf-section';
 import type { HighlightRect } from '@/files/pdf/search/types';
 import { UnsupportedSection } from '@/files/unsupported/unsupported-section';
-import { useRedacted } from '@/hooks/use-redacted';
-import type { FileEntry, FileVariant, FileVariants } from '@/types';
+import { useVariantFormat } from '@/hooks/use-variant-format';
+import type { FileEntry } from '@/types';
 
 interface FileSectionProps {
   file: FileEntry;
@@ -39,11 +39,11 @@ export const FileSection = ({
   currentMatchIndex,
   documentNavigation,
 }: FileSectionProps) => {
-  const { showRedacted, setShowRedacted } = useRedacted(file.url, file.variants);
+  const [selectedFormat, selectFormat] = useVariantFormat(file.url);
 
   const variantData = useMemo(
-    () => resolveVariantData(file.variants, showRedacted, setShowRedacted),
-    [file.variants, showRedacted, setShowRedacted],
+    () => resolveVariantData(file.variants, selectedFormat, selectFormat),
+    [file.variants, selectedFormat, selectFormat],
   );
 
   const resolvedFile = useMemo<FileEntry>(() => {
@@ -119,82 +119,4 @@ export const FileSection = ({
         />
       );
   }
-};
-
-/** Collapse the {@link FileVariants} union into a single active variant with redacted-switch state. */
-const resolveVariantData = (
-  variants: FileVariants,
-  showRedacted: boolean,
-  setShowRedacted: (showRedacted: boolean) => void,
-): ResolvedVariant => {
-  if (typeof variants === 'string') {
-    return {
-      filtype: variants,
-      hasAccess: true,
-      format: 'ARKIV',
-      skjerming: null,
-      hasExplicitFormat: false,
-      hasRedactedDocuments: false,
-      hasAccessToArchivedDocuments: false,
-      showRedacted,
-      setShowRedacted,
-    };
-  }
-
-  if (!Array.isArray(variants)) {
-    return {
-      ...variants,
-      hasExplicitFormat: true,
-      hasRedactedDocuments: variants.format === 'SLADDET',
-      hasAccessToArchivedDocuments: false,
-      showRedacted,
-      setShowRedacted,
-    };
-  }
-
-  const redactedVariant = variants.find(({ format }) => format === 'SLADDET');
-  const archiveVariant = variants.find(({ format }) => format === 'ARKIV');
-  const hasAccessToArchivedDocuments = archiveVariant?.hasAccess ?? false;
-  const hasAccessToRedactedDocuments = redactedVariant?.hasAccess ?? false;
-  // Hide the switch when only the unredacted variant is accessible.
-  const hasRedactedDocuments =
-    redactedVariant !== undefined && (hasAccessToRedactedDocuments || !hasAccessToArchivedDocuments);
-
-  const active = getActiveVariant(variants, showRedacted, redactedVariant, archiveVariant);
-
-  return {
-    ...active,
-    hasExplicitFormat: true,
-    hasRedactedDocuments,
-    hasAccessToArchivedDocuments,
-    showRedacted,
-    setShowRedacted,
-  };
-};
-
-/** Pick the active variant, preferring variants the user has access to. */
-const getActiveVariant = (
-  variants: [FileVariant, FileVariant],
-  showRedacted: boolean,
-  redactedVariant: FileVariant | undefined,
-  archiveVariant: FileVariant | undefined,
-): FileVariant => {
-  if (showRedacted && redactedVariant?.hasAccess === true) {
-    return redactedVariant;
-  }
-
-  if (archiveVariant?.hasAccess === true) {
-    return archiveVariant;
-  }
-
-  if (redactedVariant?.hasAccess === true) {
-    return redactedVariant;
-  }
-
-  // No accessible variant: respect the user's preference.
-  if (showRedacted && redactedVariant !== undefined) {
-    return redactedVariant;
-  }
-
-  return archiveVariant ?? redactedVariant ?? variants[0];
 };

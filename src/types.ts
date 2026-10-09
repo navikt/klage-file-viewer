@@ -1,6 +1,6 @@
 export type FileType = 'PDF' | 'JPEG' | 'PNG' | 'TIFF' | 'XLSX' | 'JSON' | 'XML' | 'AXML' | 'DXML' | 'RTF';
 
-export type VariantFormat = 'ARKIV' | 'SLADDET';
+export type VariantFormat = 'ARKIV' | 'SLADDET' | 'FULLVERSJON';
 
 export type Skjerming = 'POL' | 'FEIL';
 
@@ -8,10 +8,16 @@ export interface FileVariant {
   filtype: FileType;
   hasAccess: boolean;
   format: VariantFormat;
+  /** File size in bytes. */
+  filstoerrelse?: number;
   skjerming: Skjerming | null;
 }
 
-export type FileVariants = FileVariant | [FileVariant, FileVariant] | FileType;
+export type FileVariants =
+  | FileVariant
+  | [FileVariant, FileVariant]
+  | [FileVariant, FileVariant, FileVariant]
+  | FileType;
 
 export interface FileEntry {
   variants: FileVariants;

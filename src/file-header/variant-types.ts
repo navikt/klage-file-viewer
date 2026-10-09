@@ -1,16 +1,20 @@
 import type { FileType, Skjerming, VariantFormat } from '@/types';
 
+/** All variant formats, in display order. */
+export const VARIANT_FORMATS: readonly VariantFormat[] = ['SLADDET', 'ARKIV', 'FULLVERSJON'];
+
 export interface ResolvedVariant {
   filtype: FileType;
   format: VariantFormat;
   hasAccess: boolean;
   skjerming: Skjerming | null;
+  /** File size in bytes, or `undefined` when unknown. */
+  filstoerrelse?: number;
   /** Whether the original variants included explicit format information (not just a plain FileType string). */
   hasExplicitFormat: boolean;
-  hasRedactedDocuments: boolean;
-  hasAccessToArchivedDocuments: boolean;
-  showRedacted: boolean;
-  setShowRedacted: (showRedacted: boolean) => void;
+  /** Accessible variant formats the user can choose between, in display order. */
+  selectableFormats: VariantFormat[];
+  selectFormat: (format: VariantFormat) => void;
 }
 
 /** Append `format=…` to a base URL when the variant has explicit format information. */

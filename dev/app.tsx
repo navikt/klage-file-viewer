@@ -60,8 +60,8 @@ const App = () => {
           <Box padding="space-6" style={{ display: 'flex', justifyContent: 'center' }}>
             <Alert variant="info" size="small">
               Ingen filer funnet. Legg PDF-, Excel-, bilde- eller JSON-filer i <code>dev/public/</code>, eller opprett
-              mapper med <code>ARKIV.pdf</code> og/eller <code>SLADDET.pdf</code> for dokumentvarianter. Last siden på
-              nytt.
+              mapper med <code>ARKIV.pdf</code>, <code>SLADDET.pdf</code> og/eller <code>FULLVERSJON.pdf</code> for
+              dokumentvarianter. Last siden på nytt.
             </Alert>
           </Box>
         ) : (

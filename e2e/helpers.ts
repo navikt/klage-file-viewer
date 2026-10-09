@@ -8,6 +8,9 @@ const FILE_TOOLBAR_NAME = /verktøylinje for/i;
 /** Locates all file toolbars (`<nav aria-label="Verktøylinje for …">`) within the viewer. */
 export const getFileToolbars = (page: Page): Locator =>
   page.locator(VIEWER_SELECTOR).getByRole('navigation', { name: FILE_TOOLBAR_NAME });
+/** Locates the variant selector (`ToggleGroup`) in the first file toolbar. */
+export const getVariantSelector = (page: Page): Locator =>
+  getFileToolbars(page).first().getByRole('radiogroup', { name: 'Velg variant' });
 export const PAGE_SELECTOR = '[data-klage-file-viewer-page-number]';
 export const SECTION_SELECTOR = '[data-klage-file-viewer-section-index]';
 
@@ -22,6 +25,9 @@ export const DOCUMENT_COUNT_CAPTURE_REGEX = /Dokument (\d+) av (\d+)/;
 export const INITIAL_SCALE = '100';
 const MATCH_COUNTER_REGEX = /^\d+ \/ \d+$/;
 export const DOCUMENT_WITH_VARIANTS_URL = '/?files=doc%3AVedtak%20om%20tilbakekreving';
+export const DOCUMENT_WITH_FULLVERSJON_URL = '/?files=doc%3AVedtak%20om%20tilbakekreving%20med%20fullversjon';
+export const DOCUMENT_ONLY_SLADDET_URL = '/?files=doc%3AVedtak%20om%20tilbakekreving%20kun%20sladdet';
+export const DOCUMENT_ONLY_FULLVERSJON_URL = '/?files=doc%3AVedtak%20om%20tilbakekreving%20kun%20fullversjon';
 export const SINGLE_PDF_URL = '/?files=file%3AKlagevedtak.pdf';
 
 /**
