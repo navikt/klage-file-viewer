@@ -89,15 +89,25 @@ describe('resolveVariantData', () => {
     expect(result.selectableFormats).toEqual(['ARKIV']);
   });
 
-  it('falls back to FULLVERSJON when ARKIV is selected but inaccessible', () => {
+  it('falls back to SLADDET when ARKIV is selected but inaccessible', () => {
     const result = resolve([variant('ARKIV', false), SLADDET, FULLVERSJON], 'ARKIV');
 
-    expect(result.format).toBe('FULLVERSJON');
+    expect(result.format).toBe('SLADDET');
     expect(result.selectableFormats).toEqual(['SLADDET', 'FULLVERSJON']);
   });
 
-  it('falls back to FULLVERSJON when ARKIV is selected but missing', () => {
-    expect(resolve([SLADDET, FULLVERSJON], 'ARKIV').format).toBe('FULLVERSJON');
+  it('falls back to SLADDET when ARKIV is selected but missing', () => {
+    expect(resolve([SLADDET, FULLVERSJON], 'ARKIV').format).toBe('SLADDET');
+  });
+
+  it('falls back to SLADDET when FULLVERSJON is selected but inaccessible', () => {
+    expect(resolve([ARKIV, SLADDET, variant('FULLVERSJON', false)], 'FULLVERSJON').format).toBe('SLADDET');
+  });
+
+  it('falls back to FULLVERSJON when it is the only accessible variant', () => {
+    const variants: FileVariants = [variant('ARKIV', false), variant('SLADDET', false), FULLVERSJON];
+
+    expect(resolve(variants, 'SLADDET').format).toBe('FULLVERSJON');
   });
 
   it('falls back to SLADDET when unredacted variants are inaccessible', () => {

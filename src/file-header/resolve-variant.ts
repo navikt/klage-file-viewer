@@ -2,7 +2,7 @@ import { type ResolvedVariant, VARIANT_FORMATS } from '@/file-header/variant-typ
 import type { FileVariant, FileVariants, VariantFormat } from '@/types';
 
 /** Formats to fall back to, in order, when the selected format is missing or inaccessible. */
-const FALLBACK_ORDER: VariantFormat[] = ['ARKIV', 'FULLVERSJON', 'SLADDET'];
+const FALLBACK_ORDER: VariantFormat[] = ['SLADDET', 'ARKIV', 'FULLVERSJON'];
 
 /** Collapse the {@link FileVariants} union into a single active variant. */
 export const resolveVariantData = (
