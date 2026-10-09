@@ -9,7 +9,7 @@ import { PdfSection } from '@/files/pdf/pdf-section';
 import type { HighlightRect } from '@/files/pdf/search/types';
 import { UnsupportedSection } from '@/files/unsupported/unsupported-section';
 import { useRedacted } from '@/hooks/use-redacted';
-import type { FileEntry, FileVariants } from '@/types';
+import type { FileEntry, FileVariant, FileVariants } from '@/types';
 
 interface FileSectionProps {
   file: FileEntry;
@@ -154,13 +154,13 @@ const resolveVariantData = (
 
   const redactedVariant = variants.find(({ format }) => format === 'SLADDET');
   const archiveVariant = variants.find(({ format }) => format === 'ARKIV');
-  const hasRedactedDocuments = redactedVariant !== undefined;
   const hasAccessToArchivedDocuments = archiveVariant?.hasAccess ?? false;
+  const hasAccessToRedactedDocuments = redactedVariant?.hasAccess ?? false;
+  // Hide the switch when only the unredacted variant is accessible.
+  const hasRedactedDocuments =
+    redactedVariant !== undefined && (hasAccessToRedactedDocuments || !hasAccessToArchivedDocuments);
 
-  const active =
-    showRedacted && hasRedactedDocuments
-      ? (redactedVariant ?? archiveVariant ?? variants[0])
-      : (archiveVariant ?? redactedVariant ?? variants[0]);
+  const active = getActiveVariant(variants, showRedacted, redactedVariant, archiveVariant);
 
   return {
     ...active,
@@ -170,4 +170,31 @@ const resolveVariantData = (
     showRedacted,
     setShowRedacted,
   };
+};
+
+/** Pick the active variant, preferring variants the user has access to. */
+const getActiveVariant = (
+  variants: [FileVariant, FileVariant],
+  showRedacted: boolean,
+  redactedVariant: FileVariant | undefined,
+  archiveVariant: FileVariant | undefined,
+): FileVariant => {
+  if (showRedacted && redactedVariant?.hasAccess === true) {
+    return redactedVariant;
+  }
+
+  if (archiveVariant?.hasAccess === true) {
+    return archiveVariant;
+  }
+
+  if (redactedVariant?.hasAccess === true) {
+    return redactedVariant;
+  }
+
+  // No accessible variant: respect the user's preference.
+  if (showRedacted && redactedVariant !== undefined) {
+    return redactedVariant;
+  }
+
+  return archiveVariant ?? redactedVariant ?? variants[0];
 };
