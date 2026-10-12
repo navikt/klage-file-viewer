@@ -6,7 +6,7 @@ import type { VariantFormat } from '@/types';
 
 const VARIANT_ITEMS: Record<VariantFormat, { label: string; icon: ReactElement }> = {
   SLADDET: { label: 'Sladdet', icon: <PasswordHiddenIcon aria-hidden className="text-xl" /> },
-  ARKIV: { label: 'Usladdet', icon: <FileTextIcon aria-hidden className="text-xl" /> },
+  ARKIV: { label: 'Standard', icon: <FileTextIcon aria-hidden className="text-xl" /> },
   FULLVERSJON: { label: 'Fullversjon', icon: <FilePlusIcon aria-hidden className="text-xl" /> },
 };
 

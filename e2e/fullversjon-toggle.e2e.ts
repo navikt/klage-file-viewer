@@ -27,7 +27,7 @@ test.describe('KlageFileViewer', () => {
 
       await expect(radios).toHaveCount(3);
       await expect(radios.nth(0)).toHaveAccessibleName('Sladdet');
-      await expect(radios.nth(1)).toHaveAccessibleName('Usladdet');
+      await expect(radios.nth(1)).toHaveAccessibleName('Standard');
       await expect(radios.nth(2)).toHaveAccessibleName('Fullversjon');
       await expect(selector.getByRole('radio', { name: 'Sladdet', exact: true })).toHaveAttribute(
         'aria-checked',
@@ -38,7 +38,7 @@ test.describe('KlageFileViewer', () => {
     test('switches from redacted to fullversjon and back to arkiv', async ({ page }) => {
       const selector = getVariantSelector(page);
       const fullversjon = selector.getByRole('radio', { name: 'Fullversjon' });
-      const usladdet = selector.getByRole('radio', { name: 'Usladdet' });
+      const standard = selector.getByRole('radio', { name: 'Standard' });
 
       await assertPdfDoesNotContainText(page, 'fullversjonen');
 
@@ -47,8 +47,8 @@ test.describe('KlageFileViewer', () => {
       await waitForPdfRendered(page);
       await assertPdfContainsText(page, 'fullversjonen');
 
-      await usladdet.click();
-      await expect(usladdet).toHaveAttribute('aria-checked', 'true');
+      await standard.click();
+      await expect(standard).toHaveAttribute('aria-checked', 'true');
       await expect(fullversjon).toHaveAttribute('aria-checked', 'false');
       await waitForPdfRendered(page);
       await assertPdfContainsText(page, 'hunter2');
