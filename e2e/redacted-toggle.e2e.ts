@@ -17,12 +17,12 @@ test.describe('KlageFileViewer', () => {
       await waitForPdfRendered(page);
     });
 
-    test('shows only Sladdet and Usladdet in the variant selector', async ({ page }) => {
+    test('shows only Sladdet and Standard in the variant selector', async ({ page }) => {
       const radios = getVariantSelector(page).getByRole('radio');
 
       await expect(radios).toHaveCount(2);
       await expect(radios.nth(0)).toHaveAccessibleName('Sladdet');
-      await expect(radios.nth(1)).toHaveAccessibleName('Usladdet');
+      await expect(radios.nth(1)).toHaveAccessibleName('Standard');
     });
 
     test('shows redacted version by default', async ({ page }) => {
@@ -37,14 +37,14 @@ test.describe('KlageFileViewer', () => {
       await assertPdfDoesNotContainText(page, 'hunter2');
     });
 
-    test('switches to unredacted version when selecting Usladdet', async ({ page }) => {
+    test('switches to unredacted version when selecting Standard', async ({ page }) => {
       const selector = getVariantSelector(page);
-      const usladdet = selector.getByRole('radio', { name: 'Usladdet' });
+      const standard = selector.getByRole('radio', { name: 'Standard' });
 
       await assertPdfDoesNotContainText(page, 'hunter2');
 
-      await usladdet.click();
-      await expect(usladdet).toHaveAttribute('aria-checked', 'true');
+      await standard.click();
+      await expect(standard).toHaveAttribute('aria-checked', 'true');
       await waitForPdfRendered(page);
 
       // "hunter2" should now be found via search — it's only in ARKIV
@@ -55,7 +55,7 @@ test.describe('KlageFileViewer', () => {
       const selector = getVariantSelector(page);
       const sladdet = selector.getByRole('radio', { name: 'Sladdet', exact: true });
 
-      await selector.getByRole('radio', { name: 'Usladdet' }).click();
+      await selector.getByRole('radio', { name: 'Standard' }).click();
       await waitForPdfRendered(page);
       await assertPdfContainsText(page, 'hunter2');
 
