@@ -11,8 +11,13 @@ export const useScreenSize = () => {
     };
 
     window.addEventListener('resize', handleResize);
+    // Background tabs report a size of 0 until they are shown.
+    document.addEventListener('visibilitychange', handleResize);
 
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      document.removeEventListener('visibilitychange', handleResize);
+    };
   }, []);
 
   return useMemo(() => ({ width, height }), [width, height]);

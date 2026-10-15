@@ -107,7 +107,8 @@ interface PdfContentProps {
 const PdfContent = ({ title, customScale = 100, scaleMode }: PdfContentProps) => {
   const screen = useScreenSize();
 
-  const pageCount = Math.ceil(screen.height / (PDF_PAGE_HEIGHT / (100 / MIN_SCALE)));
+  // Background tabs in Chromium report a window height of 0, so always render at least one page.
+  const pageCount = Math.max(1, Math.ceil(screen.height / (PDF_PAGE_HEIGHT / (100 / MIN_SCALE))));
   const totalPageGap = (pageCount - 1) * PAGE_GAP;
   const totalPdfHeight = PDF_PAGE_HEIGHT * pageCount + totalPageGap;
 
@@ -183,7 +184,7 @@ interface PagesProps {
 }
 
 const Pages = ({ pageCount }: PagesProps) =>
-  new Array(pageCount - 1).fill(undefined).map((_, index) => <Page key={index.toString()} page={index + 1} />);
+  Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) => <Page key={index.toString()} page={index + 1} />);
 
 interface PageProps {
   page: number;
