@@ -1,8 +1,11 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
+import { type DocumentMarkerMode, MARKER_CURSOR } from '@/files/pdf/highlights/marker-style';
 import type { OcrWord } from '@/files/pdf/ocr/use-ocr-page';
 
 interface OcrLine {
   words: OcrWord[];
+  /** Index of the line's first word in the page's word list. */
+  startIndex: number;
   lineY: number;
   lineHeight: number;
   /** Left edge of the first word (0–1 fraction). */
@@ -16,10 +19,10 @@ const groupIntoLines = (words: OcrWord[]): OcrLine[] => {
   let current: OcrWord[] = [];
   let currentY = -1;
 
-  for (const word of words) {
+  for (const [index, word] of words.entries()) {
     if (word.lineY !== currentY) {
       if (current.length > 0) {
-        lines.push(buildLine(current));
+        lines.push(buildLine(current, index - current.length));
       }
 
       current = [word];
@@ -30,22 +33,23 @@ const groupIntoLines = (words: OcrWord[]): OcrLine[] => {
   }
 
   if (current.length > 0) {
-    lines.push(buildLine(current));
+    lines.push(buildLine(current, words.length - current.length));
   }
 
   return lines;
 };
 
-const buildLine = (words: OcrWord[]): OcrLine => {
+const buildLine = (words: OcrWord[], startIndex: number): OcrLine => {
   const first = words[0];
   const last = words[words.length - 1];
 
   if (first === undefined || last === undefined) {
-    return { words, lineY: 0, lineHeight: 0, left: 0, width: 0 };
+    return { words, startIndex, lineY: 0, lineHeight: 0, left: 0, width: 0 };
   }
 
   return {
     words,
+    startIndex,
     lineY: first.lineY,
     lineHeight: first.lineHeight,
     left: first.x,
@@ -55,8 +59,10 @@ const buildLine = (words: OcrWord[]): OcrLine => {
 
 interface OcrTextLayerProps {
   words: OcrWord[];
+  pageIndex: number;
   baseWidth: number;
   baseHeight: number;
+  markerMode: DocumentMarkerMode;
 }
 
 /**
@@ -66,7 +72,7 @@ interface OcrTextLayerProps {
  * copying. A post-render layout effect measures each line's natural width and
  * applies scaleX to match the OCR bounding box.
  */
-export const OcrTextLayer = ({ words, baseWidth, baseHeight }: OcrTextLayerProps) => {
+export const OcrTextLayer = ({ words, pageIndex, baseWidth, baseHeight, markerMode }: OcrTextLayerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const lines = useMemo(() => groupIntoLines(words), [words]);
 
@@ -104,7 +110,12 @@ export const OcrTextLayer = ({ words, baseWidth, baseHeight }: OcrTextLayerProps
   });
 
   return (
-    <div ref={containerRef} className="absolute inset-0 z-3 select-text" style={{ overflow: 'hidden' }}>
+    <div
+      ref={containerRef}
+      data-ocr-page-index={pageIndex}
+      className={`absolute inset-0 z-3 ${markerMode === 'unavailable' ? 'select-none' : 'select-text'}`}
+      style={{ overflow: 'hidden', cursor: markerMode === 'on' ? MARKER_CURSOR : undefined }}
+    >
       {lines.map((line, li) => {
         const top = line.lineY * baseHeight;
         const left = line.left * baseWidth;
@@ -127,11 +138,12 @@ export const OcrTextLayer = ({ words, baseWidth, baseHeight }: OcrTextLayerProps
               whiteSpace: 'nowrap',
               lineHeight: 1,
               transformOrigin: 'left top',
+              cursor: markerMode === 'unavailable' ? 'not-allowed' : undefined,
             }}
           >
             {line.words.map((word, wi) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: OCR words are static once computed and never reorder
-              <span key={wi}>
+              <span key={wi} data-ocr-word-index={line.startIndex + wi}>
                 {word.text}
                 {word.endOfLine ? '\n' : ' '}
               </span>

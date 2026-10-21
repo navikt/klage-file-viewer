@@ -1,6 +1,6 @@
 {
   "name": "@navikt/klage-file-viewer",
-  "version": "2.1.7",
+  "version": "2.2.0",
   "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
@@ -10,6 +10,14 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./highlights": {
+      "import": "./dist/highlights.js",
+      "types": "./dist/highlights.d.ts"
+    },
+    "./highlight-storage": {
+      "import": "./dist/highlight-storage.js",
+      "types": "./dist/highlight-storage.d.ts"
     },
     "./styles.css": "./dist/styles.css"
   },
@@ -31,8 +39,8 @@
   },
   "peerDependencies": {
     "@navikt/aksel-icons": "^8.0.0",
-    "@navikt/ds-css": "^8.0.0",
-    "@navikt/ds-react": "^8.0.0",
+    "@navikt/ds-css": "^8.18.0",
+    "@navikt/ds-react": "^8.18.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "@opentelemetry/api": "^1.0.0"

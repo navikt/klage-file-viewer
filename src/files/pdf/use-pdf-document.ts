@@ -173,7 +173,9 @@ export const usePdfDocument = (
 ): UsePdfDocumentResult => {
   const { commonPasswords, fileUrl } = options;
 
-  const [doc, setDoc] = useState<PdfDocumentObject | null>(null);
+  // Paired with its data, so a document is never shown with data it was not opened from.
+  const [opened, setOpened] = useState<{ doc: PdfDocumentObject; source: Blob } | null>(null);
+  const doc = opened !== null && opened.source === data ? opened.doc : null;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [passwordState, setPasswordState] = useState<PasswordState>({ status: PasswordStatus.NONE });
@@ -191,7 +193,7 @@ export const usePdfDocument = (
 
     const handleSuccess = (openedDoc: PdfDocumentObject, password: string | null) => {
       docRef.current = openedDoc;
-      setDoc(openedDoc);
+      setOpened({ doc: openedDoc, source: data });
       setUsedPassword(password);
       setPasswordState({ status: PasswordStatus.NONE });
       setLoading(false);
@@ -262,7 +264,7 @@ export const usePdfDocument = (
       if (docRef.current !== null) {
         const currentDoc = docRef.current;
         docRef.current = null;
-        setDoc(null);
+        setOpened(null);
         closeDocument(engine, currentDoc);
       }
     };
@@ -270,7 +272,7 @@ export const usePdfDocument = (
 
   const submitPassword = useCallback(
     async (password: string) => {
-      if (engine === null || dataRef.current === null) {
+      if (engine === null || data === null || dataRef.current === null) {
         return;
       }
 
@@ -281,7 +283,7 @@ export const usePdfDocument = (
 
         storePassword(fileUrl, password);
         docRef.current = openedDoc;
-        setDoc(openedDoc);
+        setOpened({ doc: openedDoc, source: data });
         setUsedPassword(password);
         setPasswordState({ status: PasswordStatus.NONE });
         setLoading(false);
@@ -295,7 +297,7 @@ export const usePdfDocument = (
         setLoading(false);
       }
     },
-    [engine, fileUrl],
+    [engine, data, fileUrl],
   );
 
   return { doc, loading, error, passwordState, usedPassword, autoTryingPasswords, submitPassword };

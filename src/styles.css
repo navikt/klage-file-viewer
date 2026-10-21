@@ -30,5 +30,11 @@
       /* biome-ignore lint/complexity/noImportantStyles: Must not be overridden by consumer */
       color: transparent !important;
     }
+
+    [data-klage-file-viewer-marker-hover],
+    [data-klage-file-viewer-marker-hover] * {
+      /* biome-ignore lint/complexity/noImportantStyles: Must win over the inline text/marker cursors of the layers below */
+      cursor: pointer !important;
+    }
   }
 }

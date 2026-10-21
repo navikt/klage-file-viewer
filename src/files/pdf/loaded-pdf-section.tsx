@@ -6,6 +6,11 @@ import { type DocumentNavigation, FileHeader } from '@/file-header/file-header';
 import type { ResolvedVariant } from '@/file-header/variant-types';
 import { FileErrorLayout } from '@/files/file-error-layout';
 import { useFlattenedFormDocument } from '@/files/pdf/forms/use-flattened-form-document';
+import { NO_HIGHLIGHTS } from '@/files/pdf/highlights/highlight-store';
+import { type DocumentMarkerMode, getMarkerUnavailableClassName } from '@/files/pdf/highlights/marker-style';
+import { selectionToHighlights } from '@/files/pdf/highlights/selection-to-highlights';
+import { usePersistedHighlights } from '@/files/pdf/highlights/use-persisted-highlights';
+import type { OcrWord } from '@/files/pdf/ocr/use-ocr-page';
 import { PdfPage } from '@/files/pdf/page/pdf-page';
 import { usePersistedRotations } from '@/files/pdf/page/use-persisted-rotations';
 import { useVisiblePages } from '@/files/pdf/page/use-visible-pages';
@@ -22,6 +27,7 @@ import { useRegisterRefresh } from '@/hooks/use-refresh-registry';
 import { useScrollToPage } from '@/hooks/use-scroll-to-page';
 import { getMostVisiblePage } from '@/lib/page-scroll';
 import { usePrint } from '@/lib/print-frame';
+import { useMarkerMode } from '@/marker-mode-context';
 import { useToolbarHeight } from '@/toolbar-height-context';
 import type { FileEntry } from '@/types';
 import { useFileData } from '@/use-file-data';
@@ -55,7 +61,7 @@ export const LoadedPdfSection = ({
   currentMatchIndex,
   documentNavigation,
 }: LoadedPdfSectionProps) => {
-  const { data, loading, fetching, error, refresh } = useFileData(file.url, file.query);
+  const { data, isCurrent, loading, fetching, error, refresh } = useFileData(file.url, file.query);
   const { engine, isLoading: engineLoading, error: engineError } = usePdfEngine();
   const { commonPasswords } = useFileViewerConfig();
   const toolbarHeight = useToolbarHeight();
@@ -114,6 +120,38 @@ export const LoadedPdfSection = ({
   // Ref for registered page DOM elements — used by both document-level pointer
   // tracking (cross-page selection) and page navigation (scroll-to-page).
   const pageElementsRef = useRef<Map<number, HTMLElement>>(new Map());
+
+  // Marker highlights belong to the shown variant, so they are left out while switching variants.
+  const { markerMode, registerOcrDocument } = useMarkerMode();
+  const {
+    highlightsByPage: markerHighlightsByPage,
+    addHighlights,
+    removeHighlight,
+  } = usePersistedHighlights(isCurrent ? file.highlightsId : undefined, file.query?.format);
+  const highlightable = file.highlightsId !== undefined;
+  const documentMarkerMode = getDocumentMarkerMode(markerMode, highlightable);
+  const ocrWordsRegistry = useRef<Map<number, OcrWord[]>>(new Map());
+
+  // In marker mode every finished PDF text selection becomes a highlight. Documents that cannot be highlighted keep no selection.
+  useEffect(() => {
+    if (documentMarkerMode === 'off' || isSelecting || selection === null || selection.ranges.length === 0) {
+      return;
+    }
+
+    if (documentMarkerMode === 'on') {
+      addHighlights(selectionToHighlights(selection, geometryRegistry.current));
+    }
+
+    clearSelection();
+  }, [documentMarkerMode, isSelecting, selection, geometryRegistry, addHighlights, clearSelection]);
+
+  useEffect(() => {
+    if (!highlightable) {
+      return;
+    }
+
+    return registerOcrDocument({ pageElementsRef, ocrWordsRegistry, addHighlights });
+  }, [highlightable, registerOcrDocument, addHighlights]);
 
   // Document-level pointer tracking for cross-page selection.
   // Uses pageElementsRef (populated by handleRegisterElement below) to
@@ -409,6 +447,7 @@ export const LoadedPdfSection = ({
         align="center"
         gap="space-16"
         width="100%"
+        className={getMarkerUnavailableClassName(documentMarkerMode === 'unavailable')}
         data-klage-file-viewer-document-pages={numPages}
       >
         {doc.pages.map((_page, pageIndex) => (
@@ -433,9 +472,21 @@ export const LoadedPdfSection = ({
             geometryRegistry={geometryRegistry}
             showPasswordOverlay={usedPassword !== null}
             onOcrDetected={handleOcrDetected}
+            markerHighlights={markerHighlightsByPage.get(pageIndex) ?? NO_HIGHLIGHTS}
+            markerMode={documentMarkerMode}
+            onRemoveHighlight={removeHighlight}
+            ocrWordsRegistry={ocrWordsRegistry}
           />
         ))}
       </VStack>
     </>
   );
+};
+
+const getDocumentMarkerMode = (markerMode: boolean, highlightable: boolean): DocumentMarkerMode => {
+  if (!markerMode) {
+    return 'off';
+  }
+
+  return highlightable ? 'on' : 'unavailable';
 };

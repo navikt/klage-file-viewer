@@ -98,20 +98,63 @@ export const startAsyncSpan = async <T>(
     return fn();
   }
 
-  return otel.tracer.startActiveSpan(name, {}, parentContext, async (span: Span) => {
-    if (traceName !== undefined) {
-      span.setAttribute('component.instance', traceName);
-    }
+  return otel.tracer.startActiveSpan(name, {}, parentContext, (span: Span) => runInSpan(otel, span, traceName, fn));
+};
 
-    try {
-      return await fn(span);
-    } catch (error) {
-      span.setStatus({ code: otel.ERROR });
-      span.recordException(error instanceof Error ? error : String(error));
+/**
+ * Start a span right away and run the callback in it synchronously, so its changes apply immediately
+ * and the requests it starts are part of the trace. The span ends when the returned promise settles.
+ *
+ * The callback runs without a span until `@opentelemetry/api` is resolved, or when it is not installed.
+ *
+ * @param name - The span name.
+ * @param traceName - Optional `component.instance` attribute value for differentiating multiple instances.
+ * @param fn - Async callback receiving the span (or `undefined` without OTel).
+ */
+export const startActionSpan = <T>(
+  name: string,
+  traceName: string | undefined,
+  fn: SpanCallback<Promise<T>>,
+): Promise<T> => {
+  const otel = cached;
 
-      throw error;
-    } finally {
-      span.end();
-    }
-  });
+  if (otel === null) {
+    return fn();
+  }
+
+  return otel.tracer.startActiveSpan(name, {}, otel.getActiveContext(), (span: Span) =>
+    runInSpan(otel, span, traceName, fn),
+  );
+};
+
+/** Mark a span as failed, for errors that are handled instead of thrown. */
+export const setSpanError = (span: Span | undefined, error: unknown): void => {
+  if (span === undefined || cached === null) {
+    return;
+  }
+
+  span.setStatus({ code: cached.ERROR });
+  span.recordException(error instanceof Error ? error : String(error));
+};
+
+const runInSpan = async <T>(
+  otel: OtelResolved,
+  span: Span,
+  traceName: string | undefined,
+  fn: SpanCallback<Promise<T>>,
+): Promise<T> => {
+  if (traceName !== undefined) {
+    span.setAttribute('component.instance', traceName);
+  }
+
+  try {
+    return await fn(span);
+  } catch (error) {
+    span.setStatus({ code: otel.ERROR });
+    span.recordException(error instanceof Error ? error : String(error));
+
+    throw error;
+  } finally {
+    span.end();
+  }
 };

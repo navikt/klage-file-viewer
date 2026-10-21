@@ -3,5 +3,9 @@ exact = true
 minimumReleaseAge = 259200
 ignoreScripts = true
 
+# Same as the dev build: serve Tesseract from the local server.
+[define]
+__TESSERACT_CDN_URL__ = "''"
+
 [test]
 preload = ["./src/test-preload.ts"]

@@ -1,11 +1,12 @@
 import { itemToFileEntry } from '@dev/file-items';
+import { createLocalStorageHighlightStorage } from '@dev/highlight-storage';
 import { Toolbar } from '@dev/toolbar';
 import { buildNewTabUrl } from '@dev/url-helpers';
 import { useFileSelection } from '@dev/use-file-selection';
 import { usePersistedStandalone } from '@dev/use-persisted-standalone';
 import { usePersistedTheme } from '@dev/use-persisted-theme';
 import { Alert, Box, Theme } from '@navikt/ds-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { KlageFileViewer } from '@/index';
 
 const PDFIUM_WASM_URL = `${window.location.origin}/pdfium.wasm`;
@@ -16,6 +17,7 @@ const App = () => {
   const { availableItems, selectedKeys, error, toggleItem } = useFileSelection();
   const [theme, toggleTheme] = usePersistedTheme();
   const [standalone, toggleStandalone] = usePersistedStandalone();
+  const [highlightStorage] = useState(createLocalStorageHighlightStorage);
 
   const files = availableItems.filter((i) => selectedKeys.has(i.key)).map(itemToFileEntry);
 
@@ -83,6 +85,7 @@ const App = () => {
               theme={theme}
               commonPasswords={COMMON_PASSWORDS}
               standalone={standalone}
+              highlightStorage={highlightStorage}
             />
           </div>
         )}

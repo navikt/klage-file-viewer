@@ -4,6 +4,8 @@ import { startAsyncSpan } from '@/telemetry';
 
 interface UseFileData {
   data: Blob | null;
+  /** `false` while `data` is from an earlier URL or query, e.g. while switching variants. */
+  isCurrent: boolean;
   loading: boolean;
   fetching: boolean;
   refresh: () => void;
@@ -13,7 +15,7 @@ interface UseFileData {
 export const useFileData = (url: string | undefined, query?: Record<string, string>): UseFileData => {
   const { onFetchError, traceName } = useFileViewerConfig();
   const [isFetching, setIsFetching] = useState(false);
-  const [data, setData] = useState<Blob | null>(null);
+  const [response, setResponse] = useState<FileResponse | null>(null);
   const [error, setError] = useState<string>();
   const abortControllerRef = useRef<AbortController | null>(null);
   const onFetchErrorRef = useRef(onFetchError);
@@ -62,7 +64,7 @@ export const useFileData = (url: string | undefined, query?: Record<string, stri
         if (response.ok) {
           const blob = await response.blob();
           span?.setAttribute('fetch.response_size', blob.size);
-          setData(blob);
+          setResponse({ data: blob, url: fetchUrl, query: fetchQuery });
           setIsFetching(false);
 
           return;
@@ -101,10 +103,24 @@ export const useFileData = (url: string | undefined, query?: Record<string, stri
 
   const refresh = useCallback(() => getData(url, query), [getData, url, query]);
 
+  const data = response?.data ?? null;
+  const isCurrent = response !== null && response.url === url && isSameQuery(response.query, query);
   const loading = isFetching && data === null;
   const fetching = isFetching;
 
-  return { data, loading, fetching, refresh, error };
+  return { data, isCurrent, loading, fetching, refresh, error };
+};
+
+interface FileResponse {
+  data: Blob;
+  url: string;
+  query: Record<string, string> | undefined;
+}
+
+const isSameQuery = (a: Record<string, string> | undefined, b: Record<string, string> | undefined): boolean => {
+  const aEntries = Object.entries(a ?? {});
+
+  return aEntries.length === Object.keys(b ?? {}).length && aEntries.every(([key, value]) => b?.[key] === value);
 };
 
 // `fetch` rejects with a `TypeError` for network-level failures. Its message is generic by design

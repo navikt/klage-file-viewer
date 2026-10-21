@@ -2,6 +2,7 @@ import { ChevronDownIcon, ChevronUpIcon, CogIcon, XMarkIcon } from '@navikt/akse
 import { Button, HStack, Tag, Tooltip } from '@navikt/ds-react';
 import { useState } from 'react';
 import { useFileViewerConfig } from '@/context';
+import { useHighlightingEnabled } from '@/files/pdf/highlights/highlight-store';
 import { PdfSearch } from '@/files/pdf/search/pdf-search';
 import type { SearchableDocument } from '@/files/pdf/search/search';
 import type { PageHighlights } from '@/files/pdf/search/types';
@@ -12,7 +13,9 @@ import { FitHeight } from '@/toolbar/fit-height';
 import { FitPage } from '@/toolbar/fit-page';
 import { FitToContent } from '@/toolbar/fit-to-content';
 import { FitWidth } from '@/toolbar/fit-width';
+import { HighlightsPanel } from '@/toolbar/highlights-panel';
 import { LinkWidthToScale } from '@/toolbar/link-width-to-scale';
+import { MarkerModeToggle } from '@/toolbar/marker-mode-toggle';
 import { Scale } from '@/toolbar/scale';
 import { SettingsModal } from '@/toolbar/settings-modal';
 
@@ -39,6 +42,7 @@ interface ToolbarProps {
   onNextDocument?: () => void;
   previousDocumentDisabled?: boolean;
   nextDocumentDisabled?: boolean;
+  onNavigateToHighlight: (sectionIndex: number, highlightId: string) => void;
 }
 
 export const Toolbar = ({
@@ -64,8 +68,10 @@ export const Toolbar = ({
   onNextDocument,
   previousDocumentDisabled,
   nextDocumentDisabled,
+  onNavigateToHighlight,
 }: ToolbarProps) => {
   const { standalone } = useFileViewerConfig();
+  const highlightingEnabled = useHighlightingEnabled();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   return (
@@ -110,6 +116,13 @@ export const Toolbar = ({
         <Separator />
 
         {newTabUrl !== null ? <NewTabButton url={newTabUrl} tooltip="Åpne alle i ny fane" /> : null}
+
+        {highlightingEnabled ? (
+          <>
+            <MarkerModeToggle />
+            <HighlightsPanel scrollContainerRef={scrollContainerRef} onNavigateToHighlight={onNavigateToHighlight} />
+          </>
+        ) : null}
 
         <PdfSearch
           isSearchOpen={isSearchOpen}

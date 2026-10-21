@@ -20,6 +20,7 @@ import { SkjermingTag } from '@/file-header/skjerming-tag';
 import { VariantSelector } from '@/file-header/variant-selector';
 import { type ResolvedVariant, resolveVariantUrl } from '@/file-header/variant-types';
 import { withFileSize } from '@/lib/format-file-size';
+import { useMarkerUnavailable } from '@/marker-mode-context';
 import { NewTabButton } from '@/new-tab-button';
 import type { FileType } from '@/types';
 
@@ -81,6 +82,7 @@ export const FileHeader = ({
   nextPageDisabled,
   documentNavigation,
 }: FileHeaderProps) => {
+  const markerUnavailable = useMarkerUnavailable();
   const fileTypeConfig = variant !== undefined ? FILE_TYPE_CONFIG[variant.filtype] : undefined;
   const resolvedNewTabUrl = resolveVariantUrl(newTabUrl, variant);
   const resolvedDownloadUrl = resolveVariantUrl(downloadUrl, variant);
@@ -129,6 +131,14 @@ export const FileHeader = ({
           >
             <Tag data-color="warning" variant="moderate" size="xsmall" className="shrink-0">
               OCR
+            </Tag>
+          </Tooltip>
+        ) : null}
+
+        {markerUnavailable ? (
+          <Tooltip content="Markeringspennen kan ikke brukes i dette dokumentet" maxChar={1000}>
+            <Tag data-color="neutral" variant="moderate" size="xsmall" className="shrink-0 whitespace-nowrap">
+              Kan ikke markeres
             </Tag>
           </Tooltip>
         ) : null}

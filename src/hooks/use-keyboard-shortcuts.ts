@@ -3,6 +3,7 @@ import { useScrollToPage } from '@/hooks/use-scroll-to-page';
 import { isMetaKey, Keys } from '@/lib/keys';
 import { getMostVisiblePage } from '@/lib/page-scroll';
 import { snapDown, snapUp } from '@/lib/snap';
+import { useMarkerMode } from '@/marker-mode-context';
 import { MAX_SCALE, MIN_SCALE, SCALE_STEP, SCROLL_STEP } from '@/scale/constants';
 import { useToolbarHeight } from '@/toolbar-height-context';
 
@@ -40,6 +41,7 @@ export const useKeyboardShortcuts = ({
 }: UseKeyboardShortcutsParams): UseKeyboardShortcutsResult => {
   const scrollToPage = useScrollToPage();
   const toolbarHeight = useToolbarHeight();
+  const { markerMode, exitMarkerMode } = useMarkerMode();
 
   const handleZoomIn = useCallback(() => {
     setScale((prev) => snapUp(prev, SCALE_STEP, MAX_SCALE));
@@ -102,6 +104,15 @@ export const useKeyboardShortcuts = ({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
+      if (event.key === Keys.Escape) {
+        if (markerMode && !event.defaultPrevented && !isEditableTarget(event.target) && !isInOpenLayer(event.target)) {
+          event.preventDefault();
+          exitMarkerMode();
+        }
+
+        return;
+      }
+
       if (!isMetaKey(event)) {
         return;
       }
@@ -130,7 +141,7 @@ export const useKeyboardShortcuts = ({
           return;
       }
     },
-    [handleZoomIn, handleZoomOut, onOpenSearch, handleArrowNavigation],
+    [handleZoomIn, handleZoomOut, onOpenSearch, handleArrowNavigation, markerMode, exitMarkerMode],
   );
 
   // Ctrl/Cmd + scroll wheel zoom
@@ -162,3 +173,12 @@ export const useKeyboardShortcuts = ({
 
   return { handleZoomIn, handleZoomOut, handleKeyDown };
 };
+
+const isEditableTarget = (target: EventTarget): boolean =>
+  target instanceof HTMLInputElement ||
+  target instanceof HTMLTextAreaElement ||
+  (target instanceof HTMLElement && target.isContentEditable);
+
+/** Escape closes open popovers and menus first, e.g. the highlight list. */
+const isInOpenLayer = (target: EventTarget): boolean =>
+  target instanceof Element && target.closest('.aksel-popover, [aria-expanded="true"]') !== null;

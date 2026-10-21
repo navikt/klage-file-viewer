@@ -6,9 +6,11 @@ import type { ResolvedVariant } from '@/file-header/variant-types';
 import { FileErrorLayout } from '@/files/file-error-layout';
 import { useRotation } from '@/files/image/use-rotation';
 import { PageElement } from '@/files/page-element';
+import { getMarkerUnavailableClassName } from '@/files/pdf/highlights/marker-style';
 import { PlaceholderWrapper } from '@/files/pdf/pdf-section-placeholder';
 import { useRegisterRefresh } from '@/hooks/use-refresh-registry';
 import { usePrint } from '@/lib/print-frame';
+import { useMarkerUnavailable } from '@/marker-mode-context';
 import { A4_WIDTH_PX } from '@/scale/constants';
 import type { FileEntry } from '@/types';
 import { useFileData } from '@/use-file-data';
@@ -50,6 +52,7 @@ export const LoadedImageSection = ({
   const { printBlob } = usePrint();
   const { data, fetching, error, refresh } = useFileData(file.url, file.query);
   const { rotation, handleRotate } = useRotation(file.url);
+  const markerUnavailable = useMarkerUnavailable();
 
   useRegisterRefresh(file.url, refresh);
 
@@ -152,7 +155,10 @@ export const LoadedImageSection = ({
       />
 
       <PageElement pageNumber={1} onRotate={handleRotate}>
-        <div className="relative" style={{ width: containerWidth, height: containerHeight }}>
+        <div
+          className={`relative ${getMarkerUnavailableClassName(markerUnavailable)}`}
+          style={{ width: containerWidth, height: containerHeight }}
+        >
           <img
             src={objectUrl}
             alt={file.title}

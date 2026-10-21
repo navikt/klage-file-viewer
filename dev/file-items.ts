@@ -11,6 +11,8 @@ const JPEG_EXTENSION_REGEX = /\.jpe?g$/i;
 const PNG_EXTENSION_REGEX = /\.png$/i;
 const TIFF_EXTENSION_REGEX = /\.tiff?$/i;
 const JSON_EXTENSION_REGEX = /\.json$/i;
+/** Files and documents named with `(under arbeid)` are not archived, so they cannot be highlighted. */
+const UNDER_ARBEID_REGEX = /\(under arbeid\)/i;
 
 const EXTENSION_REGEX_BY_TYPE: Record<FileType, RegExp> = {
   PDF: PDF_EXTENSION_REGEX,
@@ -98,6 +100,7 @@ const flatItemToFileEntry = (item: FlatItem): FileEntry => {
     variants: item.fileType,
     title: item.displayName,
     url: `/${item.filename}`,
+    highlightsId: getHighlightsId(item.filename, `/${item.filename}`),
     downloadUrl,
     newTabUrl,
   };
@@ -125,6 +128,7 @@ const documentItemToFileEntry = (item: DocumentItem): FileEntry => {
     variants: toFileVariants(variants, item.fileType),
     title: item.displayName,
     url: documentUrl,
+    highlightsId: getHighlightsId(item.name, documentUrl),
     query: { format: initialFormat },
     downloadUrl,
     newTabUrl,
@@ -148,6 +152,9 @@ const toFileVariants = (variants: FileVariant[], fileType: FileType): FileVarian
 
   return [first, second, third];
 };
+
+const getHighlightsId = (name: string, id: string): string | undefined =>
+  UNDER_ARBEID_REGEX.test(name) ? undefined : id;
 
 const itemToFileEntry = (item: AvailableItem): FileEntry => {
   if (item.isDocument) {

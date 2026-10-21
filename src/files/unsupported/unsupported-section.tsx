@@ -3,8 +3,10 @@ import { useEffect } from 'react';
 import { DownloadButton } from '@/download-button';
 import { type DocumentNavigation, FileHeader } from '@/file-header/file-header';
 import { type ResolvedVariant, resolveVariantUrl } from '@/file-header/variant-types';
+import { getMarkerUnavailableClassName } from '@/files/pdf/highlights/marker-style';
 import { getA4Dimensions } from '@/files/pdf/pdf-section-placeholder';
 import { withFileSize } from '@/lib/format-file-size';
+import { useMarkerUnavailable } from '@/marker-mode-context';
 import type { FileEntry } from '@/types';
 
 interface UnsupportedSectionProps {
@@ -24,6 +26,7 @@ export const UnsupportedSection = ({
 }: UnsupportedSectionProps) => {
   const { width, height } = getA4Dimensions(scale);
   const resolvedDownloadUrl = resolveVariantUrl(file.downloadUrl, headerVariant);
+  const markerUnavailable = useMarkerUnavailable();
 
   useEffect(() => {
     onPageCountReady(1);
@@ -46,7 +49,7 @@ export const UnsupportedSection = ({
         align="center"
         justify="center"
         gap="space-16"
-        className="bg-ax-bg-neutral-moderate/30 shadow-ax-dialog"
+        className={`bg-ax-bg-neutral-moderate/30 shadow-ax-dialog ${getMarkerUnavailableClassName(markerUnavailable)}`}
         style={{ width, minHeight: height }}
       >
         <BodyShort>

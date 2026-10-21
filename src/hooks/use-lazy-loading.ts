@@ -20,6 +20,8 @@ interface UseLazyLoadingResult {
   sectionPageCounts: Map<number, number>;
   /** Callback for a section to report its page count once loaded. */
   handlePageCountReady: (sectionIndex: number, pageCount: number) => void;
+  /** Load all sections up to and including `sectionIndex`. */
+  loadSection: (sectionIndex: number) => void;
 }
 
 export const useLazyLoading = ({ sectionCount, scrollContainerRef }: UseLazyLoadingParams): UseLazyLoadingResult => {
@@ -132,7 +134,14 @@ export const useLazyLoading = ({ sectionCount, scrollContainerRef }: UseLazyLoad
     });
   }, []);
 
-  return { loadedSectionCount, sectionPageCounts, handlePageCountReady };
+  const loadSection = useCallback(
+    (sectionIndex: number) => {
+      setLoadedSectionCount((prev) => Math.max(prev, Math.min(sectionIndex + 1, sectionCount)));
+    },
+    [sectionCount],
+  );
+
+  return { loadedSectionCount, sectionPageCounts, handlePageCountReady, loadSection };
 };
 
 /**

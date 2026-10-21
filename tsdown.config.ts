@@ -8,7 +8,7 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   format: 'esm',
-  entry: ['src/index.ts'],
+  entry: ['src/index.ts', 'src/highlights.ts', 'src/highlight-storage.ts'],
   define: {
     __PDFIUM_WASM_HASH__: JSON.stringify(pdfiumWasmHash),
     __TESSERACT_CDN_URL__: JSON.stringify(tesseractCdnUrl),

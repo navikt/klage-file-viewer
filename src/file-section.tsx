@@ -1,18 +1,24 @@
 import { useMemo } from 'react';
 import type { DocumentNavigation } from '@/file-header/file-header';
 import { resolveVariantData } from '@/file-header/resolve-variant';
+import type { ResolvedVariant } from '@/file-header/variant-types';
 import { ExcelSection } from '@/files/excel/excel-section';
 import { ImageSection } from '@/files/image/image-section';
 import { JsonSection } from '@/files/json/json-section';
+import { isHighlightableType } from '@/files/pdf/highlights/highlightable-file';
+import { useRegisterHighlightDocument } from '@/files/pdf/highlights/use-highlight-documents';
 import type { PdfSectionSearchInfo } from '@/files/pdf/loaded-pdf-section';
 import { PdfSection } from '@/files/pdf/pdf-section';
 import type { HighlightRect } from '@/files/pdf/search/types';
 import { UnsupportedSection } from '@/files/unsupported/unsupported-section';
 import { useVariantFormat } from '@/hooks/use-variant-format';
+import { MarkerUnavailableProvider } from '@/marker-mode-context';
 import type { FileEntry } from '@/types';
 
 interface FileSectionProps {
   file: FileEntry;
+  /** Position of the section in the viewer. */
+  index: number;
   scale: number;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   /** Whether this section should load its data (managed by the parent). */
@@ -30,6 +36,7 @@ interface FileSectionProps {
 
 export const FileSection = ({
   file,
+  index,
   scale,
   scrollContainerRef,
   shouldLoad,
@@ -54,11 +61,55 @@ export const FileSection = ({
     return { ...file, query: { ...file.query, format: variantData.format } };
   }, [file, variantData.hasExplicitFormat, variantData.format]);
 
+  const highlightableType = isHighlightableType(variantData.filtype);
+
+  useRegisterHighlightDocument(
+    index,
+    file.title,
+    highlightableType
+      ? { id: file.highlightsId, format: resolvedFile.query?.format, hasAccess: variantData.hasAccess }
+      : null,
+  );
+
+  return (
+    <MarkerUnavailableProvider highlightable={highlightableType && file.highlightsId !== undefined}>
+      <FileSectionContent
+        file={resolvedFile}
+        variantData={variantData}
+        scale={scale}
+        scrollContainerRef={scrollContainerRef}
+        shouldLoad={shouldLoad}
+        onPageCountReady={onPageCountReady}
+        onSearchableReady={onSearchableReady}
+        highlightsByPage={highlightsByPage}
+        currentMatchIndex={currentMatchIndex}
+        documentNavigation={documentNavigation}
+      />
+    </MarkerUnavailableProvider>
+  );
+};
+
+interface FileSectionContentProps extends Omit<FileSectionProps, 'index'> {
+  variantData: ResolvedVariant;
+}
+
+const FileSectionContent = ({
+  file,
+  variantData,
+  scale,
+  scrollContainerRef,
+  shouldLoad,
+  onPageCountReady,
+  onSearchableReady,
+  highlightsByPage,
+  currentMatchIndex,
+  documentNavigation,
+}: FileSectionContentProps) => {
   switch (variantData.filtype) {
     case 'PDF':
       return (
         <PdfSection
-          file={resolvedFile}
+          file={file}
           headerVariant={variantData}
           scale={scale}
           scrollContainerRef={scrollContainerRef}
@@ -74,7 +125,7 @@ export const FileSection = ({
     case 'XLSX':
       return (
         <ExcelSection
-          file={resolvedFile}
+          file={file}
           headerVariant={variantData}
           scrollContainerRef={scrollContainerRef}
           shouldLoad={shouldLoad}
@@ -88,7 +139,7 @@ export const FileSection = ({
     case 'TIFF':
       return (
         <ImageSection
-          file={resolvedFile}
+          file={file}
           headerVariant={variantData}
           scale={scale}
           shouldLoad={shouldLoad}
@@ -100,7 +151,7 @@ export const FileSection = ({
     case 'JSON':
       return (
         <JsonSection
-          file={resolvedFile}
+          file={file}
           headerVariant={variantData}
           shouldLoad={shouldLoad}
           onPageCountReady={onPageCountReady}
@@ -111,7 +162,7 @@ export const FileSection = ({
     default:
       return (
         <UnsupportedSection
-          file={resolvedFile}
+          file={file}
           headerVariant={variantData}
           scale={scale}
           onPageCountReady={onPageCountReady}

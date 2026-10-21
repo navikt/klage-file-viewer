@@ -25,6 +25,11 @@ export interface FileEntry {
   title: string;
   /** File source URL */
   url: string;
+  /**
+   * Identifies the file's marker highlights in `highlightStorage`, together with the variant format.
+   * Files without an ID cannot be highlighted.
+   */
+  highlightsId?: string;
   /** Optional query parameters sent with the file request */
   query?: Record<string, string>;
   /** URL to open this file in a new tab */

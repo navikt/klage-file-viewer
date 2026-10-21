@@ -7,7 +7,9 @@ import { FileErrorLayout } from '@/files/file-error-layout';
 import { JsonTree } from '@/files/json/json-tree';
 import { useJsonData } from '@/files/json/use-json-data';
 import { PageElement } from '@/files/page-element';
+import { getMarkerUnavailableClassName } from '@/files/pdf/highlights/marker-style';
 import { useRegisterRefresh } from '@/hooks/use-refresh-registry';
+import { useMarkerUnavailable } from '@/marker-mode-context';
 import type { FileEntry } from '@/types';
 import { useFileData } from '@/use-file-data';
 
@@ -24,6 +26,7 @@ export const LoadedJsonSection = ({
   onPageCountReady,
   documentNavigation,
 }: LoadedJsonSectionProps) => {
+  const markerUnavailable = useMarkerUnavailable();
   const { errorComponent: ErrorComponent } = useFileViewerConfig();
   const { data, fetching, error, refresh } = useFileData(file.url, file.query);
 
@@ -108,7 +111,9 @@ export const LoadedJsonSection = ({
       />
 
       <PageElement pageNumber={1}>
-        <div className="bg-ax-bg-neutral-moderate/30 shadow-ax-dialog w-fit rounded-lg p-4 font-mono text-sm">
+        <div
+          className={`bg-ax-bg-neutral-moderate/30 shadow-ax-dialog w-fit rounded-lg p-4 font-mono text-sm ${getMarkerUnavailableClassName(markerUnavailable)}`}
+        >
           <JsonTree value={json} />
         </div>
       </PageElement>

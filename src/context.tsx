@@ -1,4 +1,5 @@
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from 'react';
+import type { HighlightStorage } from '@/files/pdf/highlights/storage-contract';
 
 /** The server responded with a non-2xx status code. */
 export interface HttpFetchErrorInfo {
@@ -20,7 +21,7 @@ export interface NetworkFetchErrorInfo {
 
 export type FetchErrorInfo = HttpFetchErrorInfo | NetworkFetchErrorInfo;
 
-export enum ThemeMode {
+enum ThemeMode {
   Light = 'light',
   Dark = 'dark',
 }
@@ -89,6 +90,13 @@ const FileViewerConfigContext = createContext<KlageFileViewerConfig>(DEFAULT_CON
 
 export const useFileViewerConfig = (): KlageFileViewerConfig => useContext(FileViewerConfigContext);
 
+/** `true` when PDF pages are shown colour-inverted. Images are never inverted. */
+export const usePdfColorsInverted = (): boolean => {
+  const { theme, invertColors } = useFileViewerConfig();
+
+  return invertColors && theme === ThemeMode.Dark;
+};
+
 export interface KlageFileViewerProviderProps {
   /** When `true`, shows all fit options (fit-to-width, fit-to-page). When `false` (default), hides options that depend on a fixed container width. */
   standalone?: boolean;
@@ -97,6 +105,8 @@ export interface KlageFileViewerProviderProps {
   theme: 'light' | 'dark';
   /** Called when a file fetch fails. */
   onFetchError?: (error: FetchErrorInfo) => void;
+  /** Where marker highlights are stored. Marker highlighting is unavailable without it. */
+  highlightStorage?: HighlightStorage;
   /** Optional component rendered inside the error alert alongside the default reload button. */
   errorComponent?: React.ComponentType<{ refresh: () => void }>;
   /** Common passwords to automatically try when a PDF is password-protected. */
@@ -111,6 +121,7 @@ export const FileViewerProvider = ({
   standalone = false,
   traceName,
   onFetchError,
+  highlightStorage,
   errorComponent,
   commonPasswords,
   theme,
@@ -167,6 +178,7 @@ export const FileViewerProvider = ({
       standalone,
       traceName,
       onFetchError,
+      highlightStorage,
       errorComponent,
       commonPasswords,
       theme,
@@ -181,6 +193,7 @@ export const FileViewerProvider = ({
       standalone,
       traceName,
       onFetchError,
+      highlightStorage,
       errorComponent,
       commonPasswords,
       theme,

@@ -55,7 +55,9 @@ const Highlight = ({ highlight, isCurrent }: HighlightProps) => {
         left: highlight.left,
         width: highlight.width,
         height: highlight.height,
-        backgroundColor: isCurrent ? 'rgba(255, 165, 0, 0.6)' : 'rgba(255, 255, 0, 0.4)',
+        // Orange, so search matches are not confused with yellow marker highlights or blue selection.
+        backgroundColor: isCurrent ? 'rgba(255, 120, 0, 0.6)' : 'rgba(255, 165, 0, 0.35)',
+        outline: isCurrent ? '1px solid rgb(230, 90, 0)' : 'none',
         transition: 'background-color 150ms ease',
       }}
     />

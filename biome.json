@@ -170,7 +170,7 @@
   },
   "overrides": [
     {
-      "includes": ["src/index.ts"],
+      "includes": ["src/index.ts", "src/highlights.ts"],
       "linter": {
         "rules": {
           "performance": {
