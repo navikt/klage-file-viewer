@@ -1,12 +1,19 @@
 import type { PdfDocumentObject, PdfEngine, Rotation } from '@embedpdf/models';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePdfColorsInverted } from '@/context';
 import { PageElement } from '@/files/page-element';
+import { findHighlightAt } from '@/files/pdf/highlights/highlight-list';
+import { MarkerHighlightLayer } from '@/files/pdf/highlights/marker-highlight-layer';
+import type { DocumentMarkerMode } from '@/files/pdf/highlights/marker-style';
+import type { StoredHighlight } from '@/files/pdf/highlights/types';
 import { PageOcrLayer } from '@/files/pdf/ocr/page-ocr-layer';
+import type { OcrWord } from '@/files/pdf/ocr/use-ocr-page';
 import { getRotationMatrix } from '@/files/pdf/page/get-rotation-matrix';
 import { PdfPageImage } from '@/files/pdf/page/pdf-page-image';
 import { PasswordUnlockedOverlay } from '@/files/pdf/password/password-unlocked-overlay';
 import { HighlightLayer } from '@/files/pdf/search/highlight-layer';
 import type { HighlightRect } from '@/files/pdf/search/types';
+import { screenToGlyph } from '@/files/pdf/selection/hit-test';
 import { PageSelectionLayer } from '@/files/pdf/selection/page-selection-layer';
 import type { PageSelectionRange, ScreenPageGeometry } from '@/files/pdf/selection/types';
 import { PX_PER_PT } from '@/scale/constants';
@@ -32,6 +39,10 @@ interface PdfPageProps {
   geometryRegistry: React.RefObject<Map<number, ScreenPageGeometry>>;
   showPasswordOverlay?: boolean;
   onOcrDetected?: () => void;
+  markerHighlights: StoredHighlight[];
+  markerMode: DocumentMarkerMode;
+  onRemoveHighlight: (id: string) => void;
+  ocrWordsRegistry: React.RefObject<Map<number, OcrWord[]>>;
 }
 
 export const PdfPage = ({
@@ -53,9 +64,15 @@ export const PdfPage = ({
   geometryRegistry,
   showPasswordOverlay,
   onOcrDetected,
+  markerHighlights,
+  markerMode,
+  onRemoveHighlight,
+  ocrWordsRegistry,
 }: PdfPageProps) => {
   const pageNumber = pageIndex + 1;
   const contentRef = useRef<HTMLDivElement>(null);
+  const [hoveredHighlightId, setHoveredHighlightId] = useState<string | null>(null);
+  const colorsInverted = usePdfColorsInverted();
 
   const handleRef = useCallback(
     (el: HTMLDivElement | null) => {
@@ -96,9 +113,57 @@ export const PdfPage = ({
 
   const rotationMatrix = getRotationMatrix(rotation, baseWidth, baseHeight);
 
+  // Removal and hover feedback are only active in marker mode, so ordinary text selection is never blocked.
+  const activeHoveredHighlightId = markerMode === 'on' && !isSelecting ? hoveredHighlightId : null;
+
+  const highlightAt = (clientX: number, clientY: number): StoredHighlight | undefined => {
+    if (contentRef.current === null || markerHighlights.length === 0) {
+      return undefined;
+    }
+
+    const rect = contentRef.current.getBoundingClientRect();
+    const { x, y } = screenToGlyph(clientX - rect.left, clientY - rect.top, rotation, baseWidth, baseHeight);
+
+    return findHighlightAt(markerHighlights, x / baseWidth, y / baseHeight);
+  };
+
+  const handleMouseDownCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Double and triple clicks pass through so word/line selection still works on top of a highlight.
+    if (markerMode !== 'on' || e.button !== 0 || e.detail !== 1) {
+      return;
+    }
+
+    const highlight = highlightAt(e.clientX, e.clientY);
+
+    if (highlight === undefined) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    onRemoveHighlight(highlight.id);
+    setHoveredHighlightId(null);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (markerMode !== 'on' || isSelecting || e.buttons !== 0) {
+      return;
+    }
+
+    setHoveredHighlightId(highlightAt(e.clientX, e.clientY)?.id ?? null);
+  };
+
   return (
     <PageElement ref={handleRef} pageNumber={pageNumber} onRotate={() => onRotate(pageIndex)}>
-      <div ref={contentRef} className="relative" style={{ width, height }}>
+      <div
+        ref={contentRef}
+        className="relative"
+        style={{ width, height }}
+        data-klage-file-viewer-marker-hover={activeHoveredHighlightId === null ? undefined : true}
+        onMouseDownCapture={handleMouseDownCapture}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => setHoveredHighlightId(null)}
+      >
         <div
           data-klage-file-viewer-page-content
           className="relative select-none"
@@ -110,6 +175,11 @@ export const PdfPage = ({
           }}
         >
           <PdfPageImage engine={engine} doc={renderDoc} page={renderPage} visible={visible} />
+          <MarkerHighlightLayer
+            highlights={markerHighlights}
+            hoveredHighlightId={activeHoveredHighlightId}
+            inverted={colorsInverted}
+          />
           <PageSelectionLayer
             engine={engine}
             doc={doc}
@@ -124,6 +194,7 @@ export const PdfPage = ({
             isSelecting={isSelecting}
             onMouseDown={onMouseDown}
             geometryRegistry={geometryRegistry}
+            markerMode={markerMode}
           />
           <PageOcrLayer
             engine={engine}
@@ -133,6 +204,8 @@ export const PdfPage = ({
             visible={visible}
             baseWidth={baseWidth}
             baseHeight={baseHeight}
+            markerMode={markerMode}
+            ocrWordsRegistry={ocrWordsRegistry}
             onOcrDetected={onOcrDetected}
           />
           {highlights !== undefined && highlights.length > 0 ? (

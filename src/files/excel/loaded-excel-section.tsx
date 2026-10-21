@@ -8,8 +8,10 @@ import { ExcelTable } from '@/files/excel/excel-table';
 import { useExcelData } from '@/files/excel/use-excel-data';
 import { FileErrorLayout } from '@/files/file-error-layout';
 import { PageElement } from '@/files/page-element';
+import { getMarkerUnavailableClassName } from '@/files/pdf/highlights/marker-style';
 import { useRegisterRefresh } from '@/hooks/use-refresh-registry';
 import { usePageNavigation } from '@/lib/use-page-navigation';
+import { useMarkerUnavailable } from '@/marker-mode-context';
 import type { FileEntry } from '@/types';
 import { useFileData } from '@/use-file-data';
 
@@ -29,6 +31,7 @@ export const LoadedExcelSection = ({
   onPageCountReady,
   documentNavigation,
 }: LoadedExcelSectionProps) => {
+  const markerUnavailable = useMarkerUnavailable();
   const { errorComponent: ErrorComponent } = useFileViewerConfig();
   const { data, loading, fetching, error, refresh } = useFileData(file.url, file.query);
 
@@ -127,7 +130,7 @@ export const LoadedExcelSection = ({
         documentNavigation={documentNavigation}
       />
 
-      <div className="relative flex w-full flex-col gap-4">
+      <div className={`relative flex w-full flex-col gap-4 ${getMarkerUnavailableClassName(markerUnavailable)}`}>
         {sheets.map((sheet, index) => {
           const sheetNumber = index + 1;
 

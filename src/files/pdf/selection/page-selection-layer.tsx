@@ -1,5 +1,6 @@
 import type { PdfDocumentObject, PdfEngine, PdfPageObject, Rotation } from '@embedpdf/models';
 import { useEffect } from 'react';
+import type { DocumentMarkerMode } from '@/files/pdf/highlights/marker-style';
 import { SelectionOverlay } from '@/files/pdf/selection/selection-overlay';
 import type { PageSelectionRange, ScreenPageGeometry } from '@/files/pdf/selection/types';
 import { usePageGeometry } from '@/files/pdf/selection/use-page-geometry';
@@ -23,6 +24,7 @@ interface PageSelectionLayerProps {
   isSelecting: boolean;
   onMouseDown: (pageIndex: number, charIndex: number, detail: number) => void;
   geometryRegistry: React.RefObject<Map<number, ScreenPageGeometry>>;
+  markerMode: DocumentMarkerMode;
 }
 
 export const PageSelectionLayer = ({
@@ -39,6 +41,7 @@ export const PageSelectionLayer = ({
   isSelecting,
   onMouseDown,
   geometryRegistry,
+  markerMode,
 }: PageSelectionLayerProps) => {
   const { geometry } = usePageGeometry(engine, doc, page, scale, visible);
 
@@ -63,6 +66,7 @@ export const PageSelectionLayer = ({
       rotation={rotation}
       baseWidth={baseWidth}
       baseHeight={baseHeight}
+      markerMode={markerMode}
     />
   );
 };

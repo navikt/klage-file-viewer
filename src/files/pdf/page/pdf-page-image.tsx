@@ -1,7 +1,7 @@
 import type { ImageDataLike, PdfDocumentObject, PdfEngine, PdfPageObject } from '@embedpdf/models';
 import { Skeleton, VStack } from '@navikt/ds-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ThemeMode, useFileViewerConfig } from '@/context';
+import { useFileViewerConfig, usePdfColorsInverted } from '@/context';
 
 interface PhysicalSize {
   width: number;
@@ -20,7 +20,8 @@ export const PdfPageImage = ({ engine, doc, page, visible }: PdfPageImageProps) 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderedRef = useRef(false);
   const observerRef = useRef<ResizeObserver | null>(null);
-  const { theme, invertColors, antiAliasing } = useFileViewerConfig();
+  const { antiAliasing } = useFileViewerConfig();
+  const inverted = usePdfColorsInverted();
   const [physicalSize, setPhysicalSize] = useState<PhysicalSize | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -123,7 +124,7 @@ export const PdfPageImage = ({ engine, doc, page, visible }: PdfPageImageProps) 
     };
   }, [engine, doc, page, visible, physicalSize]);
 
-  const filterStyle = invertColors && theme === ThemeMode.Dark ? 'hue-rotate(180deg) invert(1)' : 'none';
+  const filterStyle = inverted ? 'hue-rotate(180deg) invert(1)' : 'none';
   const dpr = physicalSize?.dpr ?? window.devicePixelRatio;
   const imageRenderingClass = getImageRenderingClass(dpr, antiAliasing);
 

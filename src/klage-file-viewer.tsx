@@ -3,6 +3,8 @@ import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef,
 import { FileViewerProvider, type KlageFileViewerProviderProps, useFileViewerConfig } from '@/context';
 import type { DocumentNavigation } from '@/file-header/file-header';
 import { FileSection } from '@/file-section';
+import { HighlightStoreProvider } from '@/files/pdf/highlights/highlight-store';
+import { isHighlightableFile } from '@/files/pdf/highlights/highlightable-file';
 import type { PdfSectionSearchInfo } from '@/files/pdf/loaded-pdf-section';
 import { PdfEngineProvider } from '@/files/pdf/pdf-engine-context';
 import type { SearchableDocument } from '@/files/pdf/search/search';
@@ -10,11 +12,13 @@ import type { HighlightRect, PageHighlights } from '@/files/pdf/search/types';
 import { useInitialScale } from '@/hooks/use-initial-scale';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useLazyLoading } from '@/hooks/use-lazy-loading';
+import { useNavigateToHighlight } from '@/hooks/use-navigate-to-highlight';
 import { RefreshRegistryProvider, useRefreshRegistry } from '@/hooks/use-refresh-registry';
 import { useSectionVisibility } from '@/hooks/use-section-visibility';
 import { clamp } from '@/lib/clamp';
 import { computeFitToContentWidth } from '@/lib/page-measure';
 import { PrintProvider } from '@/lib/print-frame';
+import { MarkerModeProvider } from '@/marker-mode-context';
 import { ResizeHandle } from '@/resize-handle';
 import {
   DEFAULT_INLINE_WIDTH,
@@ -68,14 +72,18 @@ export const KlageFileViewer = ({
         <PdfEngineProvider pdfiumWasmUrl={pdfiumWasmUrl}>
           <PrintProvider>
             <ToolbarHeightProvider toolbarRef={toolbarRef}>
-              <KlageFileViewerInner
-                files={files}
-                onClose={onClose}
-                newTabUrl={newTabUrl}
-                handleRef={handleRef}
-                className={className === undefined ? 'klage-file-viewer' : `klage-file-viewer ${className}`}
-                toolbarRef={toolbarRef}
-              />
+              <HighlightStoreProvider highlightable={files.some(isHighlightableFile)}>
+                <MarkerModeProvider>
+                  <KlageFileViewerInner
+                    files={files}
+                    onClose={onClose}
+                    newTabUrl={newTabUrl}
+                    handleRef={handleRef}
+                    className={className === undefined ? 'klage-file-viewer' : `klage-file-viewer ${className}`}
+                    toolbarRef={toolbarRef}
+                  />
+                </MarkerModeProvider>
+              </HighlightStoreProvider>
             </ToolbarHeightProvider>
           </PrintProvider>
         </PdfEngineProvider>
@@ -159,22 +167,6 @@ const KlageFileViewerInner = ({
     isDraggingRef.current = true;
   }, []);
 
-  const handleWidthDragEnd = useCallback(
-    (width: number) => {
-      if (widthFollowsScale) {
-        setScale((width / DEFAULT_INLINE_WIDTH) * 100);
-      } else {
-        setViewerWidth(width);
-      }
-
-      // Defer clearing until after React flushes the effect triggered by setScale.
-      setTimeout(() => {
-        isDraggingRef.current = false;
-      }, 0);
-    },
-    [widthFollowsScale, setScale, setViewerWidth],
-  );
-
   const handleWidthDrag = useCallback(
     (width: number) => {
       if (widthFollowsScale) {
@@ -186,6 +178,18 @@ const KlageFileViewerInner = ({
     [widthFollowsScale, setScale, setViewerWidth],
   );
 
+  const handleWidthDragEnd = useCallback(
+    (width: number) => {
+      handleWidthDrag(width);
+
+      // Defer clearing until after React flushes the effect triggered by setScale.
+      setTimeout(() => {
+        isDraggingRef.current = false;
+      }, 0);
+    },
+    [handleWidthDrag],
+  );
+
   useImperativeHandle(handleRef, () => ({
     focus: () => scrollContainerRef.current?.focus(),
     reloadFile,
@@ -195,10 +199,12 @@ const KlageFileViewerInner = ({
   const [pdfSearchInfoMap, setPdfSearchInfoMap] = useState<Map<number, PdfSectionSearchInfo>>(() => new Map());
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  const { loadedSectionCount, sectionPageCounts, handlePageCountReady } = useLazyLoading({
+  const { loadedSectionCount, sectionPageCounts, handlePageCountReady, loadSection } = useLazyLoading({
     sectionCount: files.length,
     scrollContainerRef,
   });
+
+  const navigateToHighlight = useNavigateToHighlight({ scrollContainerRef, loadSection, sectionPageCounts });
 
   const {
     currentDocumentIndex,
@@ -383,6 +389,7 @@ const KlageFileViewerInner = ({
             onNextDocument={onNextDocument}
             previousDocumentDisabled={previousDocumentDisabled}
             nextDocumentDisabled={nextDocumentDisabled}
+            onNavigateToHighlight={navigateToHighlight}
           />
 
           {/* Scrollable container with all file sections */}
@@ -399,6 +406,7 @@ const KlageFileViewerInner = ({
               >
                 <FileSection
                   file={file}
+                  index={index}
                   scale={scale}
                   scrollContainerRef={scrollContainerRef}
                   shouldLoad={index < loadedSectionCount}
