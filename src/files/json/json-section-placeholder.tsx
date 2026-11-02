@@ -9,7 +9,7 @@ export const JsonSectionPlaceholder = ({ title }: JsonSectionPlaceholderProps) =
   <>
     <FileHeader title={title} currentPage={null} numPages={null} isLoading={false} />
 
-    <VStack align="center" justify="center" className="min-h-64 w-full bg-ax-bg-neutral-moderate/30 shadow-ax-dialog">
+    <VStack align="center" justify="center" className="bg-ax-bg-neutral-moderate/30 shadow-ax-dialog min-h-64 w-full">
       <BodyShort>Venter på innlasting …</BodyShort>
     </VStack>
   </>

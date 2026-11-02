@@ -8,7 +8,7 @@ interface JsonTreeProps {
 }
 
 export const JsonTree = ({ value, initialExpanded = true }: JsonTreeProps) => (
-  <pre className="m-0 w-fit whitespace-pre leading-relaxed">
+  <pre className="m-0 w-fit leading-relaxed whitespace-pre">
     <JsonValue value={value} depth={0} initialExpanded={initialExpanded} />
   </pre>
 );
@@ -163,7 +163,7 @@ const ToggleButton = ({ onClick, expanded, openBracket }: ToggleButtonProps) => 
     <button
       type="button"
       onClick={onClick}
-      className="mr-1 inline-flex cursor-pointer items-center border-none bg-transparent p-0 align-middle text-ax-icon-neutral hover:text-ax-icon-action"
+      className="text-ax-icon-neutral hover:text-ax-icon-action mr-1 inline-flex cursor-pointer items-center border-none bg-transparent p-0 align-middle"
       aria-label={label}
       aria-expanded={expanded}
     >

@@ -18,7 +18,7 @@ export const ExcelPlaceholderTable = ({ children }: ExcelPlaceholderTableProps) 
   <div className="relative w-full">
     <ExcelTable sheetName=" " rows={EMPTY_ROWS} />
 
-    <div className="absolute top-0 right-0 bottom-0 left-0 flex items-center justify-center bg-ax-bg-neutral-moderate/30">
+    <div className="bg-ax-bg-neutral-moderate/30 absolute top-0 right-0 bottom-0 left-0 flex items-center justify-center">
       <VStack align="center" gap="space-8">
         <Loader size="3xlarge" />
         {children}

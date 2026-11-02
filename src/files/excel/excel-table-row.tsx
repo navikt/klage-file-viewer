@@ -10,7 +10,7 @@ interface ExcelTableRowProps {
 export const ExcelTableRow = memo(({ row, rowIndex }: ExcelTableRowProps) => {
   return (
     <tr className="group/row odd:bg-ax-bg-default even:bg-ax-bg-neutral-moderate">
-      <td className="sticky left-0 z-10 border border-ax-border-neutral bg-ax-bg-neutral-moderate px-2 py-1 text-center font-ax-bold text-ax-text-neutral-subtle">
+      <td className="border-ax-border-neutral bg-ax-bg-neutral-moderate font-ax-bold text-ax-text-neutral-subtle sticky left-0 z-10 border px-2 py-1 text-center">
         {(rowIndex + 1).toString(10)}
       </td>
 

@@ -77,7 +77,7 @@ export const Toolbar = ({
       justify="space-between"
       padding="space-8"
       wrap={false}
-      className="z-30 whitespace-nowrap border-ax-border-neutral border-b bg-ax-bg-neutral-moderate"
+      className="border-ax-border-neutral bg-ax-bg-neutral-moderate z-30 border-b whitespace-nowrap"
       width="100%"
       position="sticky"
       top="space-0"
@@ -193,4 +193,4 @@ export const Toolbar = ({
   );
 };
 
-const Separator = () => <div className="mx-1 h-4 w-px bg-ax-border-neutral" role="presentation" aria-hidden />;
+const Separator = () => <div className="bg-ax-border-neutral mx-1 h-4 w-px" role="presentation" aria-hidden />;

@@ -68,7 +68,7 @@ export const ScaleSelect = ({ scale, setScale, scaleUp, scaleDown, close }: Scal
       padding="space-8"
       borderRadius="4"
       shadow="dialog"
-      className="absolute right-0 bottom-full z-10 flex flex-col gap-2 whitespace-nowrap text-ax-text-neutral not-italic"
+      className="text-ax-text-neutral absolute right-0 bottom-full z-10 flex flex-col gap-2 whitespace-nowrap not-italic"
     >
       <RadioGroup legend="Skalering" onChange={onRadioChange} value={radioValue} size="small">
         {PRESETS.map((p) => (

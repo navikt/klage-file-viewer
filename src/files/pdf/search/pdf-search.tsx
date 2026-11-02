@@ -240,7 +240,7 @@ const PdfSearchUI = ({
       <HStack
         align="center"
         wrap={false}
-        className="h-full rounded border border-ax-border-neutral bg-ax-bg-input outline-ax-border-focus focus-within:outline-2"
+        className="border-ax-border-neutral bg-ax-bg-input outline-ax-border-focus h-full rounded border focus-within:outline-2"
       >
         <input
           type="search"

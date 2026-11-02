@@ -6,7 +6,7 @@ interface ExcelTableCellProps {
 }
 
 export const ExcelTableCell = memo(({ value }: ExcelTableCellProps) => (
-  <td className="whitespace-nowrap border border-ax-border-neutral px-2 py-1">{formatCellValue(value)}</td>
+  <td className="border-ax-border-neutral border px-2 py-1 whitespace-nowrap">{formatCellValue(value)}</td>
 ));
 
 ExcelTableCell.displayName = 'ExcelTableCell';

@@ -84,7 +84,7 @@ export const LoadedJsonSection = ({
           align="center"
           justify="center"
           gap="space-16"
-          className="min-h-64 w-full bg-ax-bg-neutral-moderate/30 shadow-ax-dialog"
+          className="bg-ax-bg-neutral-moderate/30 shadow-ax-dialog min-h-64 w-full"
         >
           <Loader size="3xlarge" />
           <BodyShort>Leser JSON-fil …</BodyShort>
@@ -108,7 +108,7 @@ export const LoadedJsonSection = ({
       />
 
       <PageElement pageNumber={1}>
-        <div className="w-fit rounded-lg bg-ax-bg-neutral-moderate/30 p-4 font-mono text-sm shadow-ax-dialog">
+        <div className="bg-ax-bg-neutral-moderate/30 shadow-ax-dialog w-fit rounded-lg p-4 font-mono text-sm">
           <JsonTree value={json} />
         </div>
       </PageElement>

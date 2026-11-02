@@ -46,7 +46,7 @@
       },
       "nursery": {
         "useExplicitType": "off",
-        "useSortedClasses": {
+        "useTailwindSortedClasses": {
           "level": "on",
           "fix": "safe",
           "options": {}

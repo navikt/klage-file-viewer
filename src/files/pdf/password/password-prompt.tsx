@@ -46,7 +46,7 @@ export const PasswordPrompt = ({ passwordState, onSubmitPassword, scale }: Passw
         }}
         align="center"
         gap="space-24"
-        className="rounded-lg border border-ax-border-neutral bg-ax-bg-default p-10 shadow-md"
+        className="border-ax-border-neutral bg-ax-bg-default rounded-lg border p-10 shadow-md"
       >
         <VStack align="center" gap="space-8">
           <PadlockLockedIcon aria-hidden fontSize="3rem" />

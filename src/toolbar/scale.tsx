@@ -101,10 +101,10 @@ export const Scale = ({ scale, setScale }: Props) => {
         />
       </Tooltip>
 
-      <label className="whitespace-nowrap rounded border border-ax-border-neutral bg-ax-bg-input px-2 outline-ax-border-focus focus-within:outline-2">
+      <label className="border-ax-border-neutral bg-ax-bg-input outline-ax-border-focus rounded border px-2 whitespace-nowrap focus-within:outline-2">
         <input
           type="text"
-          className="w-6 text-right text-ax-medium focus:outline-none"
+          className="text-ax-medium w-6 text-right focus:outline-none"
           value={input}
           onChange={({ target }) => setInput(target.value)}
           onBlur={submit}

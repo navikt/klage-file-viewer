@@ -141,7 +141,7 @@ export const PdfPageImage = ({ engine, doc, page, visible }: PdfPageImageProps) 
 };
 
 const PageSkeleton = () => (
-  <div className="absolute inset-0 bg-white p-[8%]">
+  <div className="absolute inset-0 p-[8%]">
     <VStack gap="space-16" width="100%">
       <Skeleton variant="text" width="40%" height={28} />
       <VStack gap="space-8" width="100%">

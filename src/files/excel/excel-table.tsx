@@ -13,11 +13,11 @@ export const ExcelTable = memo(({ sheetName, rows }: ExcelTableProps) => {
   const columnLabels = Array.from({ length: columnCount }, (_, i) => columnIndexToLabel(i));
 
   return (
-    <div className="w-fit overflow-hidden rounded-lg bg-ax-bg-default shadow-ax-dialog">
+    <div className="bg-ax-bg-default shadow-ax-dialog w-fit overflow-hidden rounded-lg">
       <ExcelSheetHeader sheetName={sheetName} />
 
       {rows.length === 0 ? (
-        <p className="p-4 text-center text-ax-text-neutral-subtle">Arket er tomt</p>
+        <p className="text-ax-text-neutral-subtle p-4 text-center">Arket er tomt</p>
       ) : (
         <div className="p-2">
           <table className="min-w-fit border-collapse text-sm">
@@ -28,7 +28,7 @@ export const ExcelTable = memo(({ sheetName, rows }: ExcelTableProps) => {
                 </HeaderCell>
 
                 {columnLabels.map((columnLabel) => (
-                  <HeaderCell key={columnLabel} className="z-10 font-ax-bold">
+                  <HeaderCell key={columnLabel} className="font-ax-bold z-10">
                     {columnLabel}
                   </HeaderCell>
                 ))}
@@ -56,7 +56,7 @@ ExcelTable.displayName = 'ExcelTable';
 
 const HeaderCell = ({ className, children }: { className: string; children?: React.ReactNode }) => (
   <th
-    className={`border border-ax-border-neutral bg-ax-bg-neutral-moderate/70 px-2 py-1 text-center text-ax-text-subtle text-xs ${className}`}
+    className={`border-ax-border-neutral bg-ax-bg-neutral-moderate/70 text-ax-text-subtle border px-2 py-1 text-center text-xs ${className}`}
   >
     {children}
   </th>

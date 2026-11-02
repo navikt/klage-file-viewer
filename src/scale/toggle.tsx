@@ -46,8 +46,8 @@ const ToggleButton = ({
     width="340px"
     className={
       selected
-        ? 'flex flex-col bg-ax-bg-accent-strong-pressed text-ax-text-accent-contrast hover:bg-ax-bg-accent-strong-hover'
-        : 'flex flex-col bg-ax-bg-default text-ax-text-neutral hover:bg-ax-bg-accent-strong-hover hover:text-ax-text-accent-contrast'
+        ? 'bg-ax-bg-accent-strong-pressed text-ax-text-accent-contrast hover:bg-ax-bg-accent-strong-hover flex flex-col'
+        : 'bg-ax-bg-default text-ax-text-neutral hover:bg-ax-bg-accent-strong-hover hover:text-ax-text-accent-contrast flex flex-col'
     }
   >
     {/** biome-ignore lint/a11y/useSemanticElements: Option in radio group. */}

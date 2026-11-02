@@ -81,10 +81,10 @@ export const ResizeHandle = ({ setWidth, onDragStart, onDragEnd }: ResizeHandleP
     <div
       ref={elementRef}
       aria-hidden
-      className="group absolute top-0 right-0 bottom-0 z-50 flex w-2 cursor-col-resize select-none items-center justify-center"
+      className="group absolute top-0 right-0 bottom-0 z-50 flex w-2 cursor-col-resize items-center justify-center select-none"
       onPointerDown={handlePointerDown}
     >
-      <div className="h-8 w-1 rounded-full bg-ax-border-neutral opacity-50 transition-opacity group-hover:opacity-100" />
+      <div className="bg-ax-border-neutral h-8 w-1 rounded-full opacity-50 transition-opacity group-hover:opacity-100" />
     </div>
   );
 };

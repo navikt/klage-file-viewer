@@ -34,7 +34,7 @@ export const PageElement = ({ ref, pageNumber, children, onRotate, loadingMessag
     {onRotate !== undefined ? <RotateButton pageNumber={pageNumber} onRotate={onRotate} /> : null}
 
     {loadingMessage !== undefined ? (
-      <div className="absolute inset-0 z-10 flex items-center justify-center bg-ax-bg-neutral-moderate/70 backdrop-blur-xs">
+      <div className="bg-ax-bg-neutral-moderate/70 absolute inset-0 z-10 flex items-center justify-center backdrop-blur-xs">
         <VStack align="center" gap="space-8">
           <Loader size="3xlarge" />
           <BodyShort>{loadingMessage}</BodyShort>

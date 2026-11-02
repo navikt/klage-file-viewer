@@ -37,16 +37,16 @@ This library uses [PDFium](https://pdfium.googlesource.com/pdfium/) compiled to 
 ## Usage
 
 ```tsx
-import { KlageFileViewer } from "@navikt/klage-file-viewer";
+import { KlageFileViewer } from '@navikt/klage-file-viewer';
 
 const MyComponent = () => (
   <KlageFileViewer
     theme="light"
     files={[
       {
-        variants: "PDF",
-        title: "My Document",
-        url: "/api/documents/123.pdf",
+        variants: 'PDF',
+        title: 'My Document',
+        url: '/api/documents/123.pdf',
       },
     ]}
   />
@@ -61,11 +61,11 @@ Pass multiple entries to the `files` array to render them in sequence with a doc
 <KlageFileViewer
   theme="light"
   files={[
-    { variants: "PDF", title: "Vedtak", url: "/api/documents/1.pdf" },
-    { variants: "PDF", title: "Klage", url: "/api/documents/2.pdf" },
-    { variants: "XLSX", title: "Regnskap", url: "/api/documents/3.xlsx" },
+    { variants: 'PDF', title: 'Vedtak', url: '/api/documents/1.pdf' },
+    { variants: 'PDF', title: 'Klage', url: '/api/documents/2.pdf' },
+    { variants: 'XLSX', title: 'Regnskap', url: '/api/documents/3.xlsx' },
   ]}
-/>
+/>;
 ```
 
 ### Close button
@@ -73,11 +73,7 @@ Pass multiple entries to the `files` array to render them in sequence with a doc
 Provide `onClose` to show a close button in the toolbar:
 
 ```tsx
-<KlageFileViewer
-  theme="light"
-  files={files}
-  onClose={() => setShowViewer(false)}
-/>
+<KlageFileViewer theme="light" files={files} onClose={() => setShowViewer(false)} />;
 ```
 
 ### Configuration
@@ -88,18 +84,16 @@ Pass configuration props directly to the component:
 <KlageFileViewer
   theme="light"
   files={files}
-  commonPasswords={["secret123"]}
+  commonPasswords={['secret123']}
   onFetchError={(error) => {
-    if (error.type === "http") {
+    if (error.type === 'http') {
       console.error(`Failed to fetch ${error.url}: ${error.status}`, error.body);
     } else {
       console.error(`Network error fetching ${error.url}`, error.error);
     }
   }}
-  errorComponent={({ refresh }) => (
-    <Button onClick={refresh}>Prøv igjen</Button>
-  )}
-/>
+  errorComponent={({ refresh }) => <Button onClick={refresh}>Prøv igjen</Button>}
+/>;
 ```
 
 ## API
@@ -109,7 +103,7 @@ Pass configuration props directly to the component:
 | Prop              | Type                                           | Required | Description                                                                                                     |
 | ----------------- | ---------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
 | `files`           | `FileEntry[]`                                  | Yes      | List of files to render in sequence.                                                                            |
-| `pdfiumWasmUrl`   | `string`                                       | No       | URL to the PDFium WASM binary. Defaults to the Nav CDN-hosted version.                   |
+| `pdfiumWasmUrl`   | `string`                                       | No       | URL to the PDFium WASM binary. Defaults to the Nav CDN-hosted version.                                          |
 | `theme`           | `'light' \| 'dark'`                            | Yes      | Light or dark theme mode.                                                                                       |
 | `onClose`         | `() => void`                                   | No       | Shows a close button; called when clicked.                                                                      |
 | `newTabUrl`       | `string \| null`                               | No       | Shows a link in the toolbar to open the document set in a new tab.                                              |
@@ -125,14 +119,14 @@ Pass configuration props directly to the component:
 
 A `FileEntry` represents one file in the viewer:
 
-| Property      | Type                                                    | Required | Description                                                          |
-| ------------- | ------------------------------------------------------- | -------- | -------------------------------------------------------------------- |
-| `variants`    | `FileVariants`                                          | Yes      | Variant data for the file. Use `FileType` when file has no variants. |
-| `title`       | `string`                                                | Yes      | Display title shown in the sticky header.                            |
-| `url`         | `string`                                                | Yes      | File source URL.                                                     |
-| `query`       | `Record<string, string>`                                | No       | Query parameters sent with the file request.                         |
-| `newTabUrl`   | `string`                                                | No       | URL to open this file in a new tab.                                  |
-| `downloadUrl` | `string`                                                | No       | Download URL for this file.                                          |
+| Property      | Type                     | Required | Description                                                          |
+| ------------- | ------------------------ | -------- | -------------------------------------------------------------------- |
+| `variants`    | `FileVariants`           | Yes      | Variant data for the file. Use `FileType` when file has no variants. |
+| `title`       | `string`                 | Yes      | Display title shown in the sticky header.                            |
+| `url`         | `string`                 | Yes      | File source URL.                                                     |
+| `query`       | `Record<string, string>` | No       | Query parameters sent with the file request.                         |
+| `newTabUrl`   | `string`                 | No       | URL to open this file in a new tab.                                  |
+| `downloadUrl` | `string`                 | No       | Download URL for this file.                                          |
 
 ### `FileVariant`
 
@@ -147,11 +141,7 @@ A `FileEntry` represents one file in the viewer:
 ### `FileVariants`
 
 ```ts
-type FileVariants =
-  | FileVariant
-  | [FileVariant, FileVariant]
-  | [FileVariant, FileVariant, FileVariant]
-  | FileType;
+type FileVariants = FileVariant | [FileVariant, FileVariant] | [FileVariant, FileVariant, FileVariant] | FileType;
 ```
 
 ### `FileType`
@@ -199,18 +189,18 @@ type FetchErrorInfo =
 
 Ref handle exposed via `handleRef`:
 
-| Method             | Description                                                                                                |
-| ------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `focus()`          | Moves focus to the viewer scroll container.                                                                |
-| `reloadFile(url)`  | Re-fetches the file for the URL. Resolves to `true` if a matching file was found and reload was triggered. |
-| `reloadAll()`      | Re-fetches all currently loaded files. Resolves to the number of refreshes triggered.                      |
+| Method            | Description                                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| `focus()`         | Moves focus to the viewer scroll container.                                                                |
+| `reloadFile(url)` | Re-fetches the file for the URL. Resolves to `true` if a matching file was found and reload was triggered. |
+| `reloadAll()`     | Re-fetches all currently loaded files. Resolves to the number of refreshes triggered.                      |
 
 ### `ScaleSettings`
 
 A standalone React component for rendering the initial scale mode settings UI. Can be embedded in external settings pages to let users configure the viewer's initial zoom behavior for files opened in a new tab.
 
 ```tsx
-import { ScaleSettings } from "@navikt/klage-file-viewer";
+import { ScaleSettings } from '@navikt/klage-file-viewer';
 
 const SettingsPage = () => (
   <section>
@@ -223,10 +213,10 @@ The selected mode and custom scale value are persisted to `localStorage` and app
 
 ## Exports
 
-| Export path                            | Description                                                                                                                                                                                                     |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Export path                            | Description                                                                                                                                                                                                                                                    |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@navikt/klage-file-viewer`            | `KlageFileViewer` component, `ScaleSettings` component, `KlageFileViewerProps`, `KlageFileViewerHandle`, `FileEntry`, `FileType`, `FileVariant`, `FileVariants`, `Skjerming`, `VariantFormat`, `FetchErrorInfo`, `HttpFetchErrorInfo`, `NetworkFetchErrorInfo` |
-| `@navikt/klage-file-viewer/styles.css` | Pre-built CSS (Tailwind + component styles)                                                                                                                                                                     |
+| `@navikt/klage-file-viewer/styles.css` | Pre-built CSS (Tailwind + component styles)                                                                                                                                                                                                                    |
 
 ## Features
 

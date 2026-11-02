@@ -1,6 +1,7 @@
 # AGENTS.md
 
 ## Commands
+
 - Install dependencies: `bun i --ignore-scripts`
 - Build the library: `bun run build`
 - Run unit tests: `bun test`
@@ -9,6 +10,7 @@
 - Find unused code: `bun knip`
 
 ## Code style
+
 - TypeScript strict mode
 - No implicit boolean conversions
 - No type coercion
@@ -21,4 +23,5 @@
 - Prefer ternary expression in TSX/JSX over guard and default operators
 
 ## Tooling notes
+
 - Use `--no-pager` with Git commands that may invoke a pager (e.g., `git --no-pager diff`)

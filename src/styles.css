@@ -1,6 +1,6 @@
 @import "tailwindcss/theme" layer(klage-file-viewer);
 @import "tailwindcss/utilities" layer(klage-file-viewer);
-@config "../tailwind.config.js";
+@import "@navikt/ds-tailwind/v4" layer(klage-file-viewer);
 
 @layer klage-file-viewer {
   .klage-file-viewer {

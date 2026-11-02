@@ -71,7 +71,7 @@ export const FileErrorLayout = ({
               </DownloadButton>
             ) : null}
 
-            <code className="border-2 border-ax-border-neutral bg-ax-bg-neutral-moderate p-2 text-xs">
+            <code className="border-ax-border-neutral bg-ax-bg-neutral-moderate border-2 p-2 text-xs">
               {errorMessage}
             </code>
           </HStack>

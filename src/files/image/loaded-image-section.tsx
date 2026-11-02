@@ -156,7 +156,7 @@ export const LoadedImageSection = ({
           <img
             src={objectUrl}
             alt={file.title}
-            className="block max-w-none shadow-ax-dialog"
+            className="shadow-ax-dialog block max-w-none"
             style={{ width: baseWidth, height: baseHeight, imageRendering, transformOrigin: '0 0', transform }}
             onLoad={handleImageLoad}
             draggable={false}

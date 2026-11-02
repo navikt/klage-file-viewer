@@ -113,12 +113,12 @@ export const FileHeader = ({
         ) : null}
 
         <Tooltip content={title}>
-          <span className="truncate font-ax-bold text-base">{title}</span>
+          <span className="font-ax-bold truncate text-base">{title}</span>
         </Tooltip>
 
         {showPasswordIndicator === true ? (
           <Tooltip content="Passordbeskyttet PDF" describesChild>
-            <PadlockLockedFillIcon aria-label="Passordbeskyttet" className="shrink-0 text-ax-text-danger-decoration" />
+            <PadlockLockedFillIcon aria-label="Passordbeskyttet" className="text-ax-text-danger-decoration shrink-0" />
           </Tooltip>
         ) : null}
 
