@@ -315,6 +315,11 @@ describe('viewer OCR marker capture', () => {
         await act(async () => getButtonByText(window.document, 'Fjern alle').click());
 
         expect(button.getAttribute('data-color')).toBe('warning');
+        // Focus returns to the button and may open its tooltip, which replaces `title` with `aria-describedby`.
+        await act(async () => {
+          button.blur();
+          await new Promise((resolve) => window.setTimeout(resolve, 0));
+        });
         expect(button.getAttribute('title')).toContain('markeringene kunne ikke lagres');
         expect(window.document.body.textContent).toContain('Markeringene kunne ikke lagres');
 
